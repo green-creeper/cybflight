@@ -1,0 +1,7 @@
+Bring-up milestone #2 (reviewed by adversarial subagent: PASS, 0 blocking issues; applied NB-2/NB-3):
+- MPU-6000: enabled latched DRDY (REG_INT_PIN_CFG=0x30) + wait_for_high() and raised SPI4 to 13.5 MHz (Br::DIV4) to eliminate -18.67% sample loss at 8 kHz.
+- STM32F745 DWT: unlocked CoreSight DWT->LAR (0xE0001FB0 = 0xC5ACCE55) so indistat cycle timing works on Cortex-M7 r0p1.
+- u-blox M10 GPS: added UBX-CFG-VALSET (UBX=1, NMEA=0, NAV-PVT=1) with ACK-NAK fallback to CFG-MSG, Fletcher-8 checksum verification, 2-state 0xB5 0x62 sync, 1024B RX buffer, and multi-baud auto-probe.
+- USB CDC streaming: rewrote msg_stream_task with 50 Hz pacing + yield_now() + IMU_1_DECIM + indoor Mahony att fallback.
+- IMU startup gyro cal: added pure-f32 stationary startup gyro bias calibration (1s window, std <= 0.05 rad/s, |mean| <= 0.35 rad/s) to eliminate -3.1 deg/s yaw drift.
+- cybflight-gs 3D view: rotated Fusion 360 RFU STL (x,y,z) -> FLU (y,-x,z) so CAD Nose aligns with +X Forward.
