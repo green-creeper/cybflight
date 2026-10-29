@@ -1,15 +1,17 @@
-//! u-blox GNSS receiver driver — UBX binary protocol, legacy CFG-* commands.
+//! u-blox GNSS receiver driver — UBX binary protocol (`CFG-VALSET` + legacy `CFG-MSG`).
 //!
-//! The SAKURA outdoor integration uses F9 RTK receivers. Legacy CFG-MSG
-//! availability must be checked for the exact receiver model and firmware.
-//! There is no CFG-VALSET initialization or MON-VER negotiation path here;
-//! the former M10 configuration notes do not describe this implementation.
+//! Supports u-blox Gen 10 (`M10` / Flywoo GM10 V3), Gen 9 (`ZED-F9P` / `NEO-M9N`),
+//! and legacy Gen 8 (`M8`):
+//! 1. Sends `VALSET_M10_SIGNALS` (`BDS B1C` + `GLO off` on single `1575.42 MHz`
+//!    RF band so cold-booted `M10` receivers unlock full `10 Hz` navigation);
+//!    `ZED-F9P`, `M9N`, and `M8` atomically `ACK-NAK` it without altering their
+//!    constellation settings, whereas `M10` `ACK-ACK`s it and is given `550 ms`
+//!    for its internal GNSS subsystem reset (`UBX-21035062` §3.1.2).
+//! 2. Sends `VALSET_NAV_PVT_UART1` (`10 Hz`, `Airborne <4g`, `UBX=1`, `NMEA=0`,
+//!    `NAV-PVT=1`), falling back to `5 Hz` `VALSET` and legacy `CFG-MSG` (`M8`).
 //!
-//! Init sends `CFG-MSG NAV-PVT 1` and waits for the matching ACK-ACK,
-//! retrying up to `MAX_ATTEMPTS` times when the frame budget is exhausted.
 //! A scan can block on a silent receiver, so callers must enforce a wall-clock
-//! initialization timeout. Receiver baud/rate settings must be configured
-//! separately; this driver leaves NMEA output enabled.
+//! initialization timeout.
 
 use embedded_io_async::{Read, Write};
 
@@ -33,6 +35,35 @@ const UBX_CFG_VALSET: u8 = 0x8A;
 
 const NAV_PVT_LEN: u16 = 92;
 
+/// `UBX-CFG-VALSET` (RAM layer `0x01`, version `0x00`) payload configuring
+/// u-blox M10 single-RF-band (`1575.42 MHz`) multi-GNSS signals (matching
+/// ArduPilot `config_M10` in `AP_GPS_UBLOX_CFG_List.h`):
+/// - `CFG_SIGNAL_BDS_ENA` (`0x1031_0022`) = `1`
+/// - `CFG_SIGNAL_BDS_B1_ENA` (`0x1031_000D`, `1561.098 MHz`) = `0`
+/// - `CFG_SIGNAL_BDS_B1C_ENA` (`0x1031_000F`, `1575.42 MHz`) = `1`
+/// - `CFG_SIGNAL_GLO_ENA` (`0x1031_0025`, `1602 MHz`) = `0`
+/// - `CFG_SIGNAL_QZSS_ENA` (`0x1031_0024`) = `1`
+/// - `CFG_SIGNAL_QZSS_L1CA_ENA` (`0x1031_0012`) = `1`
+/// - `CFG_SIGNAL_QZSS_L1S_ENA` (`0x1031_0014`) = `1`
+///
+/// On cold boot, factory u-blox M10 enables `GPS + Galileo + BeiDou B1I +
+/// GLONASS` across 3 RF bands, which caps navigation output to ~3.3–5 Hz and
+/// rejects/clamps `CFG_RATE_MEAS = 100 ms`. Switching BeiDou to `B1C` and
+/// disabling `GLONASS` keeps `GPS + Galileo + BeiDou B1C + SBAS + QZSS` on the
+/// single L1 band and unlocks full `10 Hz` (`100 ms`) output. Sent best-effort
+/// (`ACK-NAK` ignored) so Gen 9 (`F9P` / `M9N`) and `M8` receivers unaffectedly
+/// proceed to `VALSET_NAV_PVT_UART1`.
+const VALSET_M10_SIGNALS: [u8; 39] = [
+    0x00, 0x01, 0x00, 0x00, // version=0, layers=RAM(0x01), reserved=[0,0]
+    0x22, 0x00, 0x31, 0x10, 0x01, // CFG_SIGNAL_BDS_ENA = true
+    0x0D, 0x00, 0x31, 0x10, 0x00, // CFG_SIGNAL_BDS_B1_ENA = false
+    0x0F, 0x00, 0x31, 0x10, 0x01, // CFG_SIGNAL_BDS_B1C_ENA = true
+    0x25, 0x00, 0x31, 0x10, 0x00, // CFG_SIGNAL_GLO_ENA = false
+    0x24, 0x00, 0x31, 0x10, 0x01, // CFG_SIGNAL_QZSS_ENA = true
+    0x12, 0x00, 0x31, 0x10, 0x01, // CFG_SIGNAL_QZSS_L1CA_ENA = true
+    0x14, 0x00, 0x31, 0x10, 0x01, // CFG_SIGNAL_QZSS_L1S_ENA = true
+];
+
 /// `UBX-CFG-VALSET` (RAM layer `0x01`, version `0x00`) payload configuring:
 /// - `CFG_UART1OUTPROT_UBX` (`0x1074_0001`, 1-byte bool) = `1`
 /// - `CFG_UART1OUTPROT_NMEA` (`0x1074_0002`, 1-byte bool) = `0`
@@ -48,6 +79,18 @@ const VALSET_NAV_PVT_UART1: [u8; 36] = [
     0x02, 0x00, 0x74, 0x10, 0x00, // CFG_UART1OUTPROT_NMEA = false
     0x07, 0x00, 0x91, 0x20, 0x01, // CFG_MSGOUT_UBX_NAV_PVT_UART1 = 1
     0x01, 0x00, 0x21, 0x30, 0x64, 0x00, // CFG_RATE_MEAS = 100 ms (10 Hz)
+    0x02, 0x00, 0x21, 0x30, 0x01, 0x00, // CFG_RATE_NAV = 1
+    0x21, 0x00, 0x11, 0x20, 0x08, // CFG_NAVSPG_DYNMODEL = 8 (Airborne <4g)
+];
+
+/// Fallback `5 Hz` (`200 ms`) `UBX-CFG-VALSET` payload if a receiver variant
+/// rejects `100 ms` `CFG_RATE_MEAS`.
+const VALSET_NAV_PVT_5HZ_UART1: [u8; 36] = [
+    0x00, 0x01, 0x00, 0x00, // version=0, layers=RAM(0x01), reserved=[0,0]
+    0x01, 0x00, 0x74, 0x10, 0x01, // CFG_UART1OUTPROT_UBX = true
+    0x02, 0x00, 0x74, 0x10, 0x00, // CFG_UART1OUTPROT_NMEA = false
+    0x07, 0x00, 0x91, 0x20, 0x01, // CFG_MSGOUT_UBX_NAV_PVT_UART1 = 1
+    0x01, 0x00, 0x21, 0x30, 0xC8, 0x00, // CFG_RATE_MEAS = 200 ms (5 Hz)
     0x02, 0x00, 0x21, 0x30, 0x01, 0x00, // CFG_RATE_NAV = 1
     0x21, 0x00, 0x11, 0x20, 0x08, // CFG_NAVSPG_DYNMODEL = 8 (Airborne <4g)
 ];
@@ -146,7 +189,7 @@ fn build_frame(buf: &mut [u8], class: u8, id: u8, payload: &[u8]) -> usize {
 // Driver
 // ---------------------------------------------------------------------------
 
-/// u-blox NAV-PVT driver with legacy CFG-MSG initialization.
+/// u-blox NAV-PVT driver (`CFG-VALSET` + legacy `CFG-MSG` initialization).
 pub struct Ublox<RW> {
     rw: RW,
 }
@@ -173,12 +216,48 @@ where
     ///
     /// Tries `UBX-CFG-VALSET` (`0x06 0x8A`, supported on u-blox M9/F9/M10)
     /// first, falling back to legacy `UBX-CFG-MSG` (`0x06 0x01`, u-blox M8)
-    /// if the receiver replies with `ACK-NAK`. Also succeeds immediately if a
-    /// valid `UBX-NAV-PVT` frame is already streaming on the port.
-    pub async fn configure_once(rw: &mut RW) -> Result<(), Error<RW::Error>> {
-        const FRAMES_PER_ATTEMPT: u8 = 24;
+    /// if the receiver replies with `ACK-NAK`. Also succeeds via RX-only
+    /// fallback if valid `UBX-NAV-PVT` frames are already streaming on the port.
+    pub async fn configure_once(
+        rw: &mut RW,
+        delay: &mut impl embedded_hal_async::delay::DelayNs,
+    ) -> Result<(), Error<RW::Error>> {
+        const FRAMES_PER_ATTEMPT: u8 = 16;
         let mut drv = Ublox { rw };
 
+        // 1. Best-effort M10 single-band (`1575.42 MHz`) constellation config
+        // so `CFG_RATE_MEAS = 100 ms` (`10 Hz`) is accepted on cold-booted M10
+        // receivers (`BDS B1C` + `GLO off`). `ACK-NAK` on Gen 9 (`F9P`/`M9N`)
+        // or `M8` is atomic and ignored; `Exhausted` means silent/wrong baud.
+        let mut sig_frame = [0u8; 48];
+        let sig_len = build_frame(
+            &mut sig_frame,
+            UBX_CLASS_CFG,
+            UBX_CFG_VALSET,
+            &VALSET_M10_SIGNALS,
+        );
+        drv.rw
+            .write_all(&sig_frame[..sig_len])
+            .await
+            .map_err(Error::Io)?;
+        let m10_signals_acked = match drv
+            .scan_for_ack(UBX_CLASS_CFG, UBX_CFG_VALSET, FRAMES_PER_ATTEMPT, false)
+            .await?
+        {
+            AckOutcome::Acked => true,
+            AckOutcome::Naked => false,
+            AckOutcome::Exhausted => return Err(Error::Timeout),
+        };
+
+        if m10_signals_acked {
+            // Per u-blox MAX-M10S Integration Manual (`UBX-21035062` §3.1.2) and
+            // ArduPilot `AP_GPS_UBLOX.cpp:368` ("GNSS takes 0.5s to reset"),
+            // changing `CFG_SIGNAL_*` triggers an ~500 ms GNSS subsystem reset
+            // during which follow-up commands may be silently dropped.
+            delay.delay_ms(550).await;
+        }
+
+        // 2. Apply `10 Hz` (`100 ms`) + `Airborne <4g` + `NAV-PVT` + `NMEA=0`.
         let mut valset_frame = [0u8; 48];
         let valset_len = build_frame(
             &mut valset_frame,
@@ -190,17 +269,40 @@ where
             .write_all(&valset_frame[..valset_len])
             .await
             .map_err(Error::Io)?;
+        let outcome = drv
+            .scan_for_ack(UBX_CLASS_CFG, UBX_CFG_VALSET, FRAMES_PER_ATTEMPT, true)
+            .await?;
 
-        match drv
-            .scan_for_ack_or_pvt(UBX_CLASS_CFG, UBX_CFG_VALSET, FRAMES_PER_ATTEMPT)
-            .await?
-        {
+        match outcome {
             AckOutcome::Acked => {
-                defmt::info!("UBX: NAV-PVT enabled via CFG-VALSET");
-                return Ok(());
+                defmt::info!("UBX: NAV-PVT 10 Hz enabled via CFG-VALSET");
+                Ok(())
             }
             AckOutcome::Naked => {
-                // Legacy u-blox M8 rejects 0x06 0x8A -> fall back to CFG-MSG (0x06 0x01).
+                // Receiver supports UBX but rejected 100 ms -> try 5 Hz VALSET
+                // first, then fall back to legacy M8 `CFG-MSG` (`0x06 0x01`).
+                let valset5_len = build_frame(
+                    &mut valset_frame,
+                    UBX_CLASS_CFG,
+                    UBX_CFG_VALSET,
+                    &VALSET_NAV_PVT_5HZ_UART1,
+                );
+                drv.rw
+                    .write_all(&valset_frame[..valset5_len])
+                    .await
+                    .map_err(Error::Io)?;
+                match drv
+                    .scan_for_ack(UBX_CLASS_CFG, UBX_CFG_VALSET, FRAMES_PER_ATTEMPT, true)
+                    .await?
+                {
+                    AckOutcome::Acked => {
+                        defmt::info!("UBX: NAV-PVT 5 Hz enabled via CFG-VALSET");
+                        return Ok(());
+                    }
+                    AckOutcome::Exhausted => return Err(Error::Timeout),
+                    AckOutcome::Naked => {}
+                }
+
                 let payload = [UBX_CLASS_NAV, UBX_NAV_PVT, 1];
                 let mut msg_frame = [0u8; 16];
                 let msg_len = build_frame(&mut msg_frame, UBX_CLASS_CFG, UBX_CFG_MSG, &payload);
@@ -209,15 +311,15 @@ where
                     .await
                     .map_err(Error::Io)?;
                 match drv
-                    .scan_for_ack_or_pvt(UBX_CLASS_CFG, UBX_CFG_MSG, FRAMES_PER_ATTEMPT)
+                    .scan_for_ack(UBX_CLASS_CFG, UBX_CFG_MSG, FRAMES_PER_ATTEMPT, true)
                     .await?
                 {
                     AckOutcome::Acked => {
                         defmt::info!("UBX: NAV-PVT enabled via legacy CFG-MSG");
-                        return Ok(());
+                        Ok(())
                     }
-                    AckOutcome::Naked => return Err(Error::Nak),
-                    AckOutcome::Exhausted => return Err(Error::Timeout),
+                    AckOutcome::Naked => Err(Error::Nak),
+                    AckOutcome::Exhausted => Err(Error::Timeout),
                 }
             }
             AckOutcome::Exhausted => Err(Error::Timeout),
@@ -237,7 +339,7 @@ where
 
         const MAX_ATTEMPTS: u8 = 5;
         for attempt in 0..MAX_ATTEMPTS {
-            match Self::configure_once(&mut rw).await {
+            match Self::configure_once(&mut rw, delay).await {
                 Ok(()) => {
                     defmt::info!("UBX: receiver ready (attempt {})", attempt);
                     return Ok(Self { rw });
@@ -252,20 +354,37 @@ where
         Err(Error::Timeout)
     }
 
-    /// Read up to `budget` UBX frames looking for ACK-ACK / ACK-NAK matching
-    /// the given class/id, or an already-active `NAV-PVT` stream.
-    async fn scan_for_ack_or_pvt(
+    /// Read up to `budget` UBX frames looking for `ACK-ACK` / `ACK-NAK`
+    /// matching `(expected_class, expected_id)`.
+    ///
+    /// Crucially, an in-flight `NAV-PVT` frame does NOT short-circuit before
+    /// `ACK-ACK` / `ACK-NAK` is read (which would mask an `ACK-NAK` when
+    /// `NAV-PVT` is already streaming at a slower rate); `saw_pvt` is used only
+    /// as an RX-only fallback if `allow_pvt_fallback` is set and `budget`
+    /// frames arrive without any `ACK`/`NAK`. Corrupted initial frames
+    /// (`BadChecksum` after baud switching) are skipped rather than aborting.
+    async fn scan_for_ack(
         &mut self,
         expected_class: u8,
         expected_id: u8,
         budget: u8,
+        allow_pvt_fallback: bool,
     ) -> Result<AckOutcome, Error<RW::Error>> {
+        let mut saw_pvt = false;
         for _ in 0..budget {
-            let (class, id, payload_len) = self.read_header().await?;
+            let (class, id, payload_len) = match self.read_header().await {
+                Ok(h) => h,
+                Err(Error::BadChecksum) => continue,
+                Err(e) => return Err(e),
+            };
 
             if class == UBX_CLASS_ACK && payload_len == 2 {
                 let mut ack_payload = [0u8; 2];
-                self.read_payload(class, id, &mut ack_payload, 2).await?;
+                match self.read_payload(class, id, &mut ack_payload, 2).await {
+                    Ok(()) => {}
+                    Err(Error::BadChecksum) => continue,
+                    Err(e) => return Err(e),
+                }
                 if ack_payload[0] == expected_class && ack_payload[1] == expected_id {
                     if id == UBX_ACK_ACK {
                         return Ok(AckOutcome::Acked);
@@ -275,13 +394,23 @@ where
                     }
                 }
             } else if class == UBX_CLASS_NAV && id == UBX_NAV_PVT && payload_len == NAV_PVT_LEN {
-                self.skip_payload(payload_len).await?;
-                return Ok(AckOutcome::Acked);
+                let mut pvt_buf = [0u8; NAV_PVT_LEN as usize];
+                if self
+                    .read_payload(class, id, &mut pvt_buf, NAV_PVT_LEN)
+                    .await
+                    .is_ok()
+                {
+                    saw_pvt = true;
+                }
             } else {
                 self.skip_payload(payload_len).await?;
             }
         }
-        Ok(AckOutcome::Exhausted)
+        if allow_pvt_fallback && saw_pvt {
+            Ok(AckOutcome::Acked)
+        } else {
+            Ok(AckOutcome::Exhausted)
+        }
     }
 
     /// Read the next NAV-PVT fix. Blocks until a valid NAV-PVT frame arrives.

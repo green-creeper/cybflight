@@ -17,12 +17,14 @@ const QMC5883L_ADDR: u8 = 0x0D;
 
 const REG_DATA_X_LSB: u8 = 0x00;
 const REG_STATUS: u8 = 0x06;
+const REG_TEMP_LSB: u8 = 0x07;
 const REG_CONTROL1: u8 = 0x09;
-const REG_SET_RESET: u8 = 0x0A;
+const REG_CONTROL2: u8 = 0x0A;
 const REG_SET_RESET_PERIOD: u8 = 0x0B;
 
 // Status register bits
 const STATUS_DRDY: u8 = 0x01;
+const STATUS_DOR: u8 = 0x04;
 
 // Control1 register values
 // Mode: continuous (bits 1:0 = 01)
@@ -68,19 +70,23 @@ where
     I2C: I2c,
 {
     /// Probe for a QMC5883L on the bus. Returns true if found.
+    ///
+    /// Retries up to 5 times (matching `Spl06::probe_i2c` and ArduPilot
+    /// `AP_Compass_QMC5883L::_check_whoami`) and primes register `0x00` first so
+    /// a sensor left mid-read or in pointer-rollover across a warm MCU reset
+    /// re-synchronizes cleanly.
     pub async fn probe(i2c: &mut I2C) -> bool {
         let mut buf = [0u8; 1];
         defmt::debug!("QMC5883L: probing addr {:#04x}", QMC5883L_ADDR);
-        match i2c.write_read(QMC5883L_ADDR, &[REG_STATUS], &mut buf).await {
-            Ok(()) => {
+        for _ in 0..5 {
+            let _ = i2c.write_read(QMC5883L_ADDR, &[REG_DATA_X_LSB], &mut buf).await;
+            if i2c.write_read(QMC5883L_ADDR, &[REG_STATUS], &mut buf).await.is_ok() {
                 defmt::debug!("QMC5883L: probe OK, status={:#04x}", buf[0]);
-                true
-            }
-            Err(_) => {
-                defmt::debug!("QMC5883L: probe failed (no ACK)");
-                false
+                return true;
             }
         }
+        defmt::debug!("QMC5883L: probe failed (no ACK)");
+        false
     }
 
     /// Initialize the QMC5883L.
@@ -88,13 +94,21 @@ where
         mut i2c: I2C,
         delay: &mut impl embedded_hal_async::delay::DelayNs,
     ) -> Result<Self, Error<I2C::Error>> {
-        // Soft reset
-        i2c.write(QMC5883L_ADDR, &[REG_SET_RESET, 0x80])
-            .await
-            .map_err(Error::I2c)?;
+        // Soft reset (`SOFT_RST = 0x80` in `REG_CONTROL2 = 0x0A`). Ignore NACK on
+        // the reset write itself per Betaflight `qmc5883lDetect`, as some clones
+        // reset immediately before driving the 9th ACK bit.
+        let _ = i2c.write(QMC5883L_ADDR, &[REG_CONTROL2, 0x80]).await;
         delay.delay_ms(20).await;
 
-        // Set/Reset period register (recommended value)
+        // Explicitly clear `ROL_PNT` and disable `INT_ENB` (`REG_CONTROL2 = 0x00`).
+        // Enabling `ROL_PNT` (`0x40`) wraps auto-increment from `0x06 -> 0x00`,
+        // preventing sequential reads from ever reaching `0x07..0x08` (`TEMP`)
+        // and leaving pointer rollover latched across warm MCU resets.
+        i2c.write(QMC5883L_ADDR, &[REG_CONTROL2, 0x00])
+            .await
+            .map_err(Error::I2c)?;
+
+        // Set/Reset period register (datasheet recommended value `0x01`)
         i2c.write(QMC5883L_ADDR, &[REG_SET_RESET_PERIOD, 0x01])
             .await
             .map_err(Error::I2c)?;
@@ -106,11 +120,6 @@ where
         )
         .await
         .map_err(Error::I2c)?;
-
-        // Enable pointer rollover
-        i2c.write(QMC5883L_ADDR, &[REG_SET_RESET, 0x40])
-            .await
-            .map_err(Error::I2c)?;
 
         delay.delay_ms(10).await;
 
@@ -126,31 +135,37 @@ where
     type Error = Error<I2C::Error>;
 
     async fn read(&mut self) -> Result<MagReading, Self::Error> {
-        // Poll briefly for DRDY (in continuous 200 Hz mode, 0x00..0x05 double-buffer
-        // the latest measurement; cap status polls at 5 so an oscillator rate skew
-        // never hammers a shared I2C bus 100 times back-to-back).
+        // Poll briefly for DRDY/DOR (in continuous 200 Hz mode, 0x00..0x05
+        // double-buffer the latest measurement; cap status polls at 5 so an
+        // oscillator rate skew never hammers a shared I2C bus).
         for _ in 0..5 {
             let mut status = [0u8; 1];
             self.i2c
                 .write_read(QMC5883L_ADDR, &[REG_STATUS], &mut status)
                 .await
                 .map_err(Error::I2c)?;
-            if status[0] & STATUS_DRDY != 0 {
+            if status[0] & (STATUS_DRDY | STATUS_DOR) != 0 {
                 break;
             }
         }
 
-        // Burst read 6 data bytes + 2 temp bytes = 8 bytes from register 0x00
-        let mut buf = [0u8; 8];
+        // Read 6 magnetic field bytes (`0x00..=0x05`) and 2 temperature bytes
+        // (`0x07..=0x08`), skipping `0x06` (`REG_STATUS`).
+        let mut buf = [0u8; 6];
         self.i2c
             .write_read(QMC5883L_ADDR, &[REG_DATA_X_LSB], &mut buf)
+            .await
+            .map_err(Error::I2c)?;
+        let mut tbuf = [0u8; 2];
+        self.i2c
+            .write_read(QMC5883L_ADDR, &[REG_TEMP_LSB], &mut tbuf)
             .await
             .map_err(Error::I2c)?;
 
         let raw_x = i16::from_le_bytes([buf[0], buf[1]]);
         let raw_y = i16::from_le_bytes([buf[2], buf[3]]);
         let raw_z = i16::from_le_bytes([buf[4], buf[5]]);
-        let raw_temp = i16::from_le_bytes([buf[6], buf[7]]);
+        let raw_temp = i16::from_le_bytes([tbuf[0], tbuf[1]]);
 
         Ok(MagReading {
             field_ut: Vector3::new(
@@ -166,7 +181,15 @@ where
     }
 
     async fn recover(&mut self) -> Result<(), Self::Error> {
-        // Re-initialize control register
+        // Restore non-rollover control2, AMR set/reset period, and continuous mode
+        self.i2c
+            .write(QMC5883L_ADDR, &[REG_CONTROL2, 0x00])
+            .await
+            .map_err(Error::I2c)?;
+        self.i2c
+            .write(QMC5883L_ADDR, &[REG_SET_RESET_PERIOD, 0x01])
+            .await
+            .map_err(Error::I2c)?;
         self.i2c
             .write(
                 QMC5883L_ADDR,

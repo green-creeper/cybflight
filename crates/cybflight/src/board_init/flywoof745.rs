@@ -486,8 +486,18 @@ pub async fn init(
         // 1. Probe & init QMC5883L external compass (0x0D) — bounded per-op by `i2c_config.timeout`
         // (never wrap `embassy-stm32` `I2c` calls in an outer `with_timeout` that could cancel
         // `write_read` between `write_dma_internal(send_stop=false)` and `read_dma_internal`).
+        // Retry with `reset_i2c1_if_wedged()` + 5 ms settle across attempts so an external
+        // compass re-synchronizes reliably across warm `reboot` / `reboot --dfu` resets.
         let mut probe_dev = I2cDevice::new(i2c1_bus);
-        let qmc_found = Qmc5883l::probe(&mut probe_dev).await;
+        let mut qmc_found = false;
+        for _ in 0..3 {
+            if Qmc5883l::probe(&mut probe_dev).await {
+                qmc_found = true;
+                break;
+            }
+            reset_i2c1_if_wedged();
+            Timer::after_millis(5).await;
+        }
         reset_i2c1_if_wedged();
         let mag_opt = if qmc_found {
             defmt::info!("I2C1: QMC5883L found, initializing...");
@@ -716,7 +726,7 @@ async fn init_gps_uart(mut uart: hal::usart::BufferedUart<'static>, spawner: &Sp
     GPS_DETECTED_BAUD.store(0, Ordering::Relaxed);
     Timer::after_millis(250).await;
 
-    const CANDIDATE_BAUDS: [u32; 5] = [115_200, 230_400, 38_400, 57_600, 9_600];
+    const CANDIDATE_BAUDS: [u32; 5] = [230_400, 115_200, 38_400, 57_600, 9_600];
     let mut last_err = None;
 
     for &baud in &CANDIDATE_BAUDS {
@@ -736,7 +746,13 @@ async fn init_gps_uart(mut uart: hal::usart::BufferedUart<'static>, spawner: &Sp
         }
 
         let mut rw = CountingRw(&mut uart);
-        match with_timeout(Duration::from_millis(550), GpsDriver::configure_once(&mut rw)).await {
+        let mut delay = embassy_time::Delay;
+        match with_timeout(
+            Duration::from_millis(1300),
+            GpsDriver::configure_once(&mut rw, &mut delay),
+        )
+        .await
+        {
             Ok(Ok(())) => {
                 GPS_DETECTED_BAUD.store(baud, Ordering::Relaxed);
                 defmt::info!("GPS u-blox init OK at {} baud", baud);
