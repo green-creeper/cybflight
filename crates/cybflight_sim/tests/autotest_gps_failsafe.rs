@@ -45,10 +45,7 @@ const FAULT_BIAS_M: Vector3<f32> = Vector3::new(5.0, 0.0, 0.0);
 /// Pick the latest history sample at or before `t`. `None` if no
 /// sample is recorded that early.
 fn sample_at_or_before(history: &[StepRecord], t_target_s: f32) -> Option<&StepRecord> {
-    history
-        .iter()
-        .rev()
-        .find(|r| r.t <= t_target_s)
+    history.iter().rev().find(|r| r.t <= t_target_s)
 }
 
 #[test]
@@ -80,7 +77,11 @@ fn jump_cascade_recovers_after_sustained_gps_excursion() {
     scenario.pass_criteria.geofence_max = Vector3::new(50.0, 50.0, 50.0);
 
     let mut controller = MpcIndiController::from_params(&scenario.vehicle_params);
-    let mut plant = QuadPlant::new(scenario.vehicle_params.clone(), &scenario.sim_params, 1.0 / 8000.0);
+    let mut plant = QuadPlant::new(
+        scenario.vehicle_params.clone(),
+        &scenario.sim_params,
+        1.0 / 8000.0,
+    );
     let runner = MissionRunner::new(Default::default());
     let out = runner.run(&mut scenario, &mut plant, &mut controller);
 
@@ -119,9 +120,8 @@ fn jump_cascade_recovers_after_sustained_gps_excursion() {
     let observation_end_t = last_sample.t;
     let observation_start_t = observation_end_t - 3.0;
 
-    let early = sample_at_or_before(&out.history, observation_start_t).expect(
-        "scenario should produce samples ≥3 s before end — increase terminal_hold_s",
-    );
+    let early = sample_at_or_before(&out.history, observation_start_t)
+        .expect("scenario should produce samples ≥3 s before end — increase terminal_hold_s");
     let late = last_sample;
 
     let early_est = early
@@ -199,12 +199,8 @@ fn gps_outage_recovers_via_jump_cascade_reinit() {
     // east shift. From the failsafe's point of view this is
     // indistinguishable from "IMU drifted during outage" — both
     // produce a sustained pos discrepancy that trips the jump gate.
-    let post_outage_shifted = FaultedGps::new(
-        outage,
-        OUTAGE_END_S,
-        f32::INFINITY,
-        POST_OUTAGE_BIAS_M,
-    );
+    let post_outage_shifted =
+        FaultedGps::new(outage, OUTAGE_END_S, f32::INFINITY, POST_OUTAGE_BIAS_M);
 
     // Light IMU noise without bias — bias would be silently
     // cancelled by the ESKF's pre-outage bias estimation, so it's
@@ -237,7 +233,11 @@ fn gps_outage_recovers_via_jump_cascade_reinit() {
     scenario.pass_criteria.geofence_max = Vector3::new(50.0, 50.0, 50.0);
 
     let mut controller = MpcIndiController::from_params(&scenario.vehicle_params);
-    let mut plant = QuadPlant::new(scenario.vehicle_params.clone(), &scenario.sim_params, 1.0 / 8000.0);
+    let mut plant = QuadPlant::new(
+        scenario.vehicle_params.clone(),
+        &scenario.sim_params,
+        1.0 / 8000.0,
+    );
     let runner = MissionRunner::new(Default::default());
     let out = runner.run(&mut scenario, &mut plant, &mut controller);
 
@@ -343,7 +343,11 @@ fn gps_outage_clean_recovery_no_cascade_needed() {
     scenario.pass_criteria.peak_tilt_rad = 80.0_f32.to_radians();
 
     let mut controller = MpcIndiController::from_params(&scenario.vehicle_params);
-    let mut plant = QuadPlant::new(scenario.vehicle_params.clone(), &scenario.sim_params, 1.0 / 8000.0);
+    let mut plant = QuadPlant::new(
+        scenario.vehicle_params.clone(),
+        &scenario.sim_params,
+        1.0 / 8000.0,
+    );
     let runner = MissionRunner::new(Default::default());
     let out = runner.run(&mut scenario, &mut plant, &mut controller);
 

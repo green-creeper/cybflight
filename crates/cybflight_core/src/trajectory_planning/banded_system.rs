@@ -264,11 +264,7 @@ mod tests {
         ];
         a.solve3(&mut b);
 
-        let a_dense = [
-            [2.0, 1.0, 0.0],
-            [1.0, 3.0, 1.0],
-            [0.0, 1.0, 2.0],
-        ];
+        let a_dense = [[2.0, 1.0, 0.0], [1.0, 3.0, 1.0], [0.0, 1.0, 2.0]];
         let rhs = [1.0, 2.0, 3.0];
         for i in 0..3 {
             let mut sum = 0.0;
@@ -296,9 +292,17 @@ mod tests {
         let mut badj = [Vector3::new(1.0, 2.0, 3.0); 3];
         a.solve3_adj(&mut badj);
         for i in 0..3 {
-            assert!(b[i].iter().all(|v| v.is_finite()), "solve3 row {i}: {:?}", b[i]);
+            assert!(
+                b[i].iter().all(|v| v.is_finite()),
+                "solve3 row {i}: {:?}",
+                b[i]
+            );
             assert!(b1[i].is_finite(), "solve1 row {i}: {}", b1[i]);
-            assert!(badj[i].iter().all(|v| v.is_finite()), "solve3_adj row {i}: {:?}", badj[i]);
+            assert!(
+                badj[i].iter().all(|v| v.is_finite()),
+                "solve3_adj row {i}: {:?}",
+                badj[i]
+            );
         }
     }
 

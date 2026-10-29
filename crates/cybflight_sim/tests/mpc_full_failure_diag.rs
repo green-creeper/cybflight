@@ -17,11 +17,11 @@ use cybflight_sim::{
     controller::{Controller, MpcFullIndiController, MpcIndiController},
     plant::QuadPlant,
     runner::{MissionRunner, RunnerConfig},
-    scenario::{default_sim_params, tweaked_vehicle, PassCriteria, Scenario},
+    scenario::{PassCriteria, Scenario, default_sim_params, tweaked_vehicle},
     trajectory::MissionSetpoints,
 };
 use nalgebra::{UnitQuaternion, Vector3};
-use vehicle_yaml::mission::{load_mission, Mission};
+use vehicle_yaml::mission::{Mission, load_mission};
 
 fn out_dir() -> PathBuf {
     let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("mpc_full_diag");
@@ -33,8 +33,8 @@ fn load(name: &str) -> Mission {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../missions")
         .join(format!("{name}.yaml"));
-    let yaml = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    let yaml =
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
     load_mission(name, &yaml).expect("mission loads")
 }
 
@@ -213,9 +213,13 @@ fn experiments() {
             let mut c = MpcFullIndiController::with_options_at_rate(&vp, 100.0, true, 8000.0);
             c.complete_references = complete;
             c.log_solves = true;
-            dump(mission_name, label, scenario_for(mission_name, &m, vp), c, |c| {
-                serde_json::to_value(&c.solve_log).unwrap()
-            });
+            dump(
+                mission_name,
+                label,
+                scenario_for(mission_name, &m, vp),
+                c,
+                |c| serde_json::to_value(&c.solve_log).unwrap(),
+            );
         }
     }
 }

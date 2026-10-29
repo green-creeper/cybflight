@@ -52,21 +52,27 @@ static EXECUTOR_HIGH: InterruptExecutor = InterruptExecutor::new();
 /// output remains the top-priority real-time path.
 static EXECUTOR_CTRL: InterruptExecutor = InterruptExecutor::new();
 
-/// CRS interrupt handler — drives the high-priority executor.
-///
-/// CRS (Clock Recovery System) is unused by this firmware, so we repurpose
-/// its NVIC slot as the executor's wake interrupt.
+#[cfg(not(feature = "board_flywoof745"))]
 #[interrupt]
 unsafe fn CRS() {
     unsafe { EXECUTOR_HIGH.on_interrupt() }
 }
 
-/// FDCAN_CAL interrupt handler — drives the mid-priority executor.
-///
-/// The FDCAN calibration unit is unused by this firmware (CAN not wired
-/// on any supported board), so its NVIC slot hosts the control executor.
+#[cfg(not(feature = "board_flywoof745"))]
 #[interrupt]
 unsafe fn FDCAN_CAL() {
+    unsafe { EXECUTOR_CTRL.on_interrupt() }
+}
+
+#[cfg(feature = "board_flywoof745")]
+#[interrupt]
+unsafe fn CAN2_TX() {
+    unsafe { EXECUTOR_HIGH.on_interrupt() }
+}
+
+#[cfg(feature = "board_flywoof745")]
+#[interrupt]
+unsafe fn CAN2_RX0() {
     unsafe { EXECUTOR_CTRL.on_interrupt() }
 }
 
@@ -103,13 +109,26 @@ async fn main(spawner: embassy_executor::Spawner) {
         .send(cybflight::status::SystemStatus::Booting);
 
     // --- Start the two interrupt executors ---
-    {
+    #[cfg(not(feature = "board_flywoof745"))]
+    let (high_spawner, ctrl_spawner) = {
         use cybflight::hal::interrupt::{self, InterruptExt, Priority};
         interrupt::CRS.set_priority(Priority::P6);
         interrupt::FDCAN_CAL.set_priority(Priority::P10);
-    }
-    let high_spawner = EXECUTOR_HIGH.start(cybflight::hal::interrupt::CRS);
-    let ctrl_spawner = EXECUTOR_CTRL.start(cybflight::hal::interrupt::FDCAN_CAL);
+        (
+            EXECUTOR_HIGH.start(cybflight::hal::interrupt::CRS),
+            EXECUTOR_CTRL.start(cybflight::hal::interrupt::FDCAN_CAL),
+        )
+    };
+    #[cfg(feature = "board_flywoof745")]
+    let (high_spawner, ctrl_spawner) = {
+        use cybflight::hal::interrupt::{self, InterruptExt, Priority};
+        interrupt::CAN2_TX.set_priority(Priority::P6);
+        interrupt::CAN2_RX0.set_priority(Priority::P10);
+        (
+            EXECUTOR_HIGH.start(cybflight::hal::interrupt::CAN2_TX),
+            EXECUTOR_CTRL.start(cybflight::hal::interrupt::CAN2_RX0),
+        )
+    };
 
     // --- Board-specific init ---
     //
@@ -204,7 +223,7 @@ async fn main(spawner: embassy_executor::Spawner) {
     spawner
         .spawn(cybflight::usb_serial::imu1_stream_task())
         .unwrap_or_else(|_| defmt::panic!("failed to spawn IMU1 stream task"));
-    #[cfg(not(feature = "board_sakurah743"))]
+    #[cfg(not(any(feature = "board_sakurah743", feature = "board_flywoof745")))]
     spawner
         .spawn(cybflight::usb_serial::imu2_stream_task())
         .unwrap_or_else(|_| defmt::panic!("failed to spawn IMU2 stream task"));
@@ -262,7 +281,7 @@ async fn main(spawner: embassy_executor::Spawner) {
     spawner
         .spawn(cybflight::usb_serial::magext_stream_task())
         .unwrap_or_else(|_| defmt::panic!("failed to spawn mag ext stream task"));
-    #[cfg(not(feature = "board_sakurah743"))]
+    #[cfg(not(any(feature = "board_sakurah743", feature = "board_flywoof745")))]
     spawner
         .spawn(cybflight::usb_serial::magint_stream_task())
         .unwrap_or_else(|_| defmt::panic!("failed to spawn mag int stream task"));
@@ -270,7 +289,7 @@ async fn main(spawner: embassy_executor::Spawner) {
     spawner
         .spawn(cybflight::usb_serial::baro1_stream_task())
         .unwrap_or_else(|_| defmt::panic!("failed to spawn baro1 stream task"));
-    #[cfg(not(feature = "board_sakurah743"))]
+    #[cfg(not(any(feature = "board_sakurah743", feature = "board_flywoof745")))]
     spawner
         .spawn(cybflight::usb_serial::baro2_stream_task())
         .unwrap_or_else(|_| defmt::panic!("failed to spawn baro2 stream task"));

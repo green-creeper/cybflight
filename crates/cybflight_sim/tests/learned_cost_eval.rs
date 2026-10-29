@@ -63,9 +63,14 @@ const SQP_N: usize = 20;
 
 /// `SAMPLER_MAX_LAG` overrides the position sampler's lag allowance [s]
 /// (YAML: 0.1). Larger lets the MPC slow into corners and hold the line.
-fn sampler_params(vp: &FirmwareConfig) -> cybflight_core::trajectory_planning::sampler::PositionSamplerParams {
+fn sampler_params(
+    vp: &FirmwareConfig,
+) -> cybflight_core::trajectory_planning::sampler::PositionSamplerParams {
     let mut p = vp.trajectory.sampler.to_position_sampler_params();
-    if let Some(l) = std::env::var("SAMPLER_MAX_LAG").ok().and_then(|v| v.parse::<f32>().ok()) {
+    if let Some(l) = std::env::var("SAMPLER_MAX_LAG")
+        .ok()
+        .and_then(|v| v.parse::<f32>().ok())
+    {
         p.max_lag_s = l;
     }
     p
@@ -74,7 +79,10 @@ fn sampler_params(vp: &FirmwareConfig) -> cybflight_core::trajectory_planning::s
 /// `MPC_THRUST_FRAC` overrides the controller's collective-thrust ceiling
 /// fraction (YAML: 0.75) — controller only; the plant keeps the airframe.
 fn thrust_frac_override(vp: &mut FirmwareConfig) {
-    if let Some(f) = std::env::var("MPC_THRUST_FRAC").ok().and_then(|v| v.parse::<f32>().ok()) {
+    if let Some(f) = std::env::var("MPC_THRUST_FRAC")
+        .ok()
+        .and_then(|v| v.parse::<f32>().ok())
+    {
         vp.mpc.thrust_frac = f;
     }
 }
@@ -91,7 +99,10 @@ fn apply_model_options(c: &mut MpcIndiController, vp: &FirmwareConfig) {
     }
     // `MPC_BODYDRAG=<kxy>` models quadratic body drag `[kxy, kxy, 2·kxy]`
     // (the plant's `body_drag` condition uses the same layout).
-    if let Some(k) = std::env::var("MPC_BODYDRAG").ok().and_then(|v| v.parse::<f32>().ok()) {
+    if let Some(k) = std::env::var("MPC_BODYDRAG")
+        .ok()
+        .and_then(|v| v.parse::<f32>().ok())
+    {
         c.set_body_drag([k, k, 2.0 * k]);
     }
 }
@@ -101,23 +112,44 @@ fn apply_model_options(c: &mut MpcIndiController, vp: &FirmwareConfig) {
 /// references that are not MINCO-through-waypoints. `PIECES_JSON=<path>`
 /// selects it in place of a mission; the mission name is the file's.
 fn load_pieces_json(path: &str) -> (String, Vec3, PiecewisePolynomial) {
-    use cybflight_core::trajectory_planning::polynomial::{Polynomial, MAX_COEFFS};
-    let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).expect("pieces json")).unwrap();
+    use cybflight_core::trajectory_planning::polynomial::{MAX_COEFFS, Polynomial};
+    let v: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).expect("pieces json")).unwrap();
     let name = v["name"].as_str().unwrap().to_string();
     let s = &v["start"];
-    let start = Vec3::new(s[0].as_f64().unwrap() as f32, s[1].as_f64().unwrap() as f32, s[2].as_f64().unwrap() as f32);
-    let pieces: Vec<Polynomial> = v["pieces"].as_array().unwrap().iter().map(|pc| {
-        let mut coeffs = [ZERO3; MAX_COEFFS];
-        for (i, c) in pc["coeffs"].as_array().unwrap().iter().enumerate() {
-            coeffs[i] = Vec3::new(c[0].as_f64().unwrap() as f32, c[1].as_f64().unwrap() as f32, c[2].as_f64().unwrap() as f32);
-        }
-        Polynomial { degree: 7, duration: pc["duration"].as_f64().unwrap() as f32, coeffs }
-    }).collect();
+    let start = Vec3::new(
+        s[0].as_f64().unwrap() as f32,
+        s[1].as_f64().unwrap() as f32,
+        s[2].as_f64().unwrap() as f32,
+    );
+    let pieces: Vec<Polynomial> = v["pieces"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|pc| {
+            let mut coeffs = [ZERO3; MAX_COEFFS];
+            for (i, c) in pc["coeffs"].as_array().unwrap().iter().enumerate() {
+                coeffs[i] = Vec3::new(
+                    c[0].as_f64().unwrap() as f32,
+                    c[1].as_f64().unwrap() as f32,
+                    c[2].as_f64().unwrap() as f32,
+                );
+            }
+            Polynomial {
+                degree: 7,
+                duration: pc["duration"].as_f64().unwrap() as f32,
+                coeffs,
+            }
+        })
+        .collect();
     (name, start, PiecewisePolynomial::from_pieces(&pieces))
 }
 
 fn rate_weight_nominal() -> f32 {
-    std::env::var("MPC_W_RATE").ok().and_then(|v| v.parse().ok()).unwrap_or(5.0)
+    std::env::var("MPC_W_RATE")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(5.0)
 }
 
 fn root() -> PathBuf {
@@ -132,7 +164,8 @@ fn out_dir() -> PathBuf {
 
 fn load(name: &str) -> Mission {
     let path = root().join("missions").join(format!("{name}.yaml"));
-    let yaml = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    let yaml =
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
     load_mission(name, &yaml).expect("mission loads")
 }
 
@@ -144,7 +177,10 @@ fn plan_fixed_time(m: &Mission) -> PiecewisePolynomial {
         durations.push(t - prev);
         prev = t;
     }
-    let intermediate: Vec<Vec3> = m.waypoints[..n - 1].iter().map(|w| Vec3::from(*w)).collect();
+    let intermediate: Vec<Vec3> = m.waypoints[..n - 1]
+        .iter()
+        .map(|w| Vec3::from(*w))
+        .collect();
     let head = [Vec3::from(m.start), ZERO3, ZERO3, ZERO3];
     let tail = [Vec3::from(m.waypoints[n - 1]), ZERO3, ZERO3, ZERO3];
     let mut minco = Box::new(MincoSnap::new(&head, &tail, n));
@@ -154,16 +190,27 @@ fn plan_fixed_time(m: &Mission) -> PiecewisePolynomial {
 
 fn vehicle() -> FirmwareConfig {
     let path = root().join("vehicles").join(format!("{VEHICLE_YAML}.yaml"));
-    let yaml = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
-    vehicle_yaml::load(VEHICLE_YAML, &yaml).expect("vehicle loads").params
+    let yaml =
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    vehicle_yaml::load(VEHICLE_YAML, &yaml)
+        .expect("vehicle loads")
+        .params
 }
 
-fn scenario_for(name: &str, m: &Mission, traj: PiecewisePolynomial, vp: FirmwareConfig) -> Scenario {
+fn scenario_for(
+    name: &str,
+    m: &Mission,
+    traj: PiecewisePolynomial,
+    vp: FirmwareConfig,
+) -> Scenario {
     // `SIM_ROTOR_DRAG_SCALE=<f>` scales the *plant's* rotor-drag
     // coefficients (the controllers keep their nominal model — a pure
     // plant/model mismatch study).
     let mut sim = default_sim_params();
-    if let Some(f) = std::env::var("SIM_ROTOR_DRAG_SCALE").ok().and_then(|v| v.parse::<f32>().ok()) {
+    if let Some(f) = std::env::var("SIM_ROTOR_DRAG_SCALE")
+        .ok()
+        .and_then(|v| v.parse::<f32>().ok())
+    {
         for c in sim.aero_drag.iter_mut() {
             *c *= f;
         }
@@ -190,11 +237,16 @@ fn scenario_for(name: &str, m: &Mission, traj: PiecewisePolynomial, vp: Firmware
     }
 }
 
-fn controller(vp: &FirmwareConfig, traj: &PiecewisePolynomial, policy: Option<&str>) -> MpcIndiController {
+fn controller(
+    vp: &FirmwareConfig,
+    traj: &PiecewisePolynomial,
+    policy: Option<&str>,
+) -> MpcIndiController {
     let mut vpc = vp.clone();
     thrust_frac_override(&mut vpc);
     let vp = &vpc;
-    let mut c = MpcIndiController::with_options(vp, vp.mpc.pos_cost_mode, SQP_RATE_HZ, INDI_RATE_HZ, SQP_N);
+    let mut c =
+        MpcIndiController::with_options(vp, vp.mpc.pos_cost_mode, SQP_RATE_HZ, INDI_RATE_HZ, SQP_N);
     c.use_tilt_map = true;
     c.flatness_feedforward = true;
     // Thrust weight from the YAML; nominal rate weight from `MPC_W_RATE`
@@ -213,9 +265,23 @@ fn controller(vp: &FirmwareConfig, traj: &PiecewisePolynomial, policy: Option<&s
     c
 }
 
-fn run_case(name: &str, tag: &str, mut scenario: Scenario, traj: &PiecewisePolynomial, c: &mut MpcIndiController) -> serde_json::Value {
-    let mut plant = QuadPlant::new(scenario.vehicle_params.clone(), &scenario.sim_params, 1.0 / 8000.0);
-    let runner = MissionRunner::new(RunnerConfig { dt_sim: 1.0 / 8000.0, max_sim_time_s: 120.0, history_rate_hz: 100.0 });
+fn run_case(
+    name: &str,
+    tag: &str,
+    mut scenario: Scenario,
+    traj: &PiecewisePolynomial,
+    c: &mut MpcIndiController,
+) -> serde_json::Value {
+    let mut plant = QuadPlant::new(
+        scenario.vehicle_params.clone(),
+        &scenario.sim_params,
+        1.0 / 8000.0,
+    );
+    let runner = MissionRunner::new(RunnerConfig {
+        dt_sim: 1.0 / 8000.0,
+        max_sim_time_s: 120.0,
+        history_rate_hz: 100.0,
+    });
     let out = runner.run(&mut scenario, &mut plant, c);
     let s = &out.summary;
     // Geometric RMSE over the mission (closest point within ±0.5 s of
@@ -228,13 +294,28 @@ fn run_case(name: &str, tag: &str, mut scenario: Scenario, traj: &PiecewisePolyn
         n += 1;
         peak = peak.max(e);
     }
-    let rms_geom = if n > 0 { (sum_sq / n as f64).sqrt() as f32 } else { 0.0 };
+    let rms_geom = if n > 0 {
+        (sum_sq / n as f64).sqrt() as f32
+    } else {
+        0.0
+    };
     let completed = s.early_exit_reason.is_none() && s.terminal_pos_err_m < 0.15;
     println!(
         "{:<24} [{:<8}] rms_time={:.4}m rms_geom={:.4}m peak_geom={:.4}m peak_time={:.4}m term={:.4}m tilt={:.1}° sat={:.0}% {}",
-        name, tag, s.rms_pos_err_m, rms_geom, peak, s.peak_pos_err_m, s.terminal_pos_err_m,
-        s.peak_tilt_rad.to_degrees(), s.peak_motor_saturation_pct,
-        if completed { "COMPLETED".to_string() } else { format!("INCOMPLETE ({:?})", s.early_exit_reason) }
+        name,
+        tag,
+        s.rms_pos_err_m,
+        rms_geom,
+        peak,
+        s.peak_pos_err_m,
+        s.terminal_pos_err_m,
+        s.peak_tilt_rad.to_degrees(),
+        s.peak_motor_saturation_pct,
+        if completed {
+            "COMPLETED".to_string()
+        } else {
+            format!("INCOMPLETE ({:?})", s.early_exit_reason)
+        }
     );
     let hist: Vec<serde_json::Value> = out
         .history
@@ -256,7 +337,10 @@ fn run_case(name: &str, tag: &str, mut scenario: Scenario, traj: &PiecewisePolyn
         .collect();
     std::fs::write(
         out_dir().join(format!("trace__{name}__{tag}.json")),
-        serde_json::to_string(&serde_json::json!({"mission": name, "tag": tag, "history": hist, "cost_log": zlog})).unwrap(),
+        serde_json::to_string(
+            &serde_json::json!({"mission": name, "tag": tag, "history": hist, "cost_log": zlog}),
+        )
+        .unwrap(),
     )
     .unwrap();
     serde_json::json!({
@@ -272,8 +356,18 @@ fn run_case(name: &str, tag: &str, mut scenario: Scenario, traj: &PiecewisePolyn
 #[test]
 fn learned_cost_vs_nominal() {
     let vp = vehicle();
-    let policy = std::env::var("COST_POLICY").unwrap_or_else(|_| root().join("target/cost_policy/policy.bin").to_string_lossy().into_owned());
-    let blind = std::env::var("COST_POLICY_BLIND").unwrap_or_else(|_| root().join("target/cost_policy_blind/policy.bin").to_string_lossy().into_owned());
+    let policy = std::env::var("COST_POLICY").unwrap_or_else(|_| {
+        root()
+            .join("target/cost_policy/policy.bin")
+            .to_string_lossy()
+            .into_owned()
+    });
+    let blind = std::env::var("COST_POLICY_BLIND").unwrap_or_else(|_| {
+        root()
+            .join("target/cost_policy_blind/policy.bin")
+            .to_string_lossy()
+            .into_owned()
+    });
     let have_policy = std::path::Path::new(&policy).exists();
     let have_blind = std::path::Path::new(&blind).exists();
     if !have_policy {
@@ -286,7 +380,11 @@ fn learned_cost_vs_nominal() {
         let mut v: Vec<String> = std::fs::read_dir(root().join("missions"))
             .unwrap()
             .filter_map(|e| e.ok())
-            .filter_map(|e| e.path().file_stem().map(|s| s.to_string_lossy().into_owned()))
+            .filter_map(|e| {
+                e.path()
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+            })
             .collect();
         v.sort();
         v
@@ -295,24 +393,51 @@ fn learned_cost_vs_nominal() {
     };
     // `MPC_W_RATE_CURRENT=<w>` adds a "current" row: the nominal state
     // weights with that rate weight and no policy (the flown tune).
-    let current: Option<f32> = std::env::var("MPC_W_RATE_CURRENT").ok().and_then(|v| v.parse().ok());
+    let current: Option<f32> = std::env::var("MPC_W_RATE_CURRENT")
+        .ok()
+        .and_then(|v| v.parse().ok());
     let mut rows = Vec::new();
     if let Ok(pj) = std::env::var("PIECES_JSON") {
         let (name, start, traj) = load_pieces_json(&pj);
-        let m = Mission { start: [start.x, start.y, start.z], ..load("indoor_circle_slow") };
+        let m = Mission {
+            start: [start.x, start.y, start.z],
+            ..load("indoor_circle_slow")
+        };
         let name = name.as_str();
         if let Some(r) = current {
             let mut c = controller(&vp, &traj, None);
             c.set_input_weights([vp.mpc.thrust_weight, r, r, r]);
-            rows.push(run_case(name, "current", scenario_for(name, &m, traj.clone(), vp.clone()), &traj, &mut c));
+            rows.push(run_case(
+                name,
+                "current",
+                scenario_for(name, &m, traj.clone(), vp.clone()),
+                &traj,
+                &mut c,
+            ));
         }
         let mut c = controller(&vp, &traj, None);
-        rows.push(run_case(name, "nominal", scenario_for(name, &m, traj.clone(), vp.clone()), &traj, &mut c));
+        rows.push(run_case(
+            name,
+            "nominal",
+            scenario_for(name, &m, traj.clone(), vp.clone()),
+            &traj,
+            &mut c,
+        ));
         if have_policy {
             let mut c = controller(&vp, &traj, Some(&policy));
-            rows.push(run_case(name, "learned", scenario_for(name, &m, traj.clone(), vp.clone()), &traj, &mut c));
+            rows.push(run_case(
+                name,
+                "learned",
+                scenario_for(name, &m, traj.clone(), vp.clone()),
+                &traj,
+                &mut c,
+            ));
         }
-        std::fs::write(out_dir().join("summary.json"), serde_json::to_string_pretty(&rows).unwrap()).unwrap();
+        std::fs::write(
+            out_dir().join("summary.json"),
+            serde_json::to_string_pretty(&rows).unwrap(),
+        )
+        .unwrap();
         return;
     }
     for name in &names {
@@ -325,28 +450,60 @@ fn learned_cost_vs_nominal() {
         if let Some(r) = current {
             let mut c = controller(&vp, &traj, None);
             c.set_input_weights([vp.mpc.thrust_weight, r, r, r]);
-            rows.push(run_case(name, "current", scenario_for(name, &m, traj.clone(), vp.clone()), &traj, &mut c));
+            rows.push(run_case(
+                name,
+                "current",
+                scenario_for(name, &m, traj.clone(), vp.clone()),
+                &traj,
+                &mut c,
+            ));
         }
         let mut c = controller(&vp, &traj, None);
-        rows.push(run_case(name, "nominal", scenario_for(name, &m, traj.clone(), vp.clone()), &traj, &mut c));
+        rows.push(run_case(
+            name,
+            "nominal",
+            scenario_for(name, &m, traj.clone(), vp.clone()),
+            &traj,
+            &mut c,
+        ));
         if have_policy {
             let mut c = controller(&vp, &traj, Some(&policy));
-            rows.push(run_case(name, "learned", scenario_for(name, &m, traj.clone(), vp.clone()), &traj, &mut c));
+            rows.push(run_case(
+                name,
+                "learned",
+                scenario_for(name, &m, traj.clone(), vp.clone()),
+                &traj,
+                &mut c,
+            ));
         }
         if have_blind {
             let mut c = controller(&vp, &traj, Some(&blind));
-            rows.push(run_case(name, "blind", scenario_for(name, &m, traj.clone(), vp.clone()), &traj, &mut c));
+            rows.push(run_case(
+                name,
+                "blind",
+                scenario_for(name, &m, traj.clone(), vp.clone()),
+                &traj,
+                &mut c,
+            ));
         }
     }
-    std::fs::write(out_dir().join("summary.json"), serde_json::to_string_pretty(&rows).unwrap()).unwrap();
+    std::fs::write(
+        out_dir().join("summary.json"),
+        serde_json::to_string_pretty(&rows).unwrap(),
+    )
+    .unwrap();
     // The nominal stack is expected to complete the held-out mission;
     // with a large sampler lag it can miss the terminal gate without any
     // tracking problem, so this is a warning, not a failure.
     for r in &rows {
-        if r["mission"] == "indoor_splits_timeopt" && r["tag"] == "nominal" && only.is_none()
+        if r["mission"] == "indoor_splits_timeopt"
+            && r["tag"] == "nominal"
+            && only.is_none()
             && !r["completed"].as_bool().unwrap()
         {
-            println!("warning: nominal stack did not complete the held-out mission (terminal gate)");
+            println!(
+                "warning: nominal stack did not complete the held-out mission (terminal gate)"
+            );
         }
     }
 }

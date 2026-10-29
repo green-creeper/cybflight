@@ -85,9 +85,19 @@ pub fn enable() {
     }
     let rcc = pac::RCC;
     let pwr = pac::PWR;
-    rcc.ahb4enr().modify(|w| w.set_bkpsramen(true));
-    pwr.cr1().modify(|w| w.set_dbp(true));
-    pwr.cr2().modify(|w| w.set_bren(true));
+    #[cfg(not(feature = "board_flywoof745"))]
+    {
+        rcc.ahb4enr().modify(|w| w.set_bkpsramen(true));
+        pwr.cr1().modify(|w| w.set_dbp(true));
+        pwr.cr2().modify(|w| w.set_bren(true));
+    }
+    #[cfg(feature = "board_flywoof745")]
+    {
+        rcc.apb1enr().modify(|w| w.set_pwren(true));
+        rcc.ahb1enr().modify(|w| w.set_bkpsramen(true));
+        pwr.cr1().modify(|w| w.set_dbp(true));
+        pwr.csr1().modify(|w| w.set_bre(true));
+    }
     // No explicit poll on BRRDY — the ready bit only matters for
     // VBAT switchover; in normal operation the regulator is already
     // running. Skip the busy-wait so `enable()` is callable from a

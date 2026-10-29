@@ -144,10 +144,7 @@ impl RotorModel for NoisyRotorTelemetry {
                 valid[i] = false;
             }
         }
-        RotorTelemetry {
-            omega_rad_s,
-            valid,
-        }
+        RotorTelemetry { omega_rad_s, valid }
     }
 }
 

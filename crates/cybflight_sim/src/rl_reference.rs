@@ -29,7 +29,7 @@
 //! negate (y and z flip).
 
 use cybflight_core::acmpc::CtbrCommand;
-use cybflight_core::nn::race_policy::{Gate, VehicleState, NUM_MOTORS};
+use cybflight_core::nn::race_policy::{Gate, NUM_MOTORS, VehicleState};
 use cybflight_core::rotation::euler_angles_rpy_to_quaternion;
 use nalgebra::{Matrix3, Matrix4, Quaternion, Rotation3, UnitQuaternion, Vector3, Vector4};
 
@@ -96,9 +96,7 @@ pub fn world_state_ned_to_enu(ws: &[f32]) -> VehicleState {
             m * q_ned.to_rotation_matrix().into_inner() * n,
         )),
         body_rate_rad_s: Vector3::new(ws[9], -ws[10], -ws[11]),
-        rotor_omega_rad_s: core::array::from_fn(|i| {
-            (ws[12 + i] + 1.0) * 0.5 * RL_OMEGA_NORM_MAX
-        }),
+        rotor_omega_rad_s: core::array::from_fn(|i| (ws[12 + i] + 1.0) * 0.5 * RL_OMEGA_NORM_MAX),
     }
 }
 
@@ -119,7 +117,10 @@ pub struct RateLoopConfig {
 
 impl Default for RateLoopConfig {
     fn default() -> Self {
-        Self { rate_gains: Vector3::new(15.0, 15.0, 8.0), newton_iters: 2 }
+        Self {
+            rate_gains: Vector3::new(15.0, 15.0, 8.0),
+            newton_iters: 2,
+        }
     }
 }
 
@@ -266,21 +267,12 @@ impl RlReferencePlant {
     /// yaw terms (`k_rd·ω̇`) are left out: they vanish at the equilibrium
     /// being solved for, and including them would make the target depend
     /// on the answer.
-    pub fn track_ctbr(
-        &self,
-        cmd: &CtbrCommand,
-        cfg: &RateLoopConfig,
-    ) -> [f32; NUM_MOTORS] {
+    pub fn track_ctbr(&self, cmd: &CtbrCommand, cfg: &RateLoopConfig) -> [f32; NUM_MOTORS] {
         let p = &self.params;
         let alpha = cfg
             .rate_gains
             .component_mul(&(cmd.body_rate_rad_s - self.body_rate_rad_s));
-        let target = Vector4::new(
-            cmd.specific_thrust_m_s2,
-            alpha.x,
-            alpha.y,
-            alpha.z,
-        );
+        let target = Vector4::new(cmd.specific_thrust_m_s2, alpha.x, alpha.y, alpha.z);
         // Rows: collective, roll, pitch, yaw. The first three are `c·ω²`,
         // the last `c·ω`; `quad` selects which residual/derivative pair a
         // row uses.
@@ -291,7 +283,9 @@ impl RlReferencePlant {
             core::array::from_fn(|i| S_YAW[i] * p.k_r[i]),
         ];
 
-        let mut w = self.rotor_omega_rad_s.map(|v| v.clamp(p.omega_min, RL_OMEGA_NORM_MAX));
+        let mut w = self
+            .rotor_omega_rad_s
+            .map(|v| v.clamp(p.omega_min, RL_OMEGA_NORM_MAX));
         for _ in 0..cfg.newton_iters {
             let residual = Vector4::from_fn(|r, _| {
                 let quad = r < 3;
@@ -301,7 +295,11 @@ impl RlReferencePlant {
                     - target[r]
             });
             let jac = Matrix4::from_fn(|r, i| {
-                if r < 3 { 2.0 * coeff[r][i] * w[i] } else { coeff[r][i] }
+                if r < 3 {
+                    2.0 * coeff[r][i] * w[i]
+                } else {
+                    coeff[r][i]
+                }
             });
             let Some(step) = jac.lu().solve(&residual) else {
                 break;
@@ -340,8 +338,7 @@ impl RlReferencePlant {
             -p.k_y * v_body.y * sum_w,
             p.k_w * sum_w2,
         );
-        let accel_world =
-            rot.transform_vector(&a_body) - Vector3::new(0.0, 0.0, p.gravity);
+        let accel_world = rot.transform_vector(&a_body) - Vector3::new(0.0, 0.0, p.gravity);
 
         // ── Angular acceleration, body FLU ──
         // Upstream (FRD): ṗ = −k_p₁ω₁² − k_p₂ω₂² + k_p₃ω₃² + k_p₄ω₄²
@@ -353,7 +350,8 @@ impl RlReferencePlant {
         let rate_dot = Vector3::new(
             -p.k_p[0] * sq(0) - p.k_p[1] * sq(1) + p.k_p[2] * sq(2) + p.k_p[3] * sq(3),
             p.k_q[0] * sq(0) - p.k_q[1] * sq(1) + p.k_q[2] * sq(2) - p.k_q[3] * sq(3),
-            p.k_r[0] * w[0] - p.k_r[1] * w[1] - p.k_r[2] * w[2] + p.k_r[3] * w[3]
+            p.k_r[0] * w[0] - p.k_r[1] * w[1] - p.k_r[2] * w[2]
+                + p.k_r[3] * w[3]
                 + p.k_rd[0] * w_dot[0]
                 - p.k_rd[1] * w_dot[1]
                 - p.k_rd[2] * w_dot[2]
@@ -377,8 +375,7 @@ impl RlReferencePlant {
 
         self.position_m += self.velocity_m_s * dt;
         self.velocity_m_s += accel_world * dt;
-        self.attitude =
-            UnitQuaternion::from_quaternion(self.attitude.as_ref() + dq * dt);
+        self.attitude = UnitQuaternion::from_quaternion(self.attitude.as_ref() + dq * dt);
         self.body_rate_rad_s += rate_dot * dt;
         for i in 0..NUM_MOTORS {
             self.rotor_omega_rad_s[i] = (w[i] + w_dot[i] * dt).max(0.0);

@@ -158,7 +158,11 @@ const DSHOT_FRAME_PERIOD_S: f32 = 200e-6;
 /// from the control rate (runtime param) — see [`rpm_observation_period_s`].
 fn rpm_observation_period_s(loop_rate_hz: f32) -> f32 {
     let tick_s = 1.0 / loop_rate_hz;
-    if tick_s > DSHOT_FRAME_PERIOD_S { tick_s } else { DSHOT_FRAME_PERIOD_S }
+    if tick_s > DSHOT_FRAME_PERIOD_S {
+        tick_s
+    } else {
+        DSHOT_FRAME_PERIOD_S
+    }
 }
 /// Ceiling on the expected RPM interval, so a near-zero ω estimate cannot
 /// make the staleness gate arbitrarily permissive. With the default 10
@@ -210,8 +214,7 @@ fn build_rpm_estimator_config(
     // the oldest entry silently, i.e. the filter modelled a delay the
     // operator never set. Clamp and say so instead — the schema range is
     // rate-independent, but what the buffer can hold is not.
-    let tau_d_max =
-        crate::estimation::rpm_estimator::max_representable_tau_d_s(control_rate_hz);
+    let tau_d_max = crate::estimation::rpm_estimator::max_representable_tau_d_s(control_rate_hz);
     let tau_d = if p.tau_d > tau_d_max {
         // Log once per motor at construction, not per tick.
         defmt::warn!(
@@ -281,8 +284,7 @@ static VOLTAGE_FAILSAFE_TRIPPED: core::sync::atomic::AtomicBool =
 /// `ControllerTimeout` failsafe — true, but it names the symptom. This
 /// atomic names the cause. Set alongside the existing one-shot log
 /// latches so the two cannot disagree about whether a trip happened.
-pub static INNER_SILENT_CAUSE: core::sync::atomic::AtomicU8 =
-    core::sync::atomic::AtomicU8::new(0);
+pub static INNER_SILENT_CAUSE: core::sync::atomic::AtomicU8 = core::sync::atomic::AtomicU8::new(0);
 
 /// `true` while `POWER_STATUS` has been silent longer than
 /// [`VOLTAGE_STALE_TIMEOUT`] and INDI is flying the held voltage.
@@ -433,7 +435,11 @@ pub async fn indi_task() {
         indi_motors: core::array::from_fn(|i| {
             let m = &params.airframe.motors[i];
             let tau = m.time_const_s;
-            let tau = if tau.is_finite() && tau > 0.0 { tau } else { DEFAULT_MOTOR_TAU_S };
+            let tau = if tau.is_finite() && tau > 0.0 {
+                tau
+            } else {
+                DEFAULT_MOTOR_TAU_S
+            };
             let omega = m.max_omega_rad_s;
             let omega = if omega.is_finite() && omega > 0.0 {
                 omega
@@ -462,7 +468,11 @@ pub async fn indi_task() {
         // alone did nothing unless the whole effectiveness block was non-zero.
         nonlinearity: SVector::from_fn(|i, _| {
             let k = params.airframe.motors[i].nonlinearity;
-            if k > 0.0 { k } else { crate::vehicle::BAKED_THRUST_NONLINEARITY }
+            if k > 0.0 {
+                k
+            } else {
+                crate::vehicle::BAKED_THRUST_NONLINEARITY
+            }
         }),
         act_limit: SVector::from_element(1.0),
         wls_wv: ic.wls_wv.into(),
@@ -527,14 +537,13 @@ pub async fn indi_task() {
             );
             (default_tau, default_omega)
         };
-        let est_config =
-            build_rpm_estimator_config(
-                i,
-                tau_m,
-                m.nonlinearity,
-                &params.indi.rpm_estimator,
-                loop_rate_hz,
-            );
+        let est_config = build_rpm_estimator_config(
+            i,
+            tau_m,
+            m.nonlinearity,
+            &params.indi.rpm_estimator,
+            loop_rate_hz,
+        );
         // Initial ω variance from `rpm_est_init_omega_var`, the same
         // value the filter re-seeds with. It was the one part of the
         // estimator's configuration that stayed a literal here.
@@ -572,7 +581,11 @@ pub async fn indi_task() {
             .map(|m| m.max_omega_rad_s)
             .filter(|v| v.is_finite())
             .fold(0.0f32, f32::max);
-        if m > 0.0 { m } else { DEFAULT_MOTOR_MAX_OMEGA_RAD_S }
+        if m > 0.0 {
+            m
+        } else {
+            DEFAULT_MOTOR_MAX_OMEGA_RAD_S
+        }
     };
     // Physics bound: max plausible dω/dt for a first-order motor with
     // time constant TAU_MIN_S driven toward max_omega_bound.
@@ -631,6 +644,7 @@ pub async fn indi_task() {
     // Cache the latest RATE_COMMAND from the outer loop (cascade, MPC, or
     // RC rate mode) plus its arrival time for the staleness gate.
     let mut last_cmd_time: Option<Instant> = None;
+    let mut last_direct_motors: Option<(Instant, [msgs::NormalizedThrottle; NU])> = None;
     /// Failsafe timeout on the rate command Signal. After this many ms
     /// without a fresh command from the outer loop, the inner loop goes
     /// silent and the watchdog disarms.
@@ -855,10 +869,12 @@ pub async fn indi_task() {
     let notch = {
         let n = params.rpm_notch.clone();
         let nyquist_ok = n.min_hz + n.fade_hz < 0.48 * loop_rate_hz;
-        let finite_pos =
-            |v: f32| v.is_finite() && v > 0.0;
-        if finite_pos(n.q) && finite_pos(n.min_hz) && finite_pos(n.fade_hz)
-            && finite_pos(n.freq_lpf_hz) && nyquist_ok
+        let finite_pos = |v: f32| v.is_finite() && v > 0.0;
+        if finite_pos(n.q)
+            && finite_pos(n.min_hz)
+            && finite_pos(n.fade_hz)
+            && finite_pos(n.freq_lpf_hz)
+            && nyquist_ok
         {
             n
         } else {
@@ -994,7 +1010,6 @@ pub async fn indi_task() {
                 motor_freq_lpf_state = [0.0; NU];
                 motor_freq_lpf_has_prev = false;
             }
-
         }};
     }
 
@@ -1210,7 +1225,9 @@ pub async fn indi_task() {
                     Some(t) => {
                         let elapsed =
                             imu.timestamp.saturating_duration_since(t).as_micros() as f32 * 1e-6;
-                        elapsed > rpm_stale_gaps * expected_rpm_gap_s(omega_hat, pole_pairs, rpm_obs_period_s)
+                        elapsed
+                            > rpm_stale_gaps
+                                * expected_rpm_gap_s(omega_hat, pole_pairs, rpm_obs_period_s)
                     }
                     None => true,
                 };
@@ -1379,6 +1396,16 @@ pub async fn indi_task() {
                 torque_ref = cmd.torque_n_m;
             }
             last_cmd_time = Some(now);
+            // Receiving a rate command supersedes any held direct-motor command.
+            last_direct_motors = None;
+        }
+        let offboard_active = super::OFFBOARD_ACTIVE.load(core::sync::atomic::Ordering::Acquire);
+        if offboard_active {
+            if let Some(direct) = super::DIRECT_MOTOR_COMMAND.try_take() {
+                last_direct_motors = Some((now, direct.motor_commands));
+            }
+        } else {
+            last_direct_motors = None;
         }
 
         // 5. Stale command while armed — go silent, let watchdog handle it.
@@ -1386,7 +1413,18 @@ pub async fn indi_task() {
             Some(t) => now.duration_since(t) < CMD_STALE_TIMEOUT,
             None => false,
         };
-        if armed && !cmd_fresh {
+        let direct_motors_opt = match last_direct_motors {
+            Some((t, cmds)) if offboard_active && now.duration_since(t) < CMD_STALE_TIMEOUT => {
+                Some(cmds)
+            }
+            _ => None,
+        };
+        if !cmd_fresh {
+            rate_ref = Vector3::zeros();
+            collective_thrust_n = 0.0;
+            spf_sp_z = 0.0;
+        }
+        if armed && !cmd_fresh && direct_motors_opt.is_none() {
             continue;
         }
 
@@ -1538,9 +1576,7 @@ pub async fn indi_task() {
         // command-staleness and non-finite-output paths above.
         if rpm_all_stale != rpm_all_stale_prev {
             if rpm_all_stale {
-                defmt::error!(
-                    "INDI: all motor RPM telemetry stale — G2 off, ω̇ from motor model"
-                );
+                defmt::error!("INDI: all motor RPM telemetry stale — G2 off, ω̇ from motor model");
             } else {
                 defmt::info!("INDI: motor RPM telemetry recovered");
             }
@@ -1629,12 +1665,15 @@ pub async fn indi_task() {
         // 8. Publish motor commands + watchdog heartbeat.
         //    Heartbeat is ONLY updated when a valid command is published.
         //    Any failure path above that hits `continue` goes silent.
-        let motor_commands = [
-            msgs::NormalizedThrottle::new_saturating(output.motor_commands[0]),
-            msgs::NormalizedThrottle::new_saturating(output.motor_commands[1]),
-            msgs::NormalizedThrottle::new_saturating(output.motor_commands[2]),
-            msgs::NormalizedThrottle::new_saturating(output.motor_commands[3]),
-        ];
+        let motor_commands = match direct_motors_opt {
+            Some(direct_cmds) => direct_cmds,
+            None => [
+                msgs::NormalizedThrottle::new_saturating(output.motor_commands[0]),
+                msgs::NormalizedThrottle::new_saturating(output.motor_commands[1]),
+                msgs::NormalizedThrottle::new_saturating(output.motor_commands[2]),
+                msgs::NormalizedThrottle::new_saturating(output.motor_commands[3]),
+            ],
+        };
         let publish_time = Instant::now();
         ACTUATOR_MOTORS.signal(msgs::ActuatorMotors {
             timestamp: publish_time,
@@ -1659,7 +1698,7 @@ pub async fn indi_task() {
             for (i, est) in rpm_estimators.iter_mut().enumerate() {
                 est.push_throttle(
                     est_current_ts,
-                    EstNormalizedThrottle::new_clamped(output.motor_commands[i]),
+                    EstNormalizedThrottle::new_clamped(motor_commands[i].value()),
                 );
             }
         }

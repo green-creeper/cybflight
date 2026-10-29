@@ -300,7 +300,10 @@ mod tests {
             sum_diff_sq += (x - y) * (x - y);
         }
         let rms_diff = libm::sqrtf(sum_diff_sq / 2000.0);
-        assert!(rms_diff < 1e-6, "expected near-perfect passthrough, got rms_diff={rms_diff}");
+        assert!(
+            rms_diff < 1e-6,
+            "expected near-perfect passthrough, got rms_diff={rms_diff}"
+        );
     }
 
     #[test]
@@ -330,12 +333,12 @@ mod tests {
         const FS: f32 = 1000.0;
         const MAX_HZ: f32 = 0.48 * FS; // 480
         let cases: &[(f32, f32)] = &[
-            (300.0, 1.0),             // mid-band, full notch
-            (MAX_HZ - FADE_HZ, 1.0),  // 430: bottom of the upper fade band
+            (300.0, 1.0),                  // mid-band, full notch
+            (MAX_HZ - FADE_HZ, 1.0),       // 430: bottom of the upper fade band
             (MAX_HZ - FADE_HZ / 2.0, 0.5), // 455: halfway back down
-            (MAX_HZ, 0.0),            // 480: passthrough
-            (666.0, 0.0),             // 40k-RPM fundamental — off the end
-            (5000.0, 0.0),            // absurd, still passthrough
+            (MAX_HZ, 0.0),                 // 480: passthrough
+            (666.0, 0.0),                  // 40k-RPM fundamental — off the end
+            (5000.0, 0.0),                 // absurd, still passthrough
         ];
         for (f, expected_weight) in cases {
             let mut bank = RpmNotchBank::<4, 1>::new(FS, Q, MIN_HZ, FADE_HZ);
@@ -358,14 +361,14 @@ mod tests {
         // As motor frequency rises through min_hz..(min_hz+fade_range), the
         // weight on the fundamental harmonic should ramp linearly from 0 to 1.
         let cases: &[(f32, f32)] = &[
-            (90.0, 0.0),                       // below min_hz
-            (100.0, 0.0),                      // at min_hz
-            (125.0, 0.5),                      // halfway up fade band
-            (150.0, 1.0),                      // top of fade band
-            (300.0, 1.0),                      // well above
-            (f32::NAN, 0.0),                   // non-finite → passthrough
-            (f32::INFINITY, 0.0),              // non-finite → passthrough
-            (-50.0, 0.0),                      // negative → clamped to min_hz
+            (90.0, 0.0),          // below min_hz
+            (100.0, 0.0),         // at min_hz
+            (125.0, 0.5),         // halfway up fade band
+            (150.0, 1.0),         // top of fade band
+            (300.0, 1.0),         // well above
+            (f32::NAN, 0.0),      // non-finite → passthrough
+            (f32::INFINITY, 0.0), // non-finite → passthrough
+            (-50.0, 0.0),         // negative → clamped to min_hz
         ];
         for (f, expected_weight) in cases {
             // Reset the cursor by constructing a fresh bank — we only need
@@ -433,7 +436,10 @@ mod tests {
             bank.update(&bad);
             for axis in 0..3 {
                 let y = bank.apply(axis, x);
-                assert!(y.is_finite(), "non-finite output at sample {n} axis {axis}: {y}");
+                assert!(
+                    y.is_finite(),
+                    "non-finite output at sample {n} axis {axis}: {y}"
+                );
             }
         }
     }

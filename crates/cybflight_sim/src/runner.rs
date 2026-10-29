@@ -236,8 +236,8 @@ impl MissionRunner {
         // The mission clock does not start until the estimator is usable
         // (see `mission_start_s` below), so wall-clock has to allow for
         // that hold on top of the trajectory itself.
-        let wall_deadline_s =
-            (sim_deadline_s + MAX_ESTIMATOR_WAIT_S).min(self.cfg.max_sim_time_s.max(sim_deadline_s));
+        let wall_deadline_s = (sim_deadline_s + MAX_ESTIMATOR_WAIT_S)
+            .min(self.cfg.max_sim_time_s.max(sim_deadline_s));
         let max_ticks = ((wall_deadline_s * controller.tick_rate_hz()).ceil() as usize).max(1);
 
         let expected_records = (max_ticks / history_stride as usize) + 2;
@@ -342,9 +342,7 @@ impl MissionRunner {
                     }
                     es.next_gps_t += 1.0 / es.gps_rate_hz;
                 }
-                let _ = es
-                    .guard
-                    .on_predict_tick(&es.eskf, (t * 1000.0) as u64);
+                let _ = es.guard.on_predict_tick(&es.eskf, (t * 1000.0) as u64);
                 owned_state = build_state_from_eskf(&es.eskf, &imu);
                 &owned_state
             } else {

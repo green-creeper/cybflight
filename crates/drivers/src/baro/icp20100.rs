@@ -239,11 +239,7 @@ async fn dummy<I2C: I2c>(i2c: &mut I2C, addr: u8) {
     let _ = i2c.write_read(addr, &[REG_EMPTY], &mut [0u8]).await;
 }
 
-async fn read_reg<I2C: I2c>(
-    i2c: &mut I2C,
-    addr: u8,
-    reg: u8,
-) -> Result<u8, Error<I2C::Error>> {
+async fn read_reg<I2C: I2c>(i2c: &mut I2C, addr: u8, reg: u8) -> Result<u8, Error<I2C::Error>> {
     let mut buf = [0u8];
     i2c.write_read(addr, &[reg], &mut buf)
         .await
@@ -384,7 +380,13 @@ async fn boot_sequence<I2C: I2c>(
 
     // TRIM2_MSB: gain in bits 6:4
     let trim2m = read_reg(i2c, addr, REG_TRIM2_MSB).await?;
-    write_reg(i2c, addr, REG_TRIM2_MSB, (trim2m & !0x70) | ((gain & 0x07) << 4)).await?;
+    write_reg(
+        i2c,
+        addr,
+        REG_TRIM2_MSB,
+        (trim2m & !0x70) | ((gain & 0x07) << 4),
+    )
+    .await?;
 
     // TRIM2_LSB: hfosc in bits 6:0
     let trim2l = read_reg(i2c, addr, REG_TRIM2_LSB).await?;

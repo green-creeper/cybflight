@@ -145,6 +145,10 @@ mod tests {
         let enu = Vector3::new(120.0, 80.0, 12.0); // ~120 m E, 80 m N, 12 m up
         let (lat, lon, h) = o.enu_to_llh(enu);
         let back = o.llh_to_enu(lat, lon, h);
-        assert!((back - enu).norm() < 1e-2, "round-trip drift {:?}", back - enu);
+        assert!(
+            (back - enu).norm() < 1e-2,
+            "round-trip drift {:?}",
+            back - enu
+        );
     }
 }

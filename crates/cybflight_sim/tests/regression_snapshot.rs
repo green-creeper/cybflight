@@ -180,7 +180,11 @@ fn compute_current() -> BTreeMap<String, Row> {
 fn run_one(scenario_name: &str, controller_name: &str) -> Row {
     let mut scenario = build_scenario(scenario_name);
     let mut controller = build_controller(controller_name, &scenario);
-    let mut plant = QuadPlant::new(scenario.vehicle_params.clone(), &scenario.sim_params, 1.0 / 8000.0);
+    let mut plant = QuadPlant::new(
+        scenario.vehicle_params.clone(),
+        &scenario.sim_params,
+        1.0 / 8000.0,
+    );
     let runner = MissionRunner::new(Default::default());
     let run_out = runner.run(&mut scenario, &mut plant, &mut *controller);
     (&run_out).into()

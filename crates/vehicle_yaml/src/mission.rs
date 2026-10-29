@@ -116,7 +116,9 @@ pub fn load_mission(label: &str, yaml: &str) -> Result<Mission, String> {
     match my.env.as_str() {
         "indoor" | "outdoor" => {}
         other => {
-            return Err(format!("{label}: env must be indoor|outdoor, got {other:?}"));
+            return Err(format!(
+                "{label}: env must be indoor|outdoor, got {other:?}"
+            ));
         }
     }
     if !my.start.iter().all(|v| v.is_finite()) {
@@ -188,7 +190,9 @@ pub fn load_mission(label: &str, yaml: &str) -> Result<Mission, String> {
             ));
         }
         (None, None) => {
-            return Err(format!("{label}: one of timestamps / durations is required"));
+            return Err(format!(
+                "{label}: one of timestamps / durations is required"
+            ));
         }
     };
 
@@ -300,17 +304,22 @@ yaw_lookahead_max_rate_rad_s: 4.0
             "timestamps: [0.5, 1.0]",
             "timestamps: [0.5, 1.0]\ndurations: [0.5, 0.5]",
         );
-        assert!(load_mission("t", &both).unwrap_err().contains("exactly one"));
+        assert!(
+            load_mission("t", &both)
+                .unwrap_err()
+                .contains("exactly one")
+        );
         let neither = MINIMAL.replace("timestamps: [0.5, 1.0]", "");
-        assert!(load_mission("t", &neither).unwrap_err().contains("required"));
+        assert!(
+            load_mission("t", &neither)
+                .unwrap_err()
+                .contains("required")
+        );
     }
 
     #[test]
     fn duplicate_head_waypoint_is_dropped() {
-        let yaml = MINIMAL.replace(
-            "waypoints:",
-            "waypoints:\n  - [0.0, 0.0, 3.0]",
-        );
+        let yaml = MINIMAL.replace("waypoints:", "waypoints:\n  - [0.0, 0.0, 3.0]");
         // 3 waypoints, 2 timestamps, wp[0] == start → dropped.
         let m = load_mission("t", &yaml).unwrap();
         assert_eq!(m.waypoints.len(), 2);
@@ -320,19 +329,31 @@ yaw_lookahead_max_rate_rad_s: 4.0
     #[test]
     fn length_mismatch_without_head_dup_is_an_error() {
         let yaml = MINIMAL.replace("waypoints:", "waypoints:\n  - [9.0, 9.0, 9.0]");
-        assert!(load_mission("t", &yaml).unwrap_err().contains("cannot reconcile"));
+        assert!(
+            load_mission("t", &yaml)
+                .unwrap_err()
+                .contains("cannot reconcile")
+        );
     }
 
     #[test]
     fn non_monotonic_timestamps_are_an_error() {
         let yaml = MINIMAL.replace("timestamps: [0.5, 1.0]", "timestamps: [1.0, 0.5]");
-        assert!(load_mission("t", &yaml).unwrap_err().contains("strictly increasing"));
+        assert!(
+            load_mission("t", &yaml)
+                .unwrap_err()
+                .contains("strictly increasing")
+        );
     }
 
     #[test]
     fn bad_env_is_an_error() {
         let yaml = MINIMAL.replace("env: outdoor", "env: moonbase");
-        assert!(load_mission("t", &yaml).unwrap_err().contains("indoor|outdoor"));
+        assert!(
+            load_mission("t", &yaml)
+                .unwrap_err()
+                .contains("indoor|outdoor")
+        );
     }
 
     #[test]
@@ -373,8 +394,7 @@ yaw_lookahead_max_rate_rad_s: 4.0
 
     #[test]
     fn headings_dropped_in_sync_with_duplicate_head() {
-        let yaml = MINIMAL
-            .replace("waypoints:", "waypoints:\n  - [0.0, 0.0, 3.0]")
+        let yaml = MINIMAL.replace("waypoints:", "waypoints:\n  - [0.0, 0.0, 3.0]")
             + "headings: [45.0, 90.0, 135.0]\n";
         // 3 waypoints (dup head) + 3 headings → both drop their first entry.
         let m = load_mission("t", &yaml).unwrap();
@@ -386,8 +406,8 @@ yaw_lookahead_max_rate_rad_s: 4.0
 
     #[test]
     fn lookahead_wins_over_headings() {
-        let yaml = MINIMAL.replace("lookahead: false", "lookahead: true")
-            + "headings: [0.0, 90.0]\n";
+        let yaml =
+            MINIMAL.replace("lookahead: false", "lookahead: true") + "headings: [0.0, 90.0]\n";
         let m = load_mission("t", &yaml).unwrap();
         assert!(m.lookahead);
         assert_eq!(m.headings, None);
@@ -413,7 +433,10 @@ yaw_lookahead_max_rate_rad_s: 4.0
     #[test]
     fn out_of_range_yaw_lookahead_dt_is_an_error() {
         for bad in ["0.05", "2.0", ".nan"] {
-            let yaml = MINIMAL.replace("yaw_lookahead_dt_s: 0.5", &format!("yaw_lookahead_dt_s: {bad}"));
+            let yaml = MINIMAL.replace(
+                "yaw_lookahead_dt_s: 0.5",
+                &format!("yaw_lookahead_dt_s: {bad}"),
+            );
             let err = load_mission("t", &yaml).unwrap_err();
             assert!(err.contains("yaw_lookahead_dt_s"), "{bad}: {err}");
         }

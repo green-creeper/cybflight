@@ -6,8 +6,8 @@
 use core::cell::Cell;
 use core::sync::atomic::{AtomicU32, Ordering};
 
-use cybflight_drivers::gps::{GpsDriver, GpsEvent};
 use cybflight_drivers::gps::ublox::Error as UbxError;
+use cybflight_drivers::gps::{GpsDriver, GpsEvent};
 use embassy_sync::blocking_mutex::{Mutex, raw::CriticalSectionRawMutex};
 use embassy_time::Instant;
 
@@ -154,7 +154,10 @@ impl core::fmt::Display for GpsHealth {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             GpsHealth::NotConfigured => {
-                write!(f, "GPS: not configured (build has no `est_pos_gps` feature)")
+                write!(
+                    f,
+                    "GPS: not configured (build has no `est_pos_gps` feature)"
+                )
             }
             GpsHealth::Initializing => write!(f, "GPS: initializing"),
             GpsHealth::UartInitFailed => write!(f, "GPS: UART init failed"),

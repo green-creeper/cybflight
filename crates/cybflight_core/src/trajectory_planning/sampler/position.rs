@@ -269,8 +269,7 @@ impl PositionSampler {
         // iterations are enough for f32 precision on a smooth polynomial.
         let mut tau_geom = tau_best;
         for _ in 0..3 {
-            let (gp_half, gpp_half) =
-                weighted_grad_half(inp.traj, tau_geom, inp.state_pos, w_sqrt);
+            let (gp_half, gpp_half) = weighted_grad_half(inp.traj, tau_geom, inp.state_pos, w_sqrt);
             if gpp_half <= 1e-12 {
                 break;
             }
@@ -351,14 +350,12 @@ impl PositionSampler {
         // window during which the time floor would itself force the
         // sampler to declare done.
         let in_terminal_phase = end - tau_curr <= self.params.max_lag_s;
-        let mission_done_by_radius = !mission_done_by_time
-            && in_terminal_phase
-            && {
-                let end_pos = inp.traj.get_pos(end);
-                let r = self.params.radius_of_acceptance;
-                let d = inp.state_pos - end_pos;
-                d.dot(&d) <= r * r
-            };
+        let mission_done_by_radius = !mission_done_by_time && in_terminal_phase && {
+            let end_pos = inp.traj.get_pos(end);
+            let r = self.params.radius_of_acceptance;
+            let d = inp.state_pos - end_pos;
+            d.dot(&d) <= r * r
+        };
 
         SampleResult {
             tau0_s: tau_curr,

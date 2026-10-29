@@ -26,7 +26,6 @@ use cybflight_core::rc::rc_mapping::StickEndpoints as RateStickEndpoints;
 #[cfg(feature = "outer_rate")]
 #[embassy_executor::task]
 pub async fn rc_interpreter_task() {
-
     let mut rc_sub = RC_INPUT
         .subscriber()
         .expect("rc_interpreter: RC_INPUT subscriber");
@@ -77,9 +76,16 @@ pub async fn rc_interpreter_task() {
     let max_rate_yaw = params_snapshot.rc.max_rate_yaw_rad_s;
     let rate_deadband = params_snapshot.rc.rate_deadband;
     let throttle_deadband = rate_deadband;
+    let mission_channel = params_snapshot.rc.mission_channel as usize;
+    let mission_high_us = params_snapshot.rc.mission_high_us;
+    let mission_low_us = params_snapshot.rc.mission_low_us;
 
-    let hover_thrust_n =
-        params_snapshot.airframe.body.mass_kg * params_snapshot.site.gravity_m_s2;
+    let hover_thrust_n = params_snapshot.airframe.body.mass_kg * params_snapshot.site.gravity_m_s2;
+
+    // `None` = not yet synced (first RC frame seeds the confirmed level,
+    // so a switch-high at boot or arm does NOT spuriously engage offboard).
+    let mut offboard_level_confirmed: Option<bool> = None;
+    let mut offboard_active = false;
 
     defmt::info!("RC interpreter: rate mode started");
 
@@ -90,6 +96,58 @@ pub async fn rc_interpreter_task() {
         }
 
         if rc.channel_count < min_channels {
+            continue;
+        }
+
+        let armed = crate::motors::IS_ARMED.load(core::sync::atomic::Ordering::Acquire);
+        let ch_present = rc.channel_count > mission_channel as u8;
+        let raw_level: Option<bool> = if !ch_present {
+            offboard_level_confirmed
+        } else {
+            let v = rc.channels[mission_channel];
+            Some(match offboard_level_confirmed {
+                Some(true) => v > mission_low_us,
+                Some(false) => v > mission_high_us,
+                None => v > mission_high_us,
+            })
+        };
+
+        let (rising, falling) = match (offboard_level_confirmed, raw_level) {
+            (None, Some(l)) => {
+                offboard_level_confirmed = Some(l);
+                (false, false)
+            }
+            (Some(c), Some(r)) if c == r => (false, false),
+            (Some(c), Some(r)) => {
+                offboard_level_confirmed = Some(r);
+                (r && !c, !r && c)
+            }
+            (_, None) => (false, false),
+        };
+
+        if !armed {
+            if offboard_active {
+                offboard_active = false;
+                super::OFFBOARD_ACTIVE.store(false, core::sync::atomic::Ordering::Release);
+                defmt::info!("RC: disarmed — offboard/RL mode cleared");
+            }
+        } else if rising && !offboard_active {
+            offboard_active = true;
+            super::OFFBOARD_ACTIVE.store(true, core::sync::atomic::Ordering::Release);
+            defmt::info!(
+                "RC: offboard/RL trigger (ch{} rising, armed) — engaging offboard/RL control",
+                mission_channel
+            );
+        } else if falling && offboard_active {
+            offboard_active = false;
+            super::OFFBOARD_ACTIVE.store(false, core::sync::atomic::Ordering::Release);
+            defmt::info!(
+                "RC: offboard/RL switch low (ch{} falling) — returning to manual RC rate control",
+                mission_channel
+            );
+        }
+
+        if offboard_active {
             continue;
         }
 
@@ -464,14 +522,13 @@ pub async fn rc_interpreter_task() {
     // every `continue` in the loop body, while `last_frame_time` advances
     // only on frames that reach the stick integrator.
     let mut last_anchor_time = Instant::now();
-    let odom_trust = Duration::from_micros(
-        if sc.odom_trust_s.is_finite() && sc.odom_trust_s > 0.0 {
+    let odom_trust =
+        Duration::from_micros(if sc.odom_trust_s.is_finite() && sc.odom_trust_s > 0.0 {
             (sc.odom_trust_s * 1.0e6) as u64
         } else {
             defmt::warn!("rc_interpreter: mpc_odom_stale_s not usable — using 0.2 s");
             200_000
-        },
-    );
+        });
 
     // Mission trigger channel, thresholds and the launch latch all come
     // from `sc` (the `rc` param group): rising edge → request a mission
@@ -554,7 +611,11 @@ pub async fn rc_interpreter_task() {
                 .as_micros() as f32
                 * 1e-6;
             let anchor_dt = anchor_dt.clamp(0.0, MAX_FRAME_DT_S);
-            let speed = if fresh_vz.is_finite() { fresh_vz.abs() } else { 0.0 };
+            let speed = if fresh_vz.is_finite() {
+                fresh_vz.abs()
+            } else {
+                0.0
+            };
             let step = (speed + LEASH_ANCHOR_TRACK_MARGIN_M_S) * anchor_dt;
             last_measured_z += (p.z - last_measured_z).clamp(-step, step);
         }
@@ -633,8 +694,7 @@ pub async fn rc_interpreter_task() {
             if rc.channels[throttle_cal.index] > sc.launch_us {
                 launch_above_count = launch_above_count.saturating_add(1);
                 if launch_above_count >= sc.launch_confirm_frames {
-                    super::LAUNCHED
-                        .store(true, core::sync::atomic::Ordering::Release);
+                    super::LAUNCHED.store(true, core::sync::atomic::Ordering::Release);
                     defmt::info!("rc_interpreter: LAUNCHED latched");
                     // No special re-seed of ACTIVE_POSITION_SETPOINT
                     // here: the pre-launch pin block below already
@@ -880,8 +940,7 @@ pub async fn rc_interpreter_task() {
                 // leash and `fence_z_min_m`. The two are different
                 // things now — an anti-windup lead limit and an absolute
                 // envelope — rather than two floors competing.
-                pos.z = (pos.z - sc.land_rate_m_s * dt)
-                    .max(last_measured_z - sc.land_lead_m);
+                pos.z = (pos.z - sc.land_rate_m_s * dt).max(last_measured_z - sc.land_lead_m);
             } else {
                 pos.z += sz * sc.z_rate_m_s * dt;
             }

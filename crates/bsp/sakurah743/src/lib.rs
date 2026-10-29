@@ -4,7 +4,7 @@ pub use embassy_stm32 as hal;
 
 use hal::exti;
 use hal::gpio::{Input, Level, Output, Pull, Speed};
-use hal::{bind_interrupts, Config, Peripherals};
+use hal::{Config, Peripherals, bind_interrupts};
 
 pub use bsp_types::{
     DmaHint, MotorMeta, PowerCalibration, SensorAlign, SerialPortId, TimerChannel, TimerId,
@@ -47,6 +47,11 @@ pub const LED_COUNT: usize = 3;
 /// — the `imu_1khz` build knob may program the chip down to 1 kHz low-noise
 /// mode, and control logic must consume that const, not this one.
 pub const PRIMARY_GYRO_ODR_HZ: f32 = 8000.0;
+
+pub type DshotDmaM1 = hal::peripherals::DMA1_CH0;
+pub type DshotDmaM2 = hal::peripherals::DMA1_CH1;
+pub type DshotDmaM3 = hal::peripherals::DMA1_CH2;
+pub type DshotDmaM4 = hal::peripherals::DMA1_CH3;
 
 // =====================================================================
 // PORT MAPPING TABLE — single source of truth for UART role assignments.

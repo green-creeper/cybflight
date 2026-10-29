@@ -1,5 +1,5 @@
 use core::cell::Cell;
-use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU8};
+use core::sync::atomic::{AtomicBool, AtomicU8, AtomicU32};
 
 use cybflight_core::eskf::EskfHealth;
 use cybflight_msgs as msgs;
@@ -9,11 +9,10 @@ use embassy_sync::signal::Signal;
 use embassy_time::Instant;
 use nalgebra::Vector3;
 
-pub mod eskf_imu_mocap;
 pub mod eskf_imu_gps;
+pub mod eskf_imu_mocap;
 pub mod mahony_task;
 pub mod rpm_estimator;
-
 
 use crate::ConvertToF32Secs;
 

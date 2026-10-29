@@ -28,16 +28,16 @@
 
 mod common;
 
-use common::{fixture, RaceOutcome};
+use common::{RaceOutcome, fixture};
 use cybflight_core::mpc::NU;
 use cybflight_core::nn::mlp::{Activation, LayerShape, Mlp};
 use cybflight_core::nn::race_policy::{
-    PolicyConfig, PolicyFrame, RacePolicy, VehicleState, NUM_MOTORS,
+    NUM_MOTORS, PolicyConfig, PolicyFrame, RacePolicy, VehicleState,
 };
 use cybflight_sim::plant::QuadPlant;
 use cybflight_sim::rl_reference::{
-    rl_track, world_state_ned_to_enu, RlParams, RlReferencePlant, RL_DT_S, RL_GATE_SIZE_M,
-    RL_OMEGA_NORM_MAX, RL_START_POS_ENU, RL_START_YAW_ENU, RL_TRACK_ENU,
+    RL_DT_S, RL_GATE_SIZE_M, RL_OMEGA_NORM_MAX, RL_START_POS_ENU, RL_START_YAW_ENU, RL_TRACK_ENU,
+    RlParams, RlReferencePlant, rl_track, world_state_ned_to_enu,
 };
 use nalgebra::{SVector, UnitQuaternion, Vector3};
 
@@ -115,8 +115,8 @@ fn enu_track_matches_upstream_ned_table() {
         [-R, -R, -1.5],
         [0.0, -2.0 * R, -1.5],
     ];
-    let gate_yaw_ned: [f32; 8] = [1.0, 2.0, 1.0, 0.0, -1.0, -2.0, -1.0, 0.0]
-        .map(|k: f32| k * core::f32::consts::FRAC_PI_2);
+    let gate_yaw_ned: [f32; 8] =
+        [1.0, 2.0, 1.0, 0.0, -1.0, -2.0, -1.0, 0.0].map(|k: f32| k * core::f32::consts::FRAC_PI_2);
 
     for i in 0..8 {
         let (p_enu, yaw_enu) = RL_TRACK_ENU[i];
@@ -134,7 +134,11 @@ fn enu_track_matches_upstream_ned_table() {
         let yaw_back = core::f32::consts::FRAC_PI_2 - yaw_enu;
         let d = yaw_back - gate_yaw_ned[i];
         let wrapped = d - core::f32::consts::TAU * (d / core::f32::consts::TAU).round();
-        assert!(wrapped.abs() < 1e-6, "gate {i} yaw: {yaw_back} vs {}", gate_yaw_ned[i]);
+        assert!(
+            wrapped.abs() < 1e-6,
+            "gate {i} yaw: {yaw_back} vs {}",
+            gate_yaw_ned[i]
+        );
     }
 }
 
@@ -204,8 +208,25 @@ fn observation_matches_python_ground_truth() {
         }
     }
     let labels = [
-        "pos_g.x", "pos_g.y", "pos_g.z", "vel_g.x", "vel_g.y", "vel_g.z", "roll", "pitch",
-        "yaw_rel", "p", "q", "r", "w0", "w1", "w2", "w3", "ahead.x", "ahead.y", "ahead.z",
+        "pos_g.x",
+        "pos_g.y",
+        "pos_g.z",
+        "vel_g.x",
+        "vel_g.y",
+        "vel_g.z",
+        "roll",
+        "pitch",
+        "yaw_rel",
+        "p",
+        "q",
+        "r",
+        "w0",
+        "w1",
+        "w2",
+        "w3",
+        "ahead.x",
+        "ahead.y",
+        "ahead.z",
         "ahead.yaw",
     ];
     println!("observation: worst |Δ| per entry over {n} samples");
@@ -261,7 +282,11 @@ fn reference_plant_tracks_python_trajectory() {
 
     println!("reference plant vs Python, position error:");
     for &k in &[1usize, 10, 25, 50, 100, 150, 199] {
-        println!("  step {k:>3} ({:>4.2} s)  {:.3e} m", k as f32 * RL_DT_S, err(k));
+        println!(
+            "  step {k:>3} ({:>4.2} s)  {:.3e} m",
+            k as f32 * RL_DT_S,
+            err(k)
+        );
     }
 
     // A sign or axis error in the transcription shows up immediately, as a

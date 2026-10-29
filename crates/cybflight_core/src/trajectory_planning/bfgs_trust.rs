@@ -462,7 +462,11 @@ where
         // Treat it as the worst possible step instead.
         let rho = if fx_trial.is_finite() {
             let actual = ws.fx - fx_trial;
-            if pred.abs() > 1e-7 { actual / pred } else { 0.0 }
+            if pred.abs() > 1e-7 {
+                actual / pred
+            } else {
+                0.0
+            }
         } else {
             f32::NEG_INFINITY
         };
@@ -948,8 +952,20 @@ mod tests {
             let mut d = [0.0; N];
             let mut bp = [0.0; N];
             let pred = dogleg_step_cached(
-                &b, &g, &bg, delta, &p_newton, newton_ok && !force_no_newton, pn_norm,
-                &p_cauchy, pc_norm, gtg, &mut p, &mut d, &mut bp, N,
+                &b,
+                &g,
+                &bg,
+                delta,
+                &p_newton,
+                newton_ok && !force_no_newton,
+                pn_norm,
+                &p_cauchy,
+                pc_norm,
+                gtg,
+                &mut p,
+                &mut d,
+                &mut bp,
+                N,
             );
             let mut bp_ref = [0.0; N];
             let reference = predicted_reduction(&b, &g, &p, &mut bp_ref, N);
@@ -1009,7 +1025,10 @@ mod tests {
             matches!(status, BfgsTrustResult::Convergence | BfgsTrustResult::Stop),
             "status {status:?}"
         );
-        assert!(iters < 50, "spent {iters} iterations recovering from one NaN trial");
+        assert!(
+            iters < 50,
+            "spent {iters} iterations recovering from one NaN trial"
+        );
         assert!(cost < 1e-6 && x[0].abs() < 1e-3);
     }
 
@@ -1038,8 +1057,19 @@ mod tests {
         let (s15, c15, i15) = run(MAX_PAST - 1);
         let (s16, c16, i16) = run(MAX_PAST);
         let (s40, c40, i40) = run(40);
-        assert_eq!((s15, c15, i15), (s16, c16, i16), "past=16 must behave as 15");
-        assert_eq!((s15, c15, i15), (s40, c40, i40), "past=40 must behave as 15");
-        assert!(c15 < 1e-4, "clamped run must still reach the optimum, cost={c15}");
+        assert_eq!(
+            (s15, c15, i15),
+            (s16, c16, i16),
+            "past=16 must behave as 15"
+        );
+        assert_eq!(
+            (s15, c15, i15),
+            (s40, c40, i40),
+            "past=40 must behave as 15"
+        );
+        assert!(
+            c15 < 1e-4,
+            "clamped run must still reach the optimum, cost={c15}"
+        );
     }
 }

@@ -6,13 +6,13 @@ use core::fmt::Write;
 
 use cybflight_core::param_registry::ParamName;
 use cybflight_core::params::{FirmwareConfig, PARAM_COUNT};
-use cybflight_core::shell_complete::{complete, for_each_match, WordSource};
+use cybflight_core::shell_complete::{WordSource, complete, for_each_match};
 use embassy_usb::{
     class::cdc_acm::CdcAcmClass,
     driver::{Driver, EndpointError},
 };
 
-use super::{write_all, WriteBuf};
+use super::{WriteBuf, write_all};
 
 /// Every command `usb_serial::dispatch()` accepts, as completion
 /// templates (grammar in [`cybflight_core::shell_complete`]). Keep in

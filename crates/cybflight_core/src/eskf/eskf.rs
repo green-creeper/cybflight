@@ -574,28 +574,48 @@ impl Eskf {
         new_cov.fixed_view_mut::<3, 3>(0, 9).copy_from(&pp_pba);
         new_cov.fixed_view_mut::<3, 3>(0, 12).copy_from(&pp_pbg);
         // Row 1 (att)
-        new_cov.fixed_view_mut::<3, 3>(3, 0).copy_from(&pp_pa.transpose());
+        new_cov
+            .fixed_view_mut::<3, 3>(3, 0)
+            .copy_from(&pp_pa.transpose());
         new_cov.fixed_view_mut::<3, 3>(3, 3).copy_from(&pp_aa);
         new_cov.fixed_view_mut::<3, 3>(3, 6).copy_from(&pp_av);
         new_cov.fixed_view_mut::<3, 3>(3, 9).copy_from(&pp_aba);
         new_cov.fixed_view_mut::<3, 3>(3, 12).copy_from(&pp_abg);
         // Row 2 (vel)
-        new_cov.fixed_view_mut::<3, 3>(6, 0).copy_from(&pp_pv.transpose());
-        new_cov.fixed_view_mut::<3, 3>(6, 3).copy_from(&pp_av.transpose());
+        new_cov
+            .fixed_view_mut::<3, 3>(6, 0)
+            .copy_from(&pp_pv.transpose());
+        new_cov
+            .fixed_view_mut::<3, 3>(6, 3)
+            .copy_from(&pp_av.transpose());
         new_cov.fixed_view_mut::<3, 3>(6, 6).copy_from(&pp_vv);
         new_cov.fixed_view_mut::<3, 3>(6, 9).copy_from(&pp_vba);
         new_cov.fixed_view_mut::<3, 3>(6, 12).copy_from(&pp_vbg);
         // Row 3 (ba)
-        new_cov.fixed_view_mut::<3, 3>(9, 0).copy_from(&pp_pba.transpose());
-        new_cov.fixed_view_mut::<3, 3>(9, 3).copy_from(&pp_aba.transpose());
-        new_cov.fixed_view_mut::<3, 3>(9, 6).copy_from(&pp_vba.transpose());
+        new_cov
+            .fixed_view_mut::<3, 3>(9, 0)
+            .copy_from(&pp_pba.transpose());
+        new_cov
+            .fixed_view_mut::<3, 3>(9, 3)
+            .copy_from(&pp_aba.transpose());
+        new_cov
+            .fixed_view_mut::<3, 3>(9, 6)
+            .copy_from(&pp_vba.transpose());
         new_cov.fixed_view_mut::<3, 3>(9, 9).copy_from(&pp_baba);
         new_cov.fixed_view_mut::<3, 3>(9, 12).copy_from(&pp_babg);
         // Row 4 (bg)
-        new_cov.fixed_view_mut::<3, 3>(12, 0).copy_from(&pp_pbg.transpose());
-        new_cov.fixed_view_mut::<3, 3>(12, 3).copy_from(&pp_abg.transpose());
-        new_cov.fixed_view_mut::<3, 3>(12, 6).copy_from(&pp_vbg.transpose());
-        new_cov.fixed_view_mut::<3, 3>(12, 9).copy_from(&pp_babg.transpose());
+        new_cov
+            .fixed_view_mut::<3, 3>(12, 0)
+            .copy_from(&pp_pbg.transpose());
+        new_cov
+            .fixed_view_mut::<3, 3>(12, 3)
+            .copy_from(&pp_abg.transpose());
+        new_cov
+            .fixed_view_mut::<3, 3>(12, 6)
+            .copy_from(&pp_vbg.transpose());
+        new_cov
+            .fixed_view_mut::<3, 3>(12, 9)
+            .copy_from(&pp_babg.transpose());
         new_cov.fixed_view_mut::<3, 3>(12, 12).copy_from(&pp_bgbg);
 
         (new_state, new_cov)
@@ -869,8 +889,7 @@ impl Eskf {
         let (r_eff, s_inv_eff, inflated) = if gamma > gate_sq {
             let inflate = gamma / gate_sq;
             if inflate > self.config.inflation_cap {
-                self.health.gate_rejects_pos =
-                    self.health.gate_rejects_pos.saturating_add(1);
+                self.health.gate_rejects_pos = self.health.gate_rejects_pos.saturating_add(1);
                 return UpdateOutcome::InflationCapExceeded;
             }
             let r_eff = r * inflate;
@@ -1022,8 +1041,7 @@ impl Eskf {
         let (r_eff, s_inv_eff, inflated) = if gamma > gate_sq {
             let inflate = gamma / gate_sq;
             if inflate > self.config.inflation_cap {
-                self.health.gate_rejects_vel =
-                    self.health.gate_rejects_vel.saturating_add(1);
+                self.health.gate_rejects_vel = self.health.gate_rejects_vel.saturating_add(1);
                 return UpdateOutcome::InflationCapExceeded;
             }
             let r_eff = r * inflate;
@@ -1086,8 +1104,7 @@ impl Eskf {
         let (r_eff, s_inv_eff, inflated) = if gamma > gate_sq {
             let inflate = gamma / gate_sq;
             if inflate > self.config.inflation_cap {
-                self.health.gate_rejects_att =
-                    self.health.gate_rejects_att.saturating_add(1);
+                self.health.gate_rejects_att = self.health.gate_rejects_att.saturating_add(1);
                 return UpdateOutcome::InflationCapExceeded;
             }
             let r_eff = r * inflate;
@@ -1132,8 +1149,7 @@ impl Eskf {
         let (r_eff, s_eff, inflated) = if gamma > gate_sq {
             let inflate = gamma / gate_sq;
             if inflate > self.config.inflation_cap {
-                self.health.gate_rejects_baro =
-                    self.health.gate_rejects_baro.saturating_add(1);
+                self.health.gate_rejects_baro = self.health.gate_rejects_baro.saturating_add(1);
                 return UpdateOutcome::InflationCapExceeded;
             }
             let r_eff = r * inflate;
@@ -1171,8 +1187,7 @@ impl Eskf {
         }
         let world_norm = mag_world_ref.norm();
         if (mag_body.norm() - world_norm).abs() > self.config.mag_norm_gate * world_norm {
-            self.health.gate_rejects_mag =
-                self.health.gate_rejects_mag.saturating_add(1);
+            self.health.gate_rejects_mag = self.health.gate_rejects_mag.saturating_add(1);
             return UpdateOutcome::InflationCapExceeded;
         }
         let m_b = self.state.orientation.inverse() * mag_world_ref;
@@ -1190,8 +1205,7 @@ impl Eskf {
         let (r_eff, s_inv_eff, inflated) = if gamma > gate_sq {
             let inflate = gamma / gate_sq;
             if inflate > self.config.inflation_cap {
-                self.health.gate_rejects_mag =
-                    self.health.gate_rejects_mag.saturating_add(1);
+                self.health.gate_rejects_mag = self.health.gate_rejects_mag.saturating_add(1);
                 return UpdateOutcome::InflationCapExceeded;
             }
             let r_eff = r * inflate;
@@ -1253,7 +1267,8 @@ impl Eskf {
         let z = b_meas - b_pred;
         let rmat = *self.state.orientation.to_rotation_matrix().matrix();
         let mut h = SMatrix::<f32, 3, 15>::zeros();
-        h.fixed_view_mut::<3, 3>(0, 3).copy_from(&(-rmat * hat(&b_body)));
+        h.fixed_view_mut::<3, 3>(0, 3)
+            .copy_from(&(-rmat * hat(&b_body)));
         // Anisotropic 2-axis measurement covariance. A single 3-D baseline is a
         // rank-2 attitude measurement: heading noise acts along the azimuth
         // tangent `u × b` (magnitude cos(elevation), so it vanishes smoothly as
@@ -1467,11 +1482,7 @@ mod health_tests {
     fn nan_input_predict_increments_nan_resets() {
         let mut e = fresh_eskf();
         // Feed a NaN-laden accel; predict should detect it post-propagation.
-        e.predict(
-            Vector3::new(f32::NAN, 0.0, 0.0),
-            Vector3::zeros(),
-            0.001,
-        );
+        e.predict(Vector3::new(f32::NAN, 0.0, 0.0), Vector3::zeros(), 0.001);
         assert_eq!(e.health().nan_resets, 1);
         assert!(!e.is_initialized());
     }
@@ -1520,7 +1531,12 @@ mod health_tests {
         let q_pitch =
             UnitQuaternion::from_axis_angle(&Vector3::y_axis(), core::f32::consts::FRAC_PI_2);
         let mut e = Eskf::new(EskfConfig::default());
-        e.init(Vector3::zeros(), q_pitch, Vector3::zeros(), Vector3::zeros());
+        e.init(
+            Vector3::zeros(),
+            q_pitch,
+            Vector3::zeros(),
+            Vector3::zeros(),
+        );
         // Truth: nose-up AND yawed 20° about world-up (a heading error).
         let q_true = UnitQuaternion::from_axis_angle(&Vector3::z_axis(), 0.349) * q_pitch;
         let b_meas = q_true * b_body;
@@ -1532,7 +1548,11 @@ mod health_tests {
             "must not blow up at vertical nose"
         );
         assert!(
-            e.orientation().into_inner().coords.iter().all(|c| c.is_finite()),
+            e.orientation()
+                .into_inner()
+                .coords
+                .iter()
+                .all(|c| c.is_finite()),
             "orientation must stay finite at vertical nose"
         );
         assert!(
@@ -1566,10 +1586,8 @@ mod health_tests {
             UnitQuaternion::from_axis_angle(&Vector3::x_axis(), core::f32::consts::FRAC_PI_2);
         let mut e = Eskf::new(EskfConfig::default());
         e.init(Vector3::zeros(), q_roll, Vector3::zeros(), Vector3::zeros());
-        let q_true = UnitQuaternion::from_axis_angle(
-            &Vector3::x_axis(),
-            core::f32::consts::FRAC_PI_2 + 0.1,
-        );
+        let q_true =
+            UnitQuaternion::from_axis_angle(&Vector3::x_axis(), core::f32::consts::FRAC_PI_2 + 0.1);
         let b_meas = q_true * b_body;
         let out = e.update_baseline(b_meas, b_body, 0.02, 0.02);
         assert!(
@@ -1577,7 +1595,11 @@ mod health_tests {
             "vertical-baseline fallback must be accepted"
         );
         assert!(
-            e.orientation().into_inner().coords.iter().all(|c| c.is_finite()),
+            e.orientation()
+                .into_inner()
+                .coords
+                .iter()
+                .all(|c| c.is_finite()),
             "orientation must stay finite in the fallback path"
         );
     }

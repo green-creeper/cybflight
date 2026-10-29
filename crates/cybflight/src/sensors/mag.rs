@@ -2,9 +2,9 @@
 //! `MagSample` messages to the specified channel.
 
 use bsp_types::SensorAlign;
+use cybflight_drivers::mag::ReadMag;
 use cybflight_drivers::mag::ist8310::Ist8310;
 use cybflight_drivers::mag::qmc5883l::Qmc5883l;
-use cybflight_drivers::mag::ReadMag;
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_sync::blocking_mutex::raw::{CriticalSectionRawMutex, NoopRawMutex};
 use embassy_sync::mutex::Mutex;
@@ -29,7 +29,11 @@ pub struct MagReader<D: ReadMag> {
 
 impl<D: ReadMag> MagReader<D> {
     pub fn new(mag: D, align: SensorAlign, hard_iron: Vector3<f32>) -> Self {
-        Self { mag, align, hard_iron }
+        Self {
+            mag,
+            align,
+            hard_iron,
+        }
     }
 
     pub async fn run(

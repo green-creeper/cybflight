@@ -7,15 +7,14 @@
 //! an infeasible reference is visible even though it is not a solver bug.
 use std::path::PathBuf;
 
-use cybflight_core::trajectory_planning::minco_acc::{unwrap_nearest, MincoAcc};
+use cybflight_core::params::PlannerParams;
+use cybflight_core::trajectory_planning::MAX_PIECES;
+use cybflight_core::trajectory_planning::minco_acc::{MincoAcc, unwrap_nearest};
 use cybflight_core::trajectory_planning::minco_snap::MincoSnap;
 use cybflight_core::trajectory_planning::quad_planning_config::QuadPlanningConfig;
 use cybflight_core::trajectory_planning::types::{Vec3, ZERO3};
-use cybflight_core::params::PlannerParams;
-use cybflight_core::trajectory_planning::MAX_PIECES;
-use cybflight_sim::primitives::{peak_demand, Envelope};
+use cybflight_sim::primitives::{Envelope, peak_demand};
 use vehicle_yaml::mission::load_mission;
-
 
 /// Shortest segment for which the f32 banded LU (no pivoting, rows mixing
 /// 1 … T⁷) still hits waypoints to < 1 mm. Measured by
@@ -45,7 +44,9 @@ struct Vehicle {
 
 fn vehicle(name: &str) -> Vehicle {
     let yaml = std::fs::read_to_string(root().join(format!("vehicles/{name}.yaml"))).unwrap();
-    let params = vehicle_yaml::load(name, &yaml).expect("vehicle loads").params;
+    let params = vehicle_yaml::load(name, &yaml)
+        .expect("vehicle loads")
+        .params;
     let q = QuadPlanningConfig::from_vehicle_params(&params);
     let planner = params.trajectory.planner.clone();
     let env = Envelope {
@@ -79,15 +80,28 @@ fn solve_like_firmware(name: &str, head_pos: Vec3, start_yaw: f32, veh: &Vehicle
 
 /// Same as [`solve_like_firmware`] with every segment duration scaled by
 /// `time_scale` (diagnostic: how the solve conditions with segment length).
-fn solve_scaled(name: &str, head_pos: Vec3, start_yaw: f32, veh: &Vehicle, time_scale: f32) -> Report {
+fn solve_scaled(
+    name: &str,
+    head_pos: Vec3,
+    start_yaw: f32,
+    veh: &Vehicle,
+    time_scale: f32,
+) -> Report {
     let path = root().join("missions").join(format!("{name}.yaml"));
     let m = load_mission(name, &std::fs::read_to_string(&path).unwrap())
         .unwrap_or_else(|e| panic!("{name}: bake would fail: {e}"));
 
     // ---- shape guard (plan_offline / bake) ----
     let n = m.waypoints.len();
-    assert!(n >= 1 && n <= MAX_PIECES, "{name}: {n} pieces outside [1, {MAX_PIECES}]");
-    assert_eq!(n, m.timestamps.len(), "{name}: waypoint/timestamp length mismatch");
+    assert!(
+        n >= 1 && n <= MAX_PIECES,
+        "{name}: {n} pieces outside [1, {MAX_PIECES}]"
+    );
+    assert_eq!(
+        n,
+        m.timestamps.len(),
+        "{name}: waypoint/timestamp length mismatch"
+    );
 
     // ---- durations from timestamps (plan_offline rejects on any bad one) ----
     let mut durations = Vec::with_capacity(n);
@@ -106,7 +120,10 @@ fn solve_scaled(name: &str, head_pos: Vec3, start_yaw: f32, veh: &Vehicle, time_
     let min_dt = durations.iter().cloned().fold(f32::INFINITY, f32::min);
 
     // ---- MINCO snap, zero-PVAJ boundaries, same instantiation as OFFLINE_MINCO ----
-    let intermediate: Vec<Vec3> = m.waypoints[..n - 1].iter().map(|w| Vec3::from(*w)).collect();
+    let intermediate: Vec<Vec3> = m.waypoints[..n - 1]
+        .iter()
+        .map(|w| Vec3::from(*w))
+        .collect();
     let tail_pos = Vec3::from(m.waypoints[n - 1]);
     let head = [head_pos, ZERO3, ZERO3, ZERO3];
     let tail = [tail_pos, ZERO3, ZERO3, ZERO3];
@@ -128,12 +145,18 @@ fn solve_scaled(name: &str, head_pos: Vec3, start_yaw: f32, veh: &Vehicle, time_
         (dur_min_s..=dur_max_s).contains(&dur),
         "{name}: firmware would reject — duration {dur:.2}s outside [{dur_min_s}, {dur_max_s}]"
     );
-    assert!((dur - init_duration_s).abs() < 1e-3, "{name}: duration {dur} != schedule {init_duration_s}");
+    assert!(
+        (dur - init_duration_s).abs() < 1e-3,
+        "{name}: duration {dur} != schedule {init_duration_s}"
+    );
 
     // ---- solver invariants ----
     for i in 0..n {
         for c in traj.piece(i).coeffs.iter() {
-            assert!(c.iter().all(|v| v.is_finite()), "{name}: non-finite coefficient in piece {i}");
+            assert!(
+                c.iter().all(|v| v.is_finite()),
+                "{name}: non-finite coefficient in piece {i}"
+            );
         }
     }
     // Every waypoint is hit at its timestamp.
@@ -162,18 +185,40 @@ fn solve_scaled(name: &str, head_pos: Vec3, start_yaw: f32, veh: &Vehicle, time_
     }
     // Rest boundaries.
     for (label, t) in [("head", 0.0), ("tail", dur)] {
-        assert!(traj.get_vel(t).norm() < 1e-2, "{name}: {label} velocity {:?}", traj.get_vel(t));
-        assert!(traj.get_acc(t).norm() < 1e-1, "{name}: {label} acceleration {:?}", traj.get_acc(t));
+        assert!(
+            traj.get_vel(t).norm() < 1e-2,
+            "{name}: {label} velocity {:?}",
+            traj.get_vel(t)
+        );
+        assert!(
+            traj.get_acc(t).norm() < 1e-1,
+            "{name}: {label} acceleration {:?}",
+            traj.get_acc(t)
+        );
     }
-    assert!((traj.get_pos(0.0) - head_pos).norm() < 1e-3, "{name}: head position");
-    assert!((traj.get_pos(dur) - tail_pos).norm() < 1e-3, "{name}: tail position");
+    assert!(
+        (traj.get_pos(0.0) - head_pos).norm() < 1e-3,
+        "{name}: head position"
+    );
+    assert!(
+        (traj.get_pos(dur) - tail_pos).norm() < 1e-3,
+        "{name}: tail position"
+    );
     // Finite everywhere on a 1 ms grid, plus peak kinematics.
     let (mut vmax, mut amax) = (0.0f32, 0.0f32);
     let mut t = 0.0f32;
     while t <= dur {
-        let (p, v, a, j) = (traj.get_pos(t), traj.get_vel(t), traj.get_acc(t), traj.get_jerk(t));
+        let (p, v, a, j) = (
+            traj.get_pos(t),
+            traj.get_vel(t),
+            traj.get_acc(t),
+            traj.get_jerk(t),
+        );
         for (what, x) in [("pos", p), ("vel", v), ("acc", a), ("jerk", j)] {
-            assert!(x.iter().all(|c| c.is_finite()), "{name}: non-finite {what} at t={t}");
+            assert!(
+                x.iter().all(|c| c.is_finite()),
+                "{name}: non-finite {what} at t={t}"
+            );
         }
         vmax = vmax.max(v.norm());
         amax = amax.max(a.norm());
@@ -198,11 +243,17 @@ fn solve_scaled(name: &str, head_pos: Vec3, start_yaw: f32, veh: &Vehicle, time_
         yaw_solver.solve(&unwrapped[..n - 1], &durations);
         let yt = yaw_solver.get_trajectory();
         let end = yt.sample(yt.total_duration());
-        assert!(end[0].is_finite() && end[1].is_finite(), "{name}: yaw spline non-finite");
+        assert!(
+            end[0].is_finite() && end[1].is_finite(),
+            "{name}: yaw spline non-finite"
+        );
         let mut err = 0.0f32;
         for i in 0..n {
             let s = yt.sample(timestamps[i]);
-            assert!(s.iter().all(|v| v.is_finite()), "{name}: yaw sample non-finite at wp {i}");
+            assert!(
+                s.iter().all(|v| v.is_finite()),
+                "{name}: yaw sample non-finite at wp {i}"
+            );
             err = err.max((s[0] - unwrapped[i]).abs());
         }
         assert!(err < 5e-3, "{name}: yaw waypoint miss {err:.4} rad");
@@ -244,14 +295,33 @@ fn every_mission_yaml_solves_like_the_firmware() {
 
     println!(
         "\n{:<30} {:>3} {:>7} {:>6} {:>8} {:>8} {:>6} {:>6} {:>6} {:>6}  {:<9} {:>8}",
-        "mission", "n", "dur[s]", "min_dt", "wp_err", "junc", "vmax", "amax", "T/Tmax", "w/wmax", "yaw", "yaw_err"
+        "mission",
+        "n",
+        "dur[s]",
+        "min_dt",
+        "wp_err",
+        "junc",
+        "vmax",
+        "amax",
+        "T/Tmax",
+        "w/wmax",
+        "yaw",
+        "yaw_err"
     );
     let mut infeasible = Vec::new();
     let mut inaccurate = Vec::new();
     let mut short_segment_warn = Vec::new();
     for name in &names {
-        let veh = if name.starts_with("indoor") { &indoor } else { &outdoor };
-        let m = load_mission(name, &std::fs::read_to_string(root().join(format!("missions/{name}.yaml"))).unwrap()).unwrap();
+        let veh = if name.starts_with("indoor") {
+            &indoor
+        } else {
+            &outdoor
+        };
+        let m = load_mission(
+            name,
+            &std::fs::read_to_string(root().join(format!("missions/{name}.yaml"))).unwrap(),
+        )
+        .unwrap();
         let start = Vec3::from(m.start);
         // 1) YAML start (OFFLINE_USE_YAML_START = true).
         let r = solve_like_firmware(name, start, 0.0, veh);
@@ -259,12 +329,22 @@ fn every_mission_yaml_solves_like_the_firmware() {
         //    away from zero (the default firmware behaviour).
         let _ = solve_like_firmware(name, start + Vec3::new(0.2, -0.2, 0.1), 2.5, veh);
 
-        let flag = if r.thrust_frac > 1.0 || r.rate_frac > 1.0 { " INFEASIBLE" } else { "" };
+        let flag = if r.thrust_frac > 1.0 || r.rate_frac > 1.0 {
+            " INFEASIBLE"
+        } else {
+            ""
+        };
         if !flag.is_empty() {
-            infeasible.push(format!("{} (T {:.2}×, ω {:.2}×)", r.name, r.thrust_frac, r.rate_frac));
+            infeasible.push(format!(
+                "{} (T {:.2}×, ω {:.2}×)",
+                r.name, r.thrust_frac, r.rate_frac
+            ));
         }
         if r.wp_err_max > 5e-3 || r.junction_err_max > 1e-2 {
-            let entry = format!("{} (min_dt {:.3} s: wp {:.4} m, junction {:.1e})", r.name, r.min_dt, r.wp_err_max, r.junction_err_max);
+            let entry = format!(
+                "{} (min_dt {:.3} s: wp {:.4} m, junction {:.1e})",
+                r.name, r.min_dt, r.wp_err_max, r.junction_err_max
+            );
             if r.min_dt >= F32_ACCURATE_MIN_SEGMENT_S {
                 inaccurate.push(entry);
             } else {
@@ -273,15 +353,29 @@ fn every_mission_yaml_solves_like_the_firmware() {
         }
         println!(
             "{:<30} {:>3} {:>7.2} {:>6.3} {:>8.1e} {:>8.1e} {:>6.2} {:>6.2} {:>6.2} {:>6.2}  {:<9} {:>8.1e}{flag}",
-            r.name, r.n, r.dur, r.min_dt, r.wp_err_max, r.junction_err_max, r.vmax, r.amax,
-            r.thrust_frac, r.rate_frac, r.yaw, r.yaw_err_max
+            r.name,
+            r.n,
+            r.dur,
+            r.min_dt,
+            r.wp_err_max,
+            r.junction_err_max,
+            r.vmax,
+            r.amax,
+            r.thrust_frac,
+            r.rate_frac,
+            r.yaw,
+            r.yaw_err_max
         );
     }
     println!(
         "\n{} missions solved; {} exceed the vehicle envelope (reference infeasible, not a solver defect): {}",
         names.len(),
         infeasible.len(),
-        if infeasible.is_empty() { "none".to_string() } else { infeasible.join(", ") }
+        if infeasible.is_empty() {
+            "none".to_string()
+        } else {
+            infeasible.join(", ")
+        }
     );
     if !short_segment_warn.is_empty() {
         println!(
@@ -302,21 +396,39 @@ fn every_mission_yaml_solves_like_the_firmware() {
 #[test]
 fn waypoint_miss_vs_segment_duration() {
     let outdoor = vehicle("simulation/research_outdoor");
-    for name in ["outdoor_splits-super_timeopt", "outdoor_splits-super_fast", "indoor_slalom_timeopt"] {
-        let m = load_mission(name, &std::fs::read_to_string(root().join(format!("missions/{name}.yaml"))).unwrap()).unwrap();
+    for name in [
+        "outdoor_splits-super_timeopt",
+        "outdoor_splits-super_fast",
+        "indoor_slalom_timeopt",
+    ] {
+        let m = load_mission(
+            name,
+            &std::fs::read_to_string(root().join(format!("missions/{name}.yaml"))).unwrap(),
+        )
+        .unwrap();
         let start = Vec3::from(m.start);
         print!("{name:<30}");
         for scale in [0.5f32, 1.0, 2.0, 4.0] {
             let r = solve_scaled(name, start, 0.0, &outdoor, scale);
-            print!("  x{scale}: min_dt={:.3} wp_err={:.1e} junc={:.1e}", r.min_dt, r.wp_err_max, r.junction_err_max);
+            print!(
+                "  x{scale}: min_dt={:.3} wp_err={:.1e} junc={:.1e}",
+                r.min_dt, r.wp_err_max, r.junction_err_max
+            );
         }
         println!();
     }
 }
 
 /// Solve a mission exactly as `plan_offline` does and hand back the trajectory.
-fn firmware_trajectory(name: &str, head_pos: Vec3) -> cybflight_core::trajectory_planning::piecewise_polynomial::PiecewisePolynomial {
-    let m = load_mission(name, &std::fs::read_to_string(root().join(format!("missions/{name}.yaml"))).unwrap()).unwrap();
+fn firmware_trajectory(
+    name: &str,
+    head_pos: Vec3,
+) -> cybflight_core::trajectory_planning::piecewise_polynomial::PiecewisePolynomial {
+    let m = load_mission(
+        name,
+        &std::fs::read_to_string(root().join(format!("missions/{name}.yaml"))).unwrap(),
+    )
+    .unwrap();
     let n = m.waypoints.len();
     let mut durations = Vec::with_capacity(n);
     let mut prev = 0.0f32;
@@ -324,7 +436,10 @@ fn firmware_trajectory(name: &str, head_pos: Vec3) -> cybflight_core::trajectory
         durations.push(ts - prev);
         prev = ts;
     }
-    let intermediate: Vec<Vec3> = m.waypoints[..n - 1].iter().map(|w| Vec3::from(*w)).collect();
+    let intermediate: Vec<Vec3> = m.waypoints[..n - 1]
+        .iter()
+        .map(|w| Vec3::from(*w))
+        .collect();
     let head = [head_pos, ZERO3, ZERO3, ZERO3];
     let tail = [Vec3::from(m.waypoints[n - 1]), ZERO3, ZERO3, ZERO3];
     let mut minco = Box::new(MincoSnap::new(&head, &tail, MAX_PIECES));
@@ -339,56 +454,133 @@ fn firmware_trajectory(name: &str, head_pos: Vec3) -> cybflight_core::trajectory
 /// export `analysis/datasets/indoor_exp_timeopt/exp_circle_timeopt.csv`.
 #[test]
 fn indoor_circle_timeopt_matches_original_export() {
-    let csv = std::fs::read_to_string(root().join("analysis/datasets/indoor_exp_timeopt/exp_circle_timeopt.csv")).unwrap();
+    let csv = std::fs::read_to_string(
+        root().join("analysis/datasets/indoor_exp_timeopt/exp_circle_timeopt.csv"),
+    )
+    .unwrap();
     let mut lines = csv.lines();
     let header: Vec<&str> = lines.next().unwrap().split(',').collect();
-    let col = |n: &str| header.iter().position(|h| *h == n).unwrap_or_else(|| panic!("no column {n}"));
-    let (ct, cp, cv, ca, cj) = (col("t"), col("p_x"), col("v_x"), col("a_lin_x"), col("jerk_x"));
+    let col = |n: &str| {
+        header
+            .iter()
+            .position(|h| *h == n)
+            .unwrap_or_else(|| panic!("no column {n}"))
+    };
+    let (ct, cp, cv, ca, cj) = (
+        col("t"),
+        col("p_x"),
+        col("v_x"),
+        col("a_lin_x"),
+        col("jerk_x"),
+    );
     let rows: Vec<Vec<f32>> = lines
         .filter(|l| !l.trim().is_empty())
         .map(|l| l.split(',').map(|x| x.parse::<f32>().unwrap()).collect())
         .collect();
     let v3 = |r: &Vec<f32>, c: usize| Vec3::new(r[c], r[c + 1], r[c + 2]);
 
-    let m = load_mission("indoor_circle_timeopt", &std::fs::read_to_string(root().join("missions/indoor_circle_timeopt.yaml")).unwrap()).unwrap();
+    let m = load_mission(
+        "indoor_circle_timeopt",
+        &std::fs::read_to_string(root().join("missions/indoor_circle_timeopt.yaml")).unwrap(),
+    )
+    .unwrap();
     let traj = firmware_trajectory("indoor_circle_timeopt", Vec3::from(m.start));
     let dur = traj.total_duration();
     let csv_end = rows.last().unwrap()[ct];
 
-    struct Stat { max: f32, t_max: f32, sum_sq: f32, n: usize }
+    struct Stat {
+        max: f32,
+        t_max: f32,
+        sum_sq: f32,
+        n: usize,
+    }
     impl Stat {
-        fn new() -> Self { Stat { max: 0.0, t_max: 0.0, sum_sq: 0.0, n: 0 } }
-        fn push(&mut self, e: f32, t: f32) { if e > self.max { self.max = e; self.t_max = t; } self.sum_sq += e * e; self.n += 1; }
-        fn rms(&self) -> f32 { (self.sum_sq / self.n.max(1) as f32).sqrt() }
+        fn new() -> Self {
+            Stat {
+                max: 0.0,
+                t_max: 0.0,
+                sum_sq: 0.0,
+                n: 0,
+            }
+        }
+        fn push(&mut self, e: f32, t: f32) {
+            if e > self.max {
+                self.max = e;
+                self.t_max = t;
+            }
+            self.sum_sq += e * e;
+            self.n += 1;
+        }
+        fn rms(&self) -> f32 {
+            (self.sum_sq / self.n.max(1) as f32).sqrt()
+        }
     }
     let (mut sp, mut sv, mut sa, mut sj) = (Stat::new(), Stat::new(), Stat::new(), Stat::new());
     let (mut ref_vmax, mut ref_amax, mut vmax, mut amax) = (0.0f32, 0.0f32, 0.0f32, 0.0f32);
     for r in &rows {
         let t = r[ct];
-        if t > dur.min(csv_end) { break; }
-        let (p, v, a, j) = (traj.get_pos(t), traj.get_vel(t), traj.get_acc(t), traj.get_jerk(t));
+        if t > dur.min(csv_end) {
+            break;
+        }
+        let (p, v, a, j) = (
+            traj.get_pos(t),
+            traj.get_vel(t),
+            traj.get_acc(t),
+            traj.get_jerk(t),
+        );
         let (rp, rv, ra, rj) = (v3(r, cp), v3(r, cv), v3(r, ca), v3(r, cj));
         sp.push((p - rp).norm(), t);
         sv.push((v - rv).norm(), t);
         sa.push((a - ra).norm(), t);
         sj.push((j - rj).norm(), t);
-        ref_vmax = ref_vmax.max(rv.norm()); ref_amax = ref_amax.max(ra.norm());
-        vmax = vmax.max(v.norm()); amax = amax.max(a.norm());
+        ref_vmax = ref_vmax.max(rv.norm());
+        ref_amax = ref_amax.max(ra.norm());
+        vmax = vmax.max(v.norm());
+        amax = amax.max(a.norm());
     }
     // Are the YAML waypoints on the original path at their timestamps?
     let mut wp_on_ref = 0.0f32;
     for (w, &ts) in m.waypoints.iter().zip(&m.timestamps) {
-        let r = rows.iter().min_by(|a, b| (a[ct] - ts).abs().partial_cmp(&(b[ct] - ts).abs()).unwrap()).unwrap();
+        let r = rows
+            .iter()
+            .min_by(|a, b| (a[ct] - ts).abs().partial_cmp(&(b[ct] - ts).abs()).unwrap())
+            .unwrap();
         wp_on_ref = wp_on_ref.max((Vec3::from(*w) - v3(r, cp)).norm());
     }
 
-    println!("\nindoor_circle_timeopt vs exp_circle_timeopt.csv ({} samples @ 10 ms)", sp.n);
-    println!("  duration      firmware {dur:.4} s   export {csv_end:.4} s   (Δ {:+.4} s)", dur - csv_end);
+    println!(
+        "\nindoor_circle_timeopt vs exp_circle_timeopt.csv ({} samples @ 10 ms)",
+        sp.n
+    );
+    println!(
+        "  duration      firmware {dur:.4} s   export {csv_end:.4} s   (Δ {:+.4} s)",
+        dur - csv_end
+    );
     println!("  YAML waypoints vs export path at their timestamps: max {wp_on_ref:.4} m");
-    println!("  position      rms {:.4} m   max {:.4} m @ t={:.2}", sp.rms(), sp.max, sp.t_max);
-    println!("  velocity      rms {:.3} m/s  max {:.3} m/s @ t={:.2}   (peak: firmware {vmax:.2}, export {ref_vmax:.2})", sv.rms(), sv.max, sv.t_max);
-    println!("  acceleration  rms {:.2} m/s² max {:.2} m/s² @ t={:.2}   (peak: firmware {amax:.2}, export {ref_amax:.2})", sa.rms(), sa.max, sa.t_max);
-    println!("  jerk          rms {:.1} m/s³ max {:.1} m/s³ @ t={:.2}", sj.rms(), sj.max, sj.t_max);
+    println!(
+        "  position      rms {:.4} m   max {:.4} m @ t={:.2}",
+        sp.rms(),
+        sp.max,
+        sp.t_max
+    );
+    println!(
+        "  velocity      rms {:.3} m/s  max {:.3} m/s @ t={:.2}   (peak: firmware {vmax:.2}, export {ref_vmax:.2})",
+        sv.rms(),
+        sv.max,
+        sv.t_max
+    );
+    println!(
+        "  acceleration  rms {:.2} m/s² max {:.2} m/s² @ t={:.2}   (peak: firmware {amax:.2}, export {ref_amax:.2})",
+        sa.rms(),
+        sa.max,
+        sa.t_max
+    );
+    println!(
+        "  jerk          rms {:.1} m/s³ max {:.1} m/s³ @ t={:.2}",
+        sj.rms(),
+        sj.max,
+        sj.t_max
+    );
 
     // Flatness outputs: collective thrust per unit mass and body rates,
     // first through the min-norm map (body-z ≡ 0; kept as the contrast —
@@ -402,9 +594,14 @@ fn indoor_circle_timeopt_matches_original_export() {
     let mut faults = 0usize;
     for r in &rows {
         let t = r[ct];
-        if t > dur.min(csv_end) { break; }
+        if t > dur.min(csv_end) {
+            break;
+        }
         let (a, j) = (traj.get_acc(t), traj.get_jerk(t));
-        let Ok((alpha, _, w)) = flatness_to_thrust_omega(a, j, 0.0, 0.0, 9.81) else { faults += 1; continue };
+        let Ok((alpha, _, w)) = flatness_to_thrust_omega(a, j, 0.0, 0.0, 9.81) else {
+            faults += 1;
+            continue;
+        };
         let (rth, rw) = (r[cth], v3(r, cw));
         st.push((alpha - rth).abs(), t);
         for k in 0..3 {
@@ -415,10 +612,21 @@ fn indoor_circle_timeopt_matches_original_export() {
         th_pk = th_pk.max(alpha);
         th_pk_ref = th_pk_ref.max(rth);
     }
-    println!("  thrust/mass   rms {:.3} m/s² max {:.3} m/s² @ t={:.2}   (peak: firmware {th_pk:.2}, export {th_pk_ref:.2})", st.rms(), st.max, st.t_max);
+    println!(
+        "  thrust/mass   rms {:.3} m/s² max {:.3} m/s² @ t={:.2}   (peak: firmware {th_pk:.2}, export {th_pk_ref:.2})",
+        st.rms(),
+        st.max,
+        st.t_max
+    );
     for (k, ax) in ["x", "y", "z"].iter().enumerate() {
-        println!("  rate w_{ax}      rms {:.3} rad/s max {:.3} rad/s @ t={:.2}   (peak: firmware {:.2}, export {:.2})",
-            sw[k].rms(), sw[k].max, sw[k].t_max, w_pk[k], w_pk_ref[k]);
+        println!(
+            "  rate w_{ax}      rms {:.3} rad/s max {:.3} rad/s @ t={:.2}   (peak: firmware {:.2}, export {:.2})",
+            sw[k].rms(),
+            sw[k].max,
+            sw[k].t_max,
+            w_pk[k],
+            w_pk_ref[k]
+        );
     }
     println!("  flatness faults: {faults}");
     assert_eq!(faults, 0);
@@ -430,14 +638,28 @@ fn indoor_circle_timeopt_matches_original_export() {
     let mut faults2 = 0usize;
     for r in &rows {
         let t = r[ct];
-        if t > dur.min(csv_end) { break; }
+        if t > dur.min(csv_end) {
+            break;
+        }
         let (a, j) = (traj.get_acc(t), traj.get_jerk(t));
-        let Ok((_, _, w)) = flatness_to_thrust_omega_true_yaw(a, j, 0.0, 0.0, 9.81) else { faults2 += 1; continue };
+        let Ok((_, _, w)) = flatness_to_thrust_omega_true_yaw(a, j, 0.0, 0.0, 9.81) else {
+            faults2 += 1;
+            continue;
+        };
         let rw = v3(r, cw);
-        for k in 0..3 { sw2[k].push((w[k] - rw[k]).abs(), t); w2_pk[k] = w2_pk[k].max(w[k].abs()); }
+        for k in 0..3 {
+            sw2[k].push((w[k] - rw[k]).abs(), t);
+            w2_pk[k] = w2_pk[k].max(w[k].abs());
+        }
     }
     for (k, ax) in ["x", "y", "z"].iter().enumerate() {
-        println!("  [true_yaw ψ=0] w_{ax}  rms {:.3} max {:.3} rad/s   (peak firmware {:.2}, export {:.2})", sw2[k].rms(), sw2[k].max, w2_pk[k], w_pk_ref[k]);
+        println!(
+            "  [true_yaw ψ=0] w_{ax}  rms {:.3} max {:.3} rad/s   (peak firmware {:.2}, export {:.2})",
+            sw2[k].rms(),
+            sw2[k].max,
+            w2_pk[k],
+            w_pk_ref[k]
+        );
     }
     println!("  [true_yaw ψ=0] faults: {faults2}");
 
@@ -449,14 +671,28 @@ fn indoor_circle_timeopt_matches_original_export() {
     let mut faults3 = 0usize;
     for r in &rows {
         let t = r[ct];
-        if t > dur.min(csv_end) { break; }
+        if t > dur.min(csv_end) {
+            break;
+        }
         let (a, j, sn) = (traj.get_acc(t), traj.get_jerk(t), traj.get_snap(t));
-        let Ok(st) = flatness_to_state_tilt_yaw(a, j, sn, [0.0, 0.0, 0.0], 9.81) else { faults3 += 1; continue };
+        let Ok(st) = flatness_to_state_tilt_yaw(a, j, sn, [0.0, 0.0, 0.0], 9.81) else {
+            faults3 += 1;
+            continue;
+        };
         let rw = v3(r, cw);
-        for k in 0..3 { sw3[k].push((st.omega[k] - rw[k]).abs(), t); w3_pk[k] = w3_pk[k].max(st.omega[k].abs()); }
+        for k in 0..3 {
+            sw3[k].push((st.omega[k] - rw[k]).abs(), t);
+            w3_pk[k] = w3_pk[k].max(st.omega[k].abs());
+        }
     }
     for (k, ax) in ["x", "y", "z"].iter().enumerate() {
-        println!("  [tilt_yaw closed form ψ=0] w_{ax}  rms {:.3} max {:.3} rad/s   (peak firmware {:.2}, export {:.2})", sw3[k].rms(), sw3[k].max, w3_pk[k], w_pk_ref[k]);
+        println!(
+            "  [tilt_yaw closed form ψ=0] w_{ax}  rms {:.3} max {:.3} rad/s   (peak firmware {:.2}, export {:.2})",
+            sw3[k].rms(),
+            sw3[k].max,
+            w3_pk[k],
+            w_pk_ref[k]
+        );
     }
     println!("  [tilt_yaw closed form ψ=0] faults: {faults3}");
     assert!((dur - csv_end).abs() < 0.05, "duration mismatch");

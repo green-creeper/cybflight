@@ -116,10 +116,7 @@ pub fn write_markdown(
 
 /// Write `timeseries.csv`. Minimal schema: t, position, setpoint, tilt,
 /// motor forces. Opt-in via the CLI / tests — large.
-pub fn write_csv(
-    dir: &Path,
-    history: &[StepRecord],
-) -> std::io::Result<std::path::PathBuf> {
+pub fn write_csv(dir: &Path, history: &[StepRecord]) -> std::io::Result<std::path::PathBuf> {
     fs::create_dir_all(dir)?;
     let path = dir.join("timeseries.csv");
     let mut f = fs::File::create(&path)?;

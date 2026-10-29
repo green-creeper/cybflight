@@ -271,17 +271,17 @@ impl EskfMocapGuard {
     /// absolute — a re-associated body must never capture the filter.
     /// On the ground it must not be, or the cascade is a permanent
     /// wedge (see `reanchor_radius_m`).
-    pub fn on_pose(
-        &mut self,
-        eskf: &mut Eskf,
-        pose: &MocapPose,
-        armed: bool,
-    ) -> MocapGuardOutcome {
+    pub fn on_pose(&mut self, eskf: &mut Eskf, pose: &MocapPose, armed: bool) -> MocapGuardOutcome {
         // Non-finite-pose gate. Cheap to do here so a corrupted
         // transport frame (ESP bridge / COBS decode) never reaches
         // `update_pose`.
         if !pose.position.iter().all(|v| v.is_finite())
-            || !pose.orientation.into_inner().coords.iter().all(|v| v.is_finite())
+            || !pose
+                .orientation
+                .into_inner()
+                .coords
+                .iter()
+                .all(|v| v.is_finite())
         {
             return MocapGuardOutcome::NonFinitePose;
         }
@@ -313,7 +313,9 @@ impl EskfMocapGuard {
         // Hand outcome to the cross-cutting failsafe — bumps both
         // pos and att counters (record_pose_outcome), drives the
         // jump+reject cascades, runs the post-update NaN check.
-        let action = self.failsafe.record_pose_outcome(eskf, outcome, pose.timestamp_ms);
+        let action = self
+            .failsafe
+            .record_pose_outcome(eskf, outcome, pose.timestamp_ms);
 
         // Default outcome from the update itself; the cascade match
         // below may override.
@@ -363,8 +365,7 @@ impl EskfMocapGuard {
         // from the re-association this guard exists to reject (poses
         // tracking a different, generally moving body). Gating on
         // `!armed` keeps the in-flight policy exactly as it was.
-        let wedged =
-            self.failsafe.snapshot().consecutive_jumps >= self.cfg.max_consecutive_jumps;
+        let wedged = self.failsafe.snapshot().consecutive_jumps >= self.cfg.max_consecutive_jumps;
         if !armed && wedged {
             let agrees = self
                 .reanchor_ref
@@ -626,7 +627,10 @@ mod tests {
         // Filter re-seeded at the pose, cascade counters cleared.
         assert!((e.position() - far).norm() < 1e-5);
         assert_eq!(g.snapshot().consecutive_jumps, 0);
-        assert!(!g.is_ready(), "a freshly re-anchored filter is not converged");
+        assert!(
+            !g.is_ready(),
+            "a freshly re-anchored filter is not converged"
+        );
     }
 
     /// The hatch is disarmed-only. Armed, the same agreeing stream must

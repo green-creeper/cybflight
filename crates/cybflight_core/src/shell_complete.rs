@@ -172,10 +172,7 @@ mod tests {
 
     fn run(line: &str) -> (usize, String) {
         let c = complete(CMDS, &Words, line);
-        (
-            c.matches,
-            String::from_utf8(c.insert().to_vec()).unwrap(),
-        )
+        (c.matches, String::from_utf8(c.insert().to_vec()).unwrap())
     }
 
     fn listed(line: &str) -> Vec<String> {
@@ -202,7 +199,12 @@ mod tests {
 
     #[test]
     fn shared_prefixes_are_deduplicated() {
-        assert_eq!(listed(""), ["help", "health", "rc", "rcstats", "stream", "param", "reboot"]);
+        assert_eq!(
+            listed(""),
+            [
+                "help", "health", "rc", "rcstats", "stream", "param", "reboot"
+            ]
+        );
         assert_eq!(listed("stream att "), ["on", "off"]);
         assert_eq!(listed("reboot "), ["--dfu"]);
     }

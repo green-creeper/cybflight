@@ -653,19 +653,52 @@ impl RecordSet {
         let indi_hz = if self.fast_indi_telem() { 500.0 } else { 100.0 };
         // (included?, channel id, bytes/record, records/s)
         let rows: [(bool, u16, f32, f32); 9] = [
-            (self.includes_imu(), topics::imu::CHANNEL_ID, 62.0, imu_hz / div),
-            (self.includes_imu_raw(), topics::imu_raw::CHANNEL_ID, 62.0, imu_hz / div),
-            (self.includes_odometry(), topics::odometry::CHANNEL_ID, 97.0,
-             crate::rates::BLACKBOX_ODOM_HZ),
-            (self.includes_motors(), topics::motors::CHANNEL_ID, 81.0, indi_hz),
-            (self.includes_motor_state(), topics::motor_state::CHANNEL_ID, 125.0, indi_hz),
+            (
+                self.includes_imu(),
+                topics::imu::CHANNEL_ID,
+                62.0,
+                imu_hz / div,
+            ),
+            (
+                self.includes_imu_raw(),
+                topics::imu_raw::CHANNEL_ID,
+                62.0,
+                imu_hz / div,
+            ),
+            (
+                self.includes_odometry(),
+                topics::odometry::CHANNEL_ID,
+                97.0,
+                crate::rates::BLACKBOX_ODOM_HZ,
+            ),
+            (
+                self.includes_motors(),
+                topics::motors::CHANNEL_ID,
+                81.0,
+                indi_hz,
+            ),
+            (
+                self.includes_motor_state(),
+                topics::motor_state::CHANNEL_ID,
+                125.0,
+                indi_hz,
+            ),
             (self.includes_rc(), topics::rc::CHANNEL_ID, 118.0, 244.0),
-            (self.includes_power(), topics::power::CHANNEL_ID, 117.0,
-             crate::rates::BLACKBOX_POWER_HZ),
+            (
+                self.includes_power(),
+                topics::power::CHANNEL_ID,
+                117.0,
+                crate::rates::BLACKBOX_POWER_HZ,
+            ),
             (self.includes_mpc(), topics::mpc::CHANNEL_ID, 132.0, 100.0),
             // Computed, not measured: `blackbox_wire::steady_state_sizes`
             // pins the 78 B `.v2` payload; + 22 B header. Was 370.0 as a map.
-            (self.includes_health(), topics::health::CHANNEL_ID, 100.0, 20.0),
+            (
+                self.includes_health(),
+                topics::health::CHANNEL_ID,
+                100.0,
+                20.0,
+            ),
         ];
         let mut total = 0.0;
         let mut i = 0;
@@ -679,4 +712,3 @@ impl RecordSet {
         total as u32
     }
 }
-

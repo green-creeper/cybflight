@@ -21,11 +21,11 @@
 //! the cycle *after* the first update event, so the buffer is prefixed by
 //! one zero (low) and suffixed by enough zeros to exceed the 50 µs reset.
 
+use crate::hal::Peri;
 use crate::hal::dma::{AnyChannel, Channel, Transfer, TransferOptions};
 use crate::hal::gpio::{AfType, Flex, OutputType, Pin, Speed};
-use crate::hal::pac::timer::vals;
 use crate::hal::pac::timer::TimGp16;
-use crate::hal::Peri;
+use crate::hal::pac::timer::vals;
 
 /// Number of LEDs in the chained strip. Each WS2812 consumes the first 24
 /// bits it sees and forwards the remainder, so this MUST match the physical

@@ -48,7 +48,7 @@ use nalgebra::{Quaternion, SVector, UnitQuaternion, Vector3};
 #[allow(unused_imports)]
 use num_traits::Float;
 
-use super::quad_model::{QuadModel, NU, NX};
+use super::quad_model::{NU, NX, QuadModel};
 use crate::nn::mlp::{Activation, LayerShape, Mlp, MlpError};
 use crate::trajectory_planning::flatness::flatness_to_thrust_omega;
 use crate::trajectory_planning::sampler::SamplerNode;
@@ -169,7 +169,11 @@ impl CostNominal {
         // `down = 1/up`).
         let s = |i: usize, up: f32, down: f32| {
             let v = z[i];
-            let v = if v.is_finite() { v.clamp(-1.0, 1.0) } else { 0.0 };
+            let v = if v.is_finite() {
+                v.clamp(-1.0, 1.0)
+            } else {
+                0.0
+            };
             if v >= 0.0 { up.powf(v) } else { down.powf(-v) }
         };
         let g = |i: usize| s(i, STATE_LOG_BASE, 1.0 / STATE_LOG_BASE);
@@ -184,7 +188,11 @@ impl CostNominal {
             self.w_att[2] * s(7, ATT_YAW_UP, ATT_YAW_DOWN),
         ];
         let (cn, ln) = (s(8, CONTOUR_UP, CONTOUR_DOWN), s(9, LAG_UP, LAG_DOWN));
-        m.w_pos_n = [self.w_pos_n[0] * cn, self.w_pos_n[1] * cn, self.w_pos_n[2] * ln];
+        m.w_pos_n = [
+            self.w_pos_n[0] * cn,
+            self.w_pos_n[1] * cn,
+            self.w_pos_n[2] * ln,
+        ];
         for i in 0..3 {
             m.w_vel_n[i] = self.w_vel_n[i] * g(10 + i);
         }
@@ -195,7 +203,11 @@ impl CostNominal {
         ];
         for i in 0..3 {
             let v = z[16 + i];
-            let v = if v.is_finite() { v.clamp(-1.0, 1.0) } else { 0.0 };
+            let v = if v.is_finite() {
+                v.clamp(-1.0, 1.0)
+            } else {
+                0.0
+            };
             m.w_input[1 + i] = if v >= 0.0 {
                 self.w_rate[i] * RATE_LOG_BASE.powf(v)
             } else {

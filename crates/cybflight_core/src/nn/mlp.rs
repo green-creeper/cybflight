@@ -39,9 +39,7 @@ impl Activation {
     fn apply(self, x: f32) -> f32 {
         match self {
             Activation::Relu => x.max(0.0),
-            Activation::Gelu => {
-                0.5 * x * (1.0 + libm::erff(x * core::f32::consts::FRAC_1_SQRT_2))
-            }
+            Activation::Gelu => 0.5 * x * (1.0 + libm::erff(x * core::f32::consts::FRAC_1_SQRT_2)),
             Activation::Tanh => libm::tanhf(x),
         }
     }
@@ -116,9 +114,16 @@ impl<'a, const W: usize> Mlp<'a, W> {
             expected += s.weight_count();
         }
         if weights.len() != expected {
-            return Err(MlpError::WeightLen { expected, actual: weights.len() });
+            return Err(MlpError::WeightLen {
+                expected,
+                actual: weights.len(),
+            });
         }
-        Ok(Self { weights, shapes, activation })
+        Ok(Self {
+            weights,
+            shapes,
+            activation,
+        })
     }
 
     pub fn input_dim(&self) -> usize {
@@ -154,7 +159,11 @@ impl<'a, const W: usize> Mlp<'a, W> {
                 for i in 0..nin {
                     acc += row[i] * src[i];
                 }
-                dst[o] = if li < last { self.activation.apply(acc) } else { acc };
+                dst[o] = if li < last {
+                    self.activation.apply(acc)
+                } else {
+                    acc
+                };
             }
             core::mem::swap(&mut src, &mut dst);
         }
@@ -174,7 +183,10 @@ mod tests {
         let w = [0.0f32; 12];
         assert_eq!(
             Mlp::<MAX_WIDTH>::new(&w, &shapes, Activation::Relu).err(),
-            Some(MlpError::WeightLen { expected: 13, actual: 12 })
+            Some(MlpError::WeightLen {
+                expected: 13,
+                actual: 12
+            })
         );
     }
 

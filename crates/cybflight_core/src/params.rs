@@ -151,7 +151,11 @@ pub struct MpcParams {
     /// (`mpc_bodydrag_*`, the `v_b|v_b|` regressor of the same fit;
     /// dominant above ~30 m/s). **All-zero = off.** Same consumer and
     /// caveats as `mpc_drag_*`.
-    #[param(keys = "mpc_bodydrag_x,mpc_bodydrag_y,mpc_bodydrag_z", min = 0.0, max = 1.0)]
+    #[param(
+        keys = "mpc_bodydrag_x,mpc_bodydrag_y,mpc_bodydrag_z",
+        min = 0.0,
+        max = 1.0
+    )]
     pub body_drag: [f32; 3],
     /// Run the baked situation-conditioned cost policy before every solve
     /// (`mpc::cost_adapt`, docs/learned_mpc_cost_deploy.md). Inert unless
@@ -497,8 +501,7 @@ impl Default for PlannerParams {
             num_check_per_piece: 8,
             duration_min_s: 0.5,
             duration_max_s: 120.0,
-            waypoint_radius_m:
-                crate::trajectory_planning::planner::DEFAULT_WAYPOINT_RADIUS,
+            waypoint_radius_m: crate::trajectory_planning::planner::DEFAULT_WAYPOINT_RADIUS,
             bfgs_trust: BfgsTrustParams::default(),
         }
     }
@@ -577,7 +580,12 @@ pub struct CascadeParams {
     /// re-arm far from the setpoint ramps in instead of commanding a
     /// full-authority lunge. Previously a `Default`-impl literal that
     /// `PositionController::new` copied and nothing could reach.
-    #[param(keys = "pos_err_max_x,pos_err_max_y,pos_err_max_z", unit = "m", min = 0.01, max = 100.0)]
+    #[param(
+        keys = "pos_err_max_x,pos_err_max_y,pos_err_max_z",
+        unit = "m",
+        min = 0.01,
+        max = 100.0
+    )]
     pub pos_err_max: [f32; 3],
     /// Per-axis clamp on the velocity error the PD stage acts on [m/s].
     /// Same rationale and history as [`Self::pos_err_max`].
@@ -648,7 +656,12 @@ impl Default for IndiEffectivenessParams {
 #[derive(Clone, Debug, Params)]
 pub struct IndiControllerParams {
     /// Rate error -> angular acceleration gains [roll, pitch, yaw] (rad/s^2 per rad/s).
-    #[param(keys = "indi_rate_r,indi_rate_p,indi_rate_y", unit = "1/s", min = 0.0, max = 1000.0)]
+    #[param(
+        keys = "indi_rate_r,indi_rate_p,indi_rate_y",
+        unit = "1/s",
+        min = 0.0,
+        max = 1000.0
+    )]
     pub rate_gains: [f32; 3],
     /// Biquad low-pass cutoff for synchronized filters (Hz).
     #[param(key = "indi_sync_hz", unit = "Hz", min = 1.0, max = 500.0)]
@@ -666,10 +679,18 @@ pub struct IndiControllerParams {
     #[param(as_u16, key = "indi_ctrl_div", min = 1.0, max = 16.0, reboot)]
     pub ctrl_decimation: usize,
     /// WLS pseudo-control weights [fx, fy, fz, roll, pitch, yaw].
-    #[param(keys = "wls_wv_fx,wls_wv_fy,wls_wv_fz,wls_wv_rr,wls_wv_rp,wls_wv_ry", min = 0.001, max = 1e6)]
+    #[param(
+        keys = "wls_wv_fx,wls_wv_fy,wls_wv_fz,wls_wv_rr,wls_wv_rp,wls_wv_ry",
+        min = 0.001,
+        max = 1e6
+    )]
     pub wls_wv: [f32; 6],
     /// WLS actuator penalty weights [m0, m1, m2, m3].
-    #[param(keys = "wls_wu_m0,wls_wu_m1,wls_wu_m2,wls_wu_m3", min = 0.001, max = 1e6)]
+    #[param(
+        keys = "wls_wu_m0,wls_wu_m1,wls_wu_m2,wls_wu_m3",
+        min = 0.001,
+        max = 1e6
+    )]
     pub wls_wu: [f32; 4],
     /// Per-motor idle throttle (normalized 0..1) held while armed and
     /// pre-launch, so props keep spinning rather than restarting under
@@ -797,7 +818,12 @@ pub struct RcParams {
     pub arm_threshold_us: u16,
     /// Throttle must be below this to permit arming [µs]
     /// (Betaflight `mincheck`).
-    #[param(key = "rc_throttle_mincheck_us", unit = "us", min = 900.0, max = 1500.0)]
+    #[param(
+        key = "rc_throttle_mincheck_us",
+        unit = "us",
+        min = 900.0,
+        max = 1500.0
+    )]
     pub throttle_mincheck_us: u16,
     /// Zero-based channel index of the mission trigger.
     #[param(key = "rc_mission_channel", min = 0.0, max = 15.0)]
@@ -1449,7 +1475,12 @@ pub struct EskfGpsGuardParams {
     #[param(key = "eskf_gps_rtk_fix_debounce_s", unit = "s", min = 0.0, max = 60.0)]
     pub rtk_fix_debounce_s: f32,
     /// Sustained `carr_soln < 2` for this long clears `rtk_quality_ok`.
-    #[param(key = "eskf_gps_rtk_loss_debounce_s", unit = "s", min = 0.0, max = 60.0)]
+    #[param(
+        key = "eskf_gps_rtk_loss_debounce_s",
+        unit = "s",
+        min = 0.0,
+        max = 60.0
+    )]
     pub rtk_loss_debounce_s: f32,
     /// Gyro-bias covariance xy-trace below which the filter counts as
     /// converged (the arming gate). Scales with gyro grade.
@@ -1469,7 +1500,12 @@ pub struct EskfGpsGuardParams {
     #[param(key = "eskf_gps_pos_sigma_fix_m", unit = "m", min = 1e-3, max = 100.0)]
     pub pos_sigma_floor_fix_m: f32,
     /// Position measurement σ floor at `carr_soln = 1` (RTK-float).
-    #[param(key = "eskf_gps_pos_sigma_float_m", unit = "m", min = 1e-3, max = 100.0)]
+    #[param(
+        key = "eskf_gps_pos_sigma_float_m",
+        unit = "m",
+        min = 1e-3,
+        max = 100.0
+    )]
     pub pos_sigma_floor_float_m: f32,
     /// Position measurement σ floor at `carr_soln = 0` (stand-alone).
     #[param(key = "eskf_gps_pos_sigma_none_m", unit = "m", min = 1e-3, max = 100.0)]
@@ -1487,7 +1523,12 @@ pub struct EskfGpsGuardParams {
     /// σ floor for the dual-antenna heading/pitch measurement (rad).
     /// Applied to the receiver-reported heading σ before `update_baseline`.
     /// Only read on a `build: gps_dual_antenna: yes` + `gps_model: unicore` build.
-    #[param(key = "eskf_gps_heading_sigma_floor_rad", unit = "rad", min = 1e-4, max = 1.0)]
+    #[param(
+        key = "eskf_gps_heading_sigma_floor_rad",
+        unit = "rad",
+        min = 1e-4,
+        max = 1.0
+    )]
     pub heading_sigma_floor_rad: f32,
 }
 
@@ -1888,7 +1929,12 @@ pub struct RpmEstimatorParams {
     /// Deliberately wide: it says the filter knows nothing about motor
     /// speed at construction, after a reconfigure, and after the
     /// rejection escape below, so the first good measurement dominates.
-    #[param(key = "rpm_est_init_omega_var", unit = "(rad/s)^2", min = 1.0, max = 1e6)]
+    #[param(
+        key = "rpm_est_init_omega_var",
+        unit = "(rad/s)^2",
+        min = 1.0,
+        max = 1e6
+    )]
     pub init_omega_var: f32,
     /// Consecutive NIS rejections before ω is re-seeded from the
     /// measurement.
@@ -2620,7 +2666,10 @@ mod tests {
 
         let plan = crate::trajectory_planning::quad_planning_config::QuadPlanningConfig::
             from_vehicle_params(&cfg);
-        assert_eq!(plan.grav, 9.78, "QuadPlanningConfig ignored site.gravity_m_s2");
+        assert_eq!(
+            plan.grav, 9.78,
+            "QuadPlanningConfig ignored site.gravity_m_s2"
+        );
         // The 10%-of-hover thrust floor is derived from g, not a literal.
         let expect_floor = cfg.airframe.body.mass_kg * 9.78 * 0.1;
         assert!(
@@ -3025,9 +3074,8 @@ mod path_tests {
     /// answered by rescanning the prefix rather than by a set.
     #[test]
     fn group_paths_are_contiguous_runs() {
-        let path_at = |i: usize| {
-            ParamName::path_of::<FirmwareConfig>(i).expect("every index has a path")
-        };
+        let path_at =
+            |i: usize| ParamName::path_of::<FirmwareConfig>(i).expect("every index has a path");
         let mut runs = 0usize;
         for idx in 0..PARAM_COUNT {
             let cur = path_at(idx);
@@ -3064,8 +3112,14 @@ mod path_tests {
     #[test]
     fn path_filter_is_separator_insensitive_and_boundary_safe() {
         assert!(ParamName::path_matches("eskf.mocap_guard", "eskf"));
-        assert!(ParamName::path_matches("eskf.mocap_guard", "eskf-mocap_guard"));
-        assert!(ParamName::path_matches("eskf.mocap_guard", "eskf.mocap-guard"));
+        assert!(ParamName::path_matches(
+            "eskf.mocap_guard",
+            "eskf-mocap_guard"
+        ));
+        assert!(ParamName::path_matches(
+            "eskf.mocap_guard",
+            "eskf.mocap-guard"
+        ));
         assert!(ParamName::path_matches("eskf.mocap_guard", "ESKF"));
         // Must not match a partial segment.
         assert!(!ParamName::path_matches("eskf.mocap_guard", "es"));

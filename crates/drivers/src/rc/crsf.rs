@@ -6,7 +6,7 @@
 
 use embedded_io_async::{Read, Write};
 
-use super::{crc8_dvb_s2_buf, crc8_poly_0xba_buf, LinkStatistics, RcChannels, MAX_CHANNELS};
+use super::{LinkStatistics, MAX_CHANNELS, RcChannels, crc8_dvb_s2_buf, crc8_poly_0xba_buf};
 
 // ---------------------------------------------------------------------------
 // Protocol constants (from crsf_protocol.h)
@@ -657,7 +657,7 @@ where
         payload[1] = CRSF_ADDRESS_FLIGHT_CONTROLLER;
         payload[2..2 + name_len].copy_from_slice(&name[..name_len]);
         payload[2 + name_len] = 0; // null terminator
-                                   // 12 zero bytes already set
+        // 12 zero bytes already set
         payload[2 + name_len + 1 + 12] = 0; // parameter count
         payload[2 + name_len + 1 + 12 + 1] = 0x01; // version
         self.write_frame(CRSF_FRAMETYPE_DEVICE_INFO, &payload[..payload_len])

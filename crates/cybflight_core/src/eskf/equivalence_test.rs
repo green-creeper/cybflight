@@ -241,8 +241,8 @@ fn build_command_stream() -> Vec<Op> {
             }),
             _ => {
                 let mag_world = Vector3::new(20.0, 5.0, -42.0);
-                let mag_body = q_true.to_rotation_matrix().transpose() * mag_world
-                    + rng.vec3_gauss(0.05);
+                let mag_body =
+                    q_true.to_rotation_matrix().transpose() * mag_world + rng.vec3_gauss(0.05);
                 ops.push(Op::UpdateMag {
                     mag_body,
                     mag_world,
@@ -410,10 +410,9 @@ fn dense_vs_dense_step_by_step() {
         let c_outcome = step(&mut candidate, op);
 
         match (r_outcome, c_outcome) {
-            (Some(r), Some(c)) => assert_eq!(
-                r, c,
-                "outcome mismatch at op {idx}: ref={r:?} cand={c:?}"
-            ),
+            (Some(r), Some(c)) => {
+                assert_eq!(r, c, "outcome mismatch at op {idx}: ref={r:?} cand={c:?}")
+            }
             (None, None) => {}
             _ => panic!("op-type mismatch at op {idx}"),
         }
@@ -487,13 +486,12 @@ fn dense_vs_sparse_predict_only() {
     let g = Vector3::new(0.0, 0.0, -9.81);
 
     for i in 0..3000 {
-        let accel = -g
-            + Vector3::new(
+        let accel =
+            -g + Vector3::new(
                 (i as f32 * dt).sin() * 0.5,
                 (i as f32 * dt * 0.3).cos() * 0.4,
                 (i as f32 * dt * 0.7).sin() * 0.2,
-            )
-            + rng.vec3_gauss(0.01);
+            ) + rng.vec3_gauss(0.01);
         let gyro = Vector3::new(
             0.5 * (i as f32 * dt).sin(),
             0.3 * (i as f32 * dt * 0.5).cos(),
@@ -518,13 +516,12 @@ fn dense_vs_dense_predict_only() {
     let g = Vector3::new(0.0, 0.0, -9.81);
 
     for i in 0..3000 {
-        let accel = -g
-            + Vector3::new(
+        let accel =
+            -g + Vector3::new(
                 (i as f32 * dt).sin() * 0.5,
                 (i as f32 * dt * 0.3).cos() * 0.4,
                 (i as f32 * dt * 0.7).sin() * 0.2,
-            )
-            + rng.vec3_gauss(0.01);
+            ) + rng.vec3_gauss(0.01);
         let gyro = Vector3::new(
             0.5 * (i as f32 * dt).sin(),
             0.3 * (i as f32 * dt * 0.5).cos(),
@@ -599,14 +596,26 @@ fn final_state_is_sane() {
     let ab = eskf.accel_bias();
     let cov = eskf.covariance();
 
-    assert!(pos.iter().all(|v| v.is_finite()), "non-finite final position");
-    assert!(vel.iter().all(|v| v.is_finite()), "non-finite final velocity");
+    assert!(
+        pos.iter().all(|v| v.is_finite()),
+        "non-finite final position"
+    );
+    assert!(
+        vel.iter().all(|v| v.is_finite()),
+        "non-finite final velocity"
+    );
     assert!(
         q.coords.iter().all(|v| v.is_finite()),
         "non-finite final orientation"
     );
-    assert!(gb.iter().all(|v| v.is_finite()), "non-finite final gyro_bias");
-    assert!(ab.iter().all(|v| v.is_finite()), "non-finite final accel_bias");
+    assert!(
+        gb.iter().all(|v| v.is_finite()),
+        "non-finite final gyro_bias"
+    );
+    assert!(
+        ab.iter().all(|v| v.is_finite()),
+        "non-finite final accel_bias"
+    );
     let cov_trace: f32 = (0..15).map(|i| cov[(i, i)]).sum();
     assert!(cov_trace.is_finite(), "non-finite covariance trace");
     assert!(cov_trace > 0.0, "covariance trace collapsed to zero");
@@ -652,5 +661,8 @@ fn covariance_self_equivalence() {
     let cb = b.covariance();
     let diff: SMatrix<f32, 15, 15> = ca - cb;
     let max_abs = diff.iter().fold(0.0_f32, |m, v| m.max(v.abs()));
-    assert!(max_abs < 1e-9, "self-equivalence broken: max |ΔP| = {max_abs}");
+    assert!(
+        max_abs < 1e-9,
+        "self-equivalence broken: max |ΔP| = {max_abs}"
+    );
 }

@@ -424,7 +424,8 @@ impl QuadPlant {
         xdot[6] = 0.5 * (-qx * wx - qy * wy - qz * wz);
         xdot.fixed_rows_mut::<3>(7).copy_from(&accel_world);
         xdot.fixed_rows_mut::<3>(10).copy_from(&rate_dot);
-        xdot.fixed_rows_mut::<NU>(ROTOR_OFFSET).copy_from(&omega_dot);
+        xdot.fixed_rows_mut::<NU>(ROTOR_OFFSET)
+            .copy_from(&omega_dot);
         (xdot, omega_dot)
     }
 
@@ -441,7 +442,11 @@ impl QuadPlant {
     pub fn step(&mut self, d: &SVector<f32, NU>) {
         let d = SVector::<f32, NU>::from_fn(|i, _| {
             let v = d[i];
-            if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 }
+            if v.is_finite() {
+                v.clamp(0.0, 1.0)
+            } else {
+                0.0
+            }
         });
         let dt = self.dt_sim;
         let half_dt = 0.5 * dt;

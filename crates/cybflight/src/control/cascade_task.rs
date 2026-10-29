@@ -11,7 +11,7 @@
 #![cfg(feature = "outer_geometric")]
 
 use cybflight_core::{
-    attitude_control::{self, geometric_controller, AttitudeControlOutput},
+    attitude_control::{self, AttitudeControlOutput, geometric_controller},
     position_control::{self, pd_ff_control},
 };
 use embassy_time::{Duration, Instant, Ticker};
@@ -61,10 +61,7 @@ pub async fn cascade_task() {
     // controller's own `Default` literals, which `new()` copied and
     // nothing could reach — so the bound on every position and velocity
     // error the cascade acts on was invisible to the operator.
-    .with_error_limits(
-        Vector3::from(g.pos_err_max),
-        Vector3::from(g.vel_err_max),
-    );
+    .with_error_limits(Vector3::from(g.pos_err_max), Vector3::from(g.vel_err_max));
     // Clamp the commanded body rate to the airframe's own declared
     // capability (`max_rate_r/p/y`) rather than the constructor's
     // 360/360/180 deg/s placeholder. Those params are what every other
@@ -124,9 +121,7 @@ pub async fn cascade_task() {
         if raw.is_finite() && raw > 0.0 {
             Duration::from_micros((raw * 1.0e6) as u64)
         } else {
-            defmt::warn!(
-                "cascade: cascade_odom_stale_s not usable — falling back to default"
-            );
+            defmt::warn!("cascade: cascade_odom_stale_s not usable — falling back to default");
             ODOM_STALE_TIMEOUT_FALLBACK
         }
     };

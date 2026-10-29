@@ -18,7 +18,7 @@
 use super::model_utils;
 use crate::rotation::hat;
 
-use nalgebra::{vector, Matrix3, SMatrix, SVector, Vector3};
+use nalgebra::{Matrix3, SMatrix, SVector, Vector3, vector};
 
 pub const NX: usize = 13;
 pub const NU: usize = 4;
@@ -224,8 +224,8 @@ impl FullQuadModel {
         let mut u_bounds = [[0.0f32; 2]; NU];
         for i in 0..NU {
             motor_pos[i] = vp.airframe.motors[i].position_m;
-            motor_yaw_coeff[i] =
-                (vp.airframe.motors[i].spin_dir as i32 as f32) * vp.airframe.motors[i].torque_coeff_m;
+            motor_yaw_coeff[i] = (vp.airframe.motors[i].spin_dir as i32 as f32)
+                * vp.airframe.motors[i].torque_coeff_m;
             u_bounds[i] = [0.0, vp.airframe.motors[i].max_thrust_n];
         }
         Self {
@@ -438,7 +438,9 @@ impl FullQuadModel {
         let mut g_tau = SMatrix::<f32, 3, NU>::zeros();
         g_tau.row_mut(0).copy_from(&pos_y.transpose());
         g_tau.row_mut(1).copy_from(&(-pos_x).transpose());
-        g_tau.row_mut(2).copy_from(&self.motor_yaw_coeff.transpose());
+        g_tau
+            .row_mut(2)
+            .copy_from(&self.motor_yaw_coeff.transpose());
         ju.fixed_view_mut::<3, NU>(10, 0)
             .copy_from(&(self.inertia_inv * g_tau));
 
@@ -711,8 +713,7 @@ impl FullQuadModel {
         let (f_total, tau_x, tau_y, tau_z) = self.alloc(u);
         // Euler rigid-body equations, matching `dynamics` rows 10..13.
         let tau = Vector3::new(tau_x, tau_y, tau_z);
-        let alpha =
-            self.inertia_inv * (tau - omega_rad_s.cross(&(self.inertia * omega_rad_s)));
+        let alpha = self.inertia_inv * (tau - omega_rad_s.cross(&(self.inertia * omega_rad_s)));
         (f_total, alpha)
     }
 }
@@ -853,7 +854,10 @@ mod tests {
         let arr = [0.0025, 0.0, 0.0, 0.0, 0.0021, 0.0, 0.0, 0.0, 0.0043];
         let (i, i_inv, fell_back) = inertia_from_array(&arr);
         assert!(!fell_back);
-        assert_eq!(i, Matrix3::from_diagonal(&Vector3::new(0.0025, 0.0021, 0.0043)));
+        assert_eq!(
+            i,
+            Matrix3::from_diagonal(&Vector3::new(0.0025, 0.0021, 0.0043))
+        );
         assert_eq!(i_inv[(0, 0)], 1.0 / 0.0025);
         assert_eq!(i_inv[(1, 1)], 1.0 / 0.0021);
         assert_eq!(i_inv[(2, 2)], 1.0 / 0.0043);
@@ -884,7 +888,10 @@ mod tests {
         let arr = [0.0025, 0.005, 0.0, 0.005, 0.0021, 0.0, 0.0, 0.0, 0.0043];
         let (i, i_inv, fell_back) = inertia_from_array(&arr);
         assert!(fell_back);
-        assert_eq!(i, Matrix3::from_diagonal(&Vector3::new(0.0025, 0.0021, 0.0043)));
+        assert_eq!(
+            i,
+            Matrix3::from_diagonal(&Vector3::new(0.0025, 0.0021, 0.0043))
+        );
         assert_eq!(i_inv[(1, 1)], 1.0 / 0.0021);
         // Non-finite off-diagonal → same fallback.
         let arr = [0.0025, f32::NAN, 0.0, 0.0, 0.0021, 0.0, 0.0, 0.0, 0.0043];

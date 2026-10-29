@@ -26,7 +26,12 @@ pub const fn encode_packet(throttle: u16, telemetry_request: bool, bidirectional
 /// `bit_0` and `bit_1` are the timer CCR values representing a 0-bit and 1-bit
 /// respectively (hardware-specific, e.g. 7/14 for DShot600 at 12 MHz timer).
 /// The buffer is filled MSB-first, with 2 trailing zero words for the reset period.
-pub fn packet_to_dma_buffer(frame: u16, buf: &mut [u32; DSHOT_DMA_BUFFER_SIZE], bit_0: u32, bit_1: u32) {
+pub fn packet_to_dma_buffer(
+    frame: u16,
+    buf: &mut [u32; DSHOT_DMA_BUFFER_SIZE],
+    bit_0: u32,
+    bit_1: u32,
+) {
     for i in 0..16 {
         let bit = (frame >> (15 - i)) & 1;
         buf[i] = if bit != 0 { bit_1 } else { bit_0 };
@@ -58,9 +63,7 @@ mod tests {
         packet_to_dma_buffer(frame, &mut buf, 7, 14);
 
         // 0x0609 = 0000_0110_0000_1001
-        let expected: [u32; 18] = [
-            7, 7, 7, 7, 7, 14, 14, 7, 7, 7, 7, 7, 14, 7, 7, 14, 0, 0,
-        ];
+        let expected: [u32; 18] = [7, 7, 7, 7, 7, 14, 14, 7, 7, 7, 7, 7, 14, 7, 7, 14, 0, 0];
         assert_eq!(buf, expected);
     }
 

@@ -1,6 +1,6 @@
+use super::MAX_PIECES;
 use super::polynomial::Polynomial;
 use super::types::{Vec3, ZERO3};
-use super::MAX_PIECES;
 
 /// A piecewise polynomial trajectory in 3D with zero heap allocations.
 ///
@@ -178,13 +178,17 @@ impl Default for PiecewisePolynomial {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::polynomial::Polynomial;
+    use super::*;
 
     fn two_linear_pieces() -> PiecewisePolynomial {
         // p0(t) = (t, 0, 0) on [0,1];  p1(t) = (1 + 2t, 0, 0) on [0,2].
         let p0 = Polynomial::new(1, 1.0, &[ZERO3, Vec3::new(1.0, 0.0, 0.0)]);
-        let p1 = Polynomial::new(1, 2.0, &[Vec3::new(1.0, 0.0, 0.0), Vec3::new(2.0, 0.0, 0.0)]);
+        let p1 = Polynomial::new(
+            1,
+            2.0,
+            &[Vec3::new(1.0, 0.0, 0.0), Vec3::new(2.0, 0.0, 0.0)],
+        );
         PiecewisePolynomial::from_pieces(&[p0, p1])
     }
 

@@ -303,10 +303,7 @@ impl RpmEstimatorConfigBuilder {
                 .escape_consecutive_rejects
                 .filter(|n| *n > 0)
                 .unwrap_or(DEFAULT_ESCAPE_CONSECUTIVE_REJECTS),
-            plausible_omega_frac: usable(
-                self.plausible_omega_frac,
-                DEFAULT_PLAUSIBLE_OMEGA_FRAC,
-            ),
+            plausible_omega_frac: usable(self.plausible_omega_frac, DEFAULT_PLAUSIBLE_OMEGA_FRAC),
         })
     }
 }

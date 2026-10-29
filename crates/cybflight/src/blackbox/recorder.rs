@@ -56,9 +56,10 @@ use heapless::String;
 
 use core::sync::atomic::Ordering;
 
+use super::cbor as cbor_result;
 use super::fat::{self, FileBody, OpError};
 use super::mcap;
-use super::cbor as cbor_result;
+use super::record_set;
 use super::record_set::RecordSet;
 use super::sdmmc_block::SdmmcBlockStore;
 use super::should_record;
@@ -68,8 +69,6 @@ use super::topics::{
     attitude, control_setpoint, events, gps_health, health, imu, imu_raw, motor_state, motors, mpc,
     mpc_cost, odometry, power, rc, tracking_error,
 };
-use crate::sensors::POWER_TELEM;
-use crate::sensors::power::PowerTelemetry;
 use crate::control::TrackingError as TrackErrMsg;
 use crate::control::failsafe::{FAILSAFE_ACTIVE, FAILSAFE_REASON, RC_LINK_HEALTHY};
 use crate::control::indi_task::{
@@ -85,7 +84,8 @@ use crate::control::{MISSION_STATE, MissionState};
 use crate::estimation::ESTIMATOR_BIAS_TELEM;
 use crate::estimation::ESTIMATOR_READY;
 use crate::msgs;
-use super::record_set;
+use crate::sensors::POWER_TELEM;
+use crate::sensors::power::PowerTelemetry;
 use crate::sensors::{BLACKBOX_ODOMETRY, IMU_1, IMU_1_RAW, MAHONY_ATTITUDE, RC_INPUT};
 
 const MCAP_LIBRARY: &str = concat!("cybflight v", env!("CARGO_PKG_VERSION"));
@@ -208,13 +208,12 @@ const POST_DISARM_GRACE: Duration = Duration::from_secs(3);
 /// never re-checks `should_record()` — user disarm goes unobserved,
 /// the file is never closed, and on power-down the FAT directory
 /// entry is left at the size set by `truncate()` (i.e. zero bytes).
-const DRAIN_BUDGET_NORMAL: usize = if crate::rates::INDI_TELEM_PUBSUB_CAP
-    > crate::rates::BLACKBOX_ODOM_PUBSUB_CAP
-{
-    crate::rates::INDI_TELEM_PUBSUB_CAP
-} else {
-    crate::rates::BLACKBOX_ODOM_PUBSUB_CAP
-};
+const DRAIN_BUDGET_NORMAL: usize =
+    if crate::rates::INDI_TELEM_PUBSUB_CAP > crate::rates::BLACKBOX_ODOM_PUBSUB_CAP {
+        crate::rates::INDI_TELEM_PUBSUB_CAP
+    } else {
+        crate::rates::BLACKBOX_ODOM_PUBSUB_CAP
+    };
 
 // Every other small/mid-tier channel must also clear in one pass. The
 // deepest not covered by the max() above is `/tracking_error` at 16;
@@ -241,14 +240,26 @@ const _: () = assert!(
 /// drop-priority rationale and its rate caveat.
 const DRAIN_BUDGET_DEPRIO: usize = crate::rates::IMU_PUBSUB_CAP;
 
-type ImuSub =
-    Subscriber<'static, CriticalSectionRawMutex, msgs::Imu, { crate::rates::IMU_PUBSUB_CAP }, { crate::sensors::IMU_PUBSUB_SUBS }, 1>;
+type ImuSub = Subscriber<
+    'static,
+    CriticalSectionRawMutex,
+    msgs::Imu,
+    { crate::rates::IMU_PUBSUB_CAP },
+    { crate::sensors::IMU_PUBSUB_SUBS },
+    1,
+>;
 /// Raw (pre-biquad-LP) IMU subscriber over `IMU_1_RAW`. Same shape
 /// as `ImuSub`. Drains under `DRAIN_BUDGET_DEPRIO` like filtered
 /// IMU — both run at the full IMU rate (1 kHz or 8 kHz depending on
 /// the `imu_1khz` build knob).
-type ImuRawSub =
-    Subscriber<'static, CriticalSectionRawMutex, msgs::Imu, { crate::rates::IMU_PUBSUB_CAP }, { crate::sensors::IMU_PUBSUB_SUBS }, 1>;
+type ImuRawSub = Subscriber<
+    'static,
+    CriticalSectionRawMutex,
+    msgs::Imu,
+    { crate::rates::IMU_PUBSUB_CAP },
+    { crate::sensors::IMU_PUBSUB_SUBS },
+    1,
+>;
 type RcSub = Subscriber<'static, CriticalSectionRawMutex, msgs::RcInput, 4, 6, 1>;
 /// Odometry subscriber over `BLACKBOX_ODOMETRY` — the decimated mirror,
 /// NOT `VEHICLE_ODOMETRY`. CAP tracks `rates::BLACKBOX_ODOM_PUBSUB_CAP`
@@ -758,7 +769,10 @@ impl FileBody for FlightRecorder {
                 total += self.emit_mpc(w, &mut scratch, wr).await?;
             }
             for _ in 0..DRAIN_BUDGET_NORMAL {
-                let next = self.mpc_cost_sub.as_mut().and_then(|s| s.try_next_message());
+                let next = self
+                    .mpc_cost_sub
+                    .as_mut()
+                    .and_then(|s| s.try_next_message());
                 let Some(wr) = next else { break };
                 total += self.emit_mpc_cost(w, &mut scratch, wr).await?;
             }
@@ -814,10 +828,7 @@ impl FileBody for FlightRecorder {
             // Under SD backpressure the shared deprio budget
             // therefore biases drops onto filtered IMU instead.
             for _ in 0..DRAIN_BUDGET_DEPRIO {
-                let next = self
-                    .imu_raw_sub
-                    .as_mut()
-                    .and_then(|s| s.try_next_message());
+                let next = self.imu_raw_sub.as_mut().and_then(|s| s.try_next_message());
                 let Some(wr) = next else { break };
                 total += self.emit_imu_raw(w, &mut scratch, wr).await?;
             }
@@ -1128,8 +1139,14 @@ impl FlightRecorder {
         let Some(n) = self.note_encode(mpc_cost::encode(scratch, &m)) else {
             return Ok(0);
         };
-        let bytes = emit_msg(w, mpc_cost::CHANNEL_ID, self.mpc_cost_seq, m.timestamp, &scratch[..n])
-            .await?;
+        let bytes = emit_msg(
+            w,
+            mpc_cost::CHANNEL_ID,
+            self.mpc_cost_seq,
+            m.timestamp,
+            &scratch[..n],
+        )
+        .await?;
         self.messages = self.messages.wrapping_add(1);
         Ok(bytes)
     }
@@ -1197,7 +1214,14 @@ impl FlightRecorder {
         let Some(n) = self.note_encode(power::encode(scratch, &m)) else {
             return Ok(0);
         };
-        let bytes = emit_msg(w, power::CHANNEL_ID, self.power_seq, m.timestamp, &scratch[..n]).await?;
+        let bytes = emit_msg(
+            w,
+            power::CHANNEL_ID,
+            self.power_seq,
+            m.timestamp,
+            &scratch[..n],
+        )
+        .await?;
         self.messages = self.messages.wrapping_add(1);
         Ok(bytes)
     }
@@ -1519,7 +1543,6 @@ fn handle_wr<M>(wr: WaitResult<M>, seq: &mut u32, drops: &mut u32) -> Option<M> 
     }
 }
 
-
 async fn emit_msg<W: Write>(
     w: &mut W,
     channel_id: u16,
@@ -1663,14 +1686,15 @@ pub async fn run_session(
     } else {
         None
     };
-    let motor_state_sub = if record_set.includes_motor_state() && !knobs.muted(motor_state::CHANNEL_ID) {
-        Some(PROCESSED_MOTOR_STATE.subscriber().map_err(|_| {
-            defmt::warn!("recorder: PROCESSED_MOTOR_STATE SUBS exhausted");
-            OpError::NoSubscriberSlot
-        })?)
-    } else {
-        None
-    };
+    let motor_state_sub =
+        if record_set.includes_motor_state() && !knobs.muted(motor_state::CHANNEL_ID) {
+            Some(PROCESSED_MOTOR_STATE.subscriber().map_err(|_| {
+                defmt::warn!("recorder: PROCESSED_MOTOR_STATE SUBS exhausted");
+                OpError::NoSubscriberSlot
+            })?)
+        } else {
+            None
+        };
     let power_sub = if record_set.includes_power() && !knobs.muted(power::CHANNEL_ID) {
         Some(POWER_TELEM.subscriber().map_err(|_| {
             defmt::warn!("recorder: POWER_TELEM SUBS exhausted");
@@ -1679,31 +1703,34 @@ pub async fn run_session(
     } else {
         None
     };
-    let track_err_sub = if record_set.includes_tracking_error() && !knobs.muted(tracking_error::CHANNEL_ID) {
-        Some(TRACKING_ERROR.subscriber().map_err(|_| {
-            defmt::warn!("recorder: TRACKING_ERROR SUBS exhausted");
-            OpError::NoSubscriberSlot
-        })?)
-    } else {
-        None
-    };
-    let ctrl_sp_sub = if record_set.includes_control_setpoint() && !knobs.muted(control_setpoint::CHANNEL_ID) {
-        Some(CONTROL_SETPOINT_TELEM.subscriber().map_err(|_| {
-            defmt::warn!("recorder: CONTROL_SETPOINT_TELEM SUBS exhausted");
-            OpError::NoSubscriberSlot
-        })?)
-    } else {
-        None
-    };
+    let track_err_sub =
+        if record_set.includes_tracking_error() && !knobs.muted(tracking_error::CHANNEL_ID) {
+            Some(TRACKING_ERROR.subscriber().map_err(|_| {
+                defmt::warn!("recorder: TRACKING_ERROR SUBS exhausted");
+                OpError::NoSubscriberSlot
+            })?)
+        } else {
+            None
+        };
+    let ctrl_sp_sub =
+        if record_set.includes_control_setpoint() && !knobs.muted(control_setpoint::CHANNEL_ID) {
+            Some(CONTROL_SETPOINT_TELEM.subscriber().map_err(|_| {
+                defmt::warn!("recorder: CONTROL_SETPOINT_TELEM SUBS exhausted");
+                OpError::NoSubscriberSlot
+            })?)
+        } else {
+            None
+        };
     #[cfg(feature = "est_eskf")]
-    let est_state_sub = if record_set.includes_estimator_state() && !knobs.muted(estimator_state::CHANNEL_ID) {
-        Some(ESTIMATOR_BIAS_TELEM.subscriber().map_err(|_| {
-            defmt::warn!("recorder: ESTIMATOR_BIAS_TELEM SUBS exhausted");
-            OpError::NoSubscriberSlot
-        })?)
-    } else {
-        None
-    };
+    let est_state_sub =
+        if record_set.includes_estimator_state() && !knobs.muted(estimator_state::CHANNEL_ID) {
+            Some(ESTIMATOR_BIAS_TELEM.subscriber().map_err(|_| {
+                defmt::warn!("recorder: ESTIMATOR_BIAS_TELEM SUBS exhausted");
+                OpError::NoSubscriberSlot
+            })?)
+        } else {
+            None
+        };
 
     // Snapshot the failsafe / estimator / mission state at session
     // open. The capture loop's edge poll only emits `/events`

@@ -6,7 +6,7 @@
 
 use embedded_io_async::{Read, Write};
 
-use super::{LinkStatistics, RcChannels, MAX_CHANNELS, crc8_dvb_s2_buf};
+use super::{LinkStatistics, MAX_CHANNELS, RcChannels, crc8_dvb_s2_buf};
 
 // ---------------------------------------------------------------------------
 // Protocol constants (from ghst_protocol.h)

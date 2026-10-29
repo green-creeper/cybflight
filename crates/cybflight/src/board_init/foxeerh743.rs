@@ -3,7 +3,7 @@ use cybflight_drivers::baro::dps310::Dps310;
 use cybflight_drivers::gps::GpsDriver;
 use cybflight_drivers::imu::icm426xx::Icm426xx;
 use cybflight_drivers::imu::mpu6x00::Mpu6x00;
-use cybflight_drivers::imu::{probe_imu_raw, DetectedImu, ReadImu};
+use cybflight_drivers::imu::{DetectedImu, ReadImu, probe_imu_raw};
 use cybflight_drivers::led::Led;
 use cybflight_drivers::mag::Qmc5883l;
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
@@ -13,7 +13,7 @@ use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::Timer;
 #[cfg(feature = "est_pos_gps")]
-use embassy_time::{with_timeout, Duration};
+use embassy_time::{Duration, with_timeout};
 use static_cell::StaticCell;
 
 use crate::bsp;
@@ -22,7 +22,7 @@ use crate::motors::{DshotQuadConfig, MotorTimerConfig};
 use crate::sensors::baro::BaroReader;
 #[cfg(feature = "est_pos_gps")]
 use crate::sensors::gps::GpsRunner;
-use crate::sensors::imu::{icm_reader_task, mpu_reader_task, ImuReader, SpiBusMtx};
+use crate::sensors::imu::{ImuReader, SpiBusMtx, icm_reader_task, mpu_reader_task};
 use crate::sensors::mag::{I2cBusMtx, MagReader};
 use crate::sensors::power::{PowerMonitor, power_task};
 use crate::status;
@@ -448,9 +448,7 @@ pub async fn init(
                 Err(e) => defmt::error!("ESP bridge USART6 init failed: {}", e),
             }
         }
-        _ => defmt::warn!(
-            "ESP bridge: PORT_ESP_BRIDGE is not a supported port on this board"
-        ),
+        _ => defmt::warn!("ESP bridge: PORT_ESP_BRIDGE is not a supported port on this board"),
     }
 
     // --- DShot motor output ---

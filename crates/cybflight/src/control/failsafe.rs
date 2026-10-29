@@ -16,7 +16,7 @@
 
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
-use embassy_time::{with_timeout, Duration, Instant};
+use embassy_time::{Duration, Instant, with_timeout};
 
 use crate::motors::ARM_STATE;
 use crate::sensors::RC_INPUT;
@@ -97,8 +97,7 @@ static FS_CONFIG: embassy_sync::blocking_mutex::Mutex<
 /// range.
 const _: () = assert!(
     cybflight_core::params::FS_CTRL_TIMEOUT_MIN_S
-        >= crate::motors::dshot::MIN_CTRL_TIMEOUT_RATIO
-            * crate::motors::dshot::MOTOR_CMD_STALE_S,
+        >= crate::motors::dshot::MIN_CTRL_TIMEOUT_RATIO * crate::motors::dshot::MOTOR_CMD_STALE_S,
     "fs_ctrl_timeout_s schema minimum is too close to the DShot \
      MOTOR_CMD_STALE window: the motors would never reach idle before \
      the failsafe disarms. Raise the minimum or shorten MOTOR_CMD_STALE."
@@ -115,8 +114,8 @@ pub fn init_fs_config() {
     // and a too-short timeout is not itself dangerous — it merely skips
     // the idle stage and disarms straight away. What matters is that it
     // stops being silent.
-    let min_ctrl_timeout_s = crate::motors::dshot::MIN_CTRL_TIMEOUT_RATIO
-        * crate::motors::dshot::MOTOR_CMD_STALE_S;
+    let min_ctrl_timeout_s =
+        crate::motors::dshot::MIN_CTRL_TIMEOUT_RATIO * crate::motors::dshot::MOTOR_CMD_STALE_S;
     if s.fs_ctrl_timeout_s < min_ctrl_timeout_s {
         defmt::warn!(
             "failsafe: fs_ctrl_timeout_s {} s is under {} s ({}x the {} s DShot stale window) — motors will not reach idle before disarm",
@@ -204,10 +203,7 @@ fn enter_failsafe(reason: FailsafeReason) {
         super::MISSION_ABORT_REQUESTED.store(false, Ordering::Release);
         super::MISSION_TRAJECTORY_SLOT.lock(|s| {
             let _ = s.borrow_mut().take();
-            super::MISSION_STATE.store(
-                super::MissionState::Idle as u8,
-                Ordering::Release,
-            );
+            super::MISSION_STATE.store(super::MissionState::Idle as u8, Ordering::Release);
         });
     }
 }
@@ -346,10 +342,7 @@ pub async fn failsafe_task() {
                             // ACTIVE=true with a stale REASON would be
                             // ambiguous).
                             FAILSAFE_ACTIVE.store(false, Ordering::Release);
-                            FAILSAFE_REASON.store(
-                                FailsafeReason::None as u8,
-                                Ordering::Release,
-                            );
+                            FAILSAFE_REASON.store(FailsafeReason::None as u8, Ordering::Release);
                             crate::status::STATUS
                                 .sender()
                                 .send(crate::status::SystemStatus::Disarmed);

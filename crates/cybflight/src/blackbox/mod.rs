@@ -44,18 +44,18 @@ pub mod recorder;
 pub mod sdmmc_block;
 pub mod topics;
 
-pub use record_set::{current as record_set, set as set_record_set, RecordSet};
+pub use record_set::{RecordSet, current as record_set, set as set_record_set};
 
 use core::sync::atomic::{AtomicBool, Ordering};
 
-use embassy_futures::select::{select, select4, Either, Either4};
 use core::cell::Cell;
+use embassy_futures::select::{Either, Either4, select, select4};
 
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::blocking_mutex::Mutex;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::signal::Signal;
-use embassy_time::{with_timeout, Duration, Timer};
+use embassy_time::{Duration, Timer, with_timeout};
 
 pub use fat::{CleanSummary, EntrySummary, MAX_FILENAME};
 pub use sdmmc_block::SdmmcBlockStore;
@@ -134,9 +134,14 @@ pub const GET_CHUNK_LEN: usize = 512;
 
 /// One unit of `blackbox get` file flow, task → shell.
 pub enum GetChunk {
-    Data { buf: [u8; GET_CHUNK_LEN], len: u16 },
+    Data {
+        buf: [u8; GET_CHUNK_LEN],
+        len: u16,
+    },
     /// Clean end of stream: CRC-32 of every streamed byte.
-    End { crc32: u32 },
+    End {
+        crc32: u32,
+    },
     /// Mid-stream fault; the transfer is dead and the shell should
     /// print the reason in-band (the size header is already out).
     Err(fat::OpError),
@@ -337,10 +342,7 @@ pub async fn blackbox_task(mut store: SdmmcBlockStore) -> ! {
                                             });
                                         }
                                         Err(e) => {
-                                            defmt::warn!(
-                                                "blackbox: session failed: {:?}",
-                                                e,
-                                            );
+                                            defmt::warn!("blackbox: session failed: {:?}", e,);
                                             LAST_SESSION.lock(|c| {
                                                 c.set(Some(LastSession {
                                                     seq,

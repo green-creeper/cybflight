@@ -14,24 +14,23 @@
 
 #![cfg(feature = "outer_mpc")]
 
-use cybflight_core::mpc::model_utils;
 #[cfg(not(feature = "outer_mpc_full"))]
 use cybflight_core::mpc::cost_adapt::{
-    situation_obs, CostNominal, CostPolicy, SituationInputs, NZ as COST_NZ,
-    OBS_DIM as COST_OBS_DIM,
+    CostNominal, CostPolicy, NZ as COST_NZ, OBS_DIM as COST_OBS_DIM, SituationInputs, situation_obs,
 };
-#[cfg(not(feature = "outer_mpc_full"))]
-use cybflight_core::mpc::quad_model::{N as MPC_N, NU as MPC_NU, NX as MPC_NX, PosCostMode};
-#[cfg(not(feature = "outer_mpc_full"))]
-use cybflight_core::mpc::{QuadModel, SimpleQuadProblem, SimpleSqpSolver};
 #[cfg(feature = "outer_mpc_full")]
 use cybflight_core::mpc::full_quad_model::{N as MPC_N, NU as MPC_NU, NX as MPC_NX};
+use cybflight_core::mpc::model_utils;
+#[cfg(not(feature = "outer_mpc_full"))]
+use cybflight_core::mpc::quad_model::{N as MPC_N, NU as MPC_NU, NX as MPC_NX, PosCostMode};
 #[cfg(feature = "outer_mpc_full")]
 use cybflight_core::mpc::{FullQuadModel, FullQuadProblem, FullSqpSolver};
+#[cfg(not(feature = "outer_mpc_full"))]
+use cybflight_core::mpc::{QuadModel, SimpleQuadProblem, SimpleSqpSolver};
 use cybflight_core::params::FirmwareConfig;
 use cybflight_core::rotation::quaternion_from_zb_and_yaw;
 use cybflight_core::trajectory_planning::flatness::{
-    flatness_to_thrust_omega_tilt_yaw, flatness_to_thrust_omega_true_yaw, FlatnessFault,
+    FlatnessFault, flatness_to_thrust_omega_tilt_yaw, flatness_to_thrust_omega_true_yaw,
 };
 use cybflight_core::trajectory_planning::lookahead_yaw::{chord_heading, slew_heading};
 use cybflight_core::trajectory_planning::sampler::{
@@ -309,9 +308,7 @@ fn build_outer_quad_model(vp: &FirmwareConfig) -> FullQuadModel {
     // floored diagonal while INDI's G1 still inverts whatever was pinned
     // — surface that instead of flying it.
     let (_, _, inertia_fell_back) =
-        cybflight_core::mpc::full_quad_model::inertia_from_array(
-            &vp.airframe.body.inertia_kg_m2,
-        );
+        cybflight_core::mpc::full_quad_model::inertia_from_array(&vp.airframe.body.inertia_kg_m2);
     if inertia_fell_back {
         defmt::warn!(
             "MPC full: airframe inertia tensor is not symmetric              positive-definite (or non-finite) — the MPC model and the α              inner loop fell back to the floored DIAGONAL, while INDI's G1              inverts the full matrix as pinned. Fix the vehicle YAML              inertia before flying this airframe."
@@ -856,7 +853,10 @@ pub async fn control_loop_task() {
         let mut solve_diag: Option<msgs::SolveDiagnostics> = None;
         // This tick's mission flatness convention — the learned-cost gate
         // (step 9b) withholds the policy's output off tilt-yaw.
-        #[cfg_attr(feature = "outer_mpc_full", allow(unused_variables, unused_assignments))]
+        #[cfg_attr(
+            feature = "outer_mpc_full",
+            allow(unused_variables, unused_assignments)
+        )]
         let mut mission_flatness_map: Option<super::offline_mission::FlatnessMap> = None;
         if mission_state == super::MissionState::Executing {
             // Reset the sampler's per-mission state on the Idle→Executing
@@ -1361,10 +1361,7 @@ pub async fn control_loop_task() {
             // transition, so rc_interpreter's first Idle tick reads a
             // value consistent with the mission's endpoint.
             if let Some(p) = tau0_sample {
-                if p[0].is_finite()
-                    && p[1].is_finite()
-                    && p[2].is_finite()
-                    && tau0_yaw.is_finite()
+                if p[0].is_finite() && p[1].is_finite() && p[2].is_finite() && tau0_yaw.is_finite()
                 {
                     let now = Instant::now();
                     super::ACTIVE_POSITION_SETPOINT.lock(|cell| {
@@ -1448,9 +1445,7 @@ pub async fn control_loop_task() {
         // Latency-to-command budget: solve only — the cost policy runs
         // after the publish (step 9b) and its wall time rides in the
         // `/mpc_cost` record instead.
-        if solve_time_us > solve_warn_us
-            && tick.wrapping_sub(last_overrun_warn_tick) >= rate_hz
-        {
+        if solve_time_us > solve_warn_us && tick.wrapping_sub(last_overrun_warn_tick) >= rate_hz {
             last_overrun_warn_tick = tick;
             defmt::warn!(
                 "MPC outer loop: solve took {} us — over half the {} Hz tick period; \
@@ -1617,8 +1612,9 @@ pub async fn control_loop_task() {
                 let mut z = [0.0f32; COST_NZ];
                 // `act` leaves z = 0 on a non-finite forward pass.
                 policy.act(&obs, &mut z);
-                policy_time_us =
-                    Instant::now().saturating_duration_since(policy_start).as_micros() as u32;
+                policy_time_us = Instant::now()
+                    .saturating_duration_since(policy_start)
+                    .as_micros() as u32;
 
                 let executing = super::MissionState::from_u8(
                     super::MISSION_STATE.load(core::sync::atomic::Ordering::Acquire),

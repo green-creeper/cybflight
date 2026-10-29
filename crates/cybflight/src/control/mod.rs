@@ -63,9 +63,10 @@ pub mod offline_mission;
 #[cfg(feature = "outer_mpc")]
 pub mod outer_loop;
 pub mod rc_interpreter;
+pub mod rl_policy_task;
 pub use msgs::{
-    TrackingError, TRACKING_ERROR_SOURCE_CASCADE, TRACKING_ERROR_SOURCE_INDI,
-    TRACKING_ERROR_SOURCE_MPC,
+    TRACKING_ERROR_SOURCE_CASCADE, TRACKING_ERROR_SOURCE_INDI, TRACKING_ERROR_SOURCE_MPC,
+    TrackingError,
 };
 
 use cybflight_msgs as msgs;
@@ -114,6 +115,28 @@ pub static ATTITUDE_CONTROL_SETPOINT: PubSubChannel<
 ///
 /// Consumed by `indi_task` via `try_take()`. Latest-value semantics.
 pub static RATE_COMMAND: Signal<CriticalSectionRawMutex, msgs::AttitudeControlSetpoint> =
+    Signal::new();
+
+/// Whether the RC offboard / RL mode switch (`rc_mission_channel`) is active
+/// while the vehicle is armed.
+///
+/// When `true` in `outer_rate` mode:
+/// - `rc_interpreter_task` pauses stick-to-`RATE_COMMAND` publishing so
+///   offboard UART commands (`esp_bridge_rx_task`) or the onboard RL policy
+///   (`rl_policy_task`) have exclusive authority.
+/// - `indi_task` accepts either `DIRECT_MOTOR_COMMAND` (direct 4-motor
+///   normalized throttle `[m1, m2, m3, m4]`) or `RATE_COMMAND` (body rates +
+///   collective thrust), guarded by the same 100 ms staleness watchdog.
+/// - Flipping the RC switch low immediately returns authority to the pilot's
+///   RC sticks.
+pub static OFFBOARD_ACTIVE: core::sync::atomic::AtomicBool =
+    core::sync::atomic::AtomicBool::new(false);
+
+/// Direct 4-motor command `[m0, m1, m2, m3]` in `[0.0, 1.0]` from Offboard
+/// UART (`WireActuatorMotors`) or the onboard RL policy (`rl_policy_task`).
+///
+/// Consumed by `indi_task` via `try_take()` when `OFFBOARD_ACTIVE` is true.
+pub static DIRECT_MOTOR_COMMAND: Signal<CriticalSectionRawMutex, msgs::ActuatorMotors> =
     Signal::new();
 
 /// Snapshot of the position setpoint the controller is currently tracking.
@@ -243,8 +266,7 @@ pub static POSITION_CONTROL_SETPOINT: PubSubChannel<
 /// throttle low in flight does NOT clear it (the existing land
 /// path handles descent).
 #[cfg(any(feature = "outer_mpc", feature = "outer_geometric"))]
-pub static LAUNCHED: core::sync::atomic::AtomicBool =
-    core::sync::atomic::AtomicBool::new(false);
+pub static LAUNCHED: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
 
 /// Last time the control loop published a motor command.
 /// Written by indi_task, read by failsafe controller watchdog.
@@ -303,13 +325,8 @@ pub static CONTROL_SETPOINT_TELEM: PubSubChannel<
 /// CAP=16 — same sysid-tier sizing as `ACTUATOR_MOTORS_TELEM` (this
 /// mirror runs at ≥500 Hz there too); SUBS=3 leaves a free slot for a
 /// future shell-stream consumer.
-pub static TRACKING_ERROR: PubSubChannel<
-    CriticalSectionRawMutex,
-    TrackingError,
-    16,
-    3,
-    3,
-> = PubSubChannel::new();
+pub static TRACKING_ERROR: PubSubChannel<CriticalSectionRawMutex, TrackingError, 16, 3, 3> =
+    PubSubChannel::new();
 
 /// Processed motor RPM telemetry.
 pub static PROCESSED_DSHOT_TELEM: PubSubChannel<

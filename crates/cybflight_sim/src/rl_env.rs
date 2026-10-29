@@ -26,7 +26,7 @@ use vehicle_yaml::SimYaml;
 
 use crate::controller::{Controller, MpcIndiController};
 use crate::plant::QuadPlant;
-use crate::primitives::{random_primitive, Envelope, Primitive};
+use crate::primitives::{Envelope, Primitive, random_primitive};
 use crate::sensors::{ImuModel, NoisyImu, PerfectRotorTelemetry, RotorModel};
 use crate::trajectory::{MissionSetpoints, Setpoint, SetpointSource};
 
@@ -54,7 +54,14 @@ pub struct RewardWeights {
 
 impl Default for RewardWeights {
     fn default() -> Self {
-        Self { geom: 10.0, time: 1.0, rate: 0.2, dz: 0.1, crash: 20.0, du_rate: 25.0 }
+        Self {
+            geom: 10.0,
+            time: 1.0,
+            rate: 0.2,
+            dz: 0.1,
+            crash: 20.0,
+            du_rate: 25.0,
+        }
     }
 }
 
@@ -136,7 +143,12 @@ impl EnvConfig {
 
     pub fn envelope(&self) -> Envelope {
         let vp = &self.vehicle;
-        let thrust_max_n: f32 = vp.airframe.motors.iter().map(|m| m.max_thrust_n).sum::<f32>()
+        let thrust_max_n: f32 = vp
+            .airframe
+            .motors
+            .iter()
+            .map(|m| m.max_thrust_n)
+            .sum::<f32>()
             * vp.mpc.thrust_frac;
         let mr = vp.airframe.body.max_rate_rad_s;
         Envelope {
@@ -333,7 +345,10 @@ impl RecoveryEnv {
         c.set_input_weights([vp.mpc.thrust_weight, r, r, r]);
         if cfg.model_drag {
             let m = &vp.airframe.motors[0];
-            c.set_rotor_drag(cfg.sim.aero_drag, m.max_thrust_n / (m.max_omega_rad_s * m.max_omega_rad_s));
+            c.set_rotor_drag(
+                cfg.sim.aero_drag,
+                m.max_thrust_n / (m.max_omega_rad_s * m.max_omega_rad_s),
+            );
             c.set_body_drag(cfg.body_drag);
         }
         c
@@ -353,7 +368,8 @@ impl RecoveryEnv {
     fn fill_horizon(&mut self, t: f32) {
         self.horizon.clear();
         for k in 0..=SIMPLE_N {
-            self.horizon.push(self.setpoints.sample(t + k as f32 * MPC_DT));
+            self.horizon
+                .push(self.setpoints.sample(t + k as f32 * MPC_DT));
         }
     }
 
@@ -383,7 +399,8 @@ impl RecoveryEnv {
         }
         if sth > 0.0 {
             let dth = Vector3::new(self.gauss(), self.gauss(), self.gauss()) * sth;
-            let q = UnitQuaternion::from_quaternion(nalgebra::Quaternion::new(x[6], x[3], x[4], x[5]));
+            let q =
+                UnitQuaternion::from_quaternion(nalgebra::Quaternion::new(x[6], x[3], x[4], x[5]));
             let qn = q * UnitQuaternion::from_scaled_axis(dth);
             x[3] = qn.i;
             x[4] = qn.j;
@@ -441,7 +458,8 @@ impl RecoveryEnv {
                 (rng.random_range(lo.ln()..hi.ln())).exp()
             };
             for k in [0usize, 4, 8] {
-                vp_plant.airframe.body.inertia_kg_m2[k] *= 1.0 + d * (lu(&mut self.rng, 0.7, 1.5) - 1.0);
+                vp_plant.airframe.body.inertia_kg_m2[k] *=
+                    1.0 + d * (lu(&mut self.rng, 0.7, 1.5) - 1.0);
             }
             let thrust_common = 1.0 + d * (self.rng.random_range(-0.15..0.15f32));
             let tau_f = 1.0 + d * (lu(&mut self.rng, 0.5, 2.0) - 1.0);
@@ -488,7 +506,12 @@ impl RecoveryEnv {
         self.loc_bias = Vector3::zeros();
         self.plant = QuadPlant::new(vp_plant, &sim, self.cfg.dt_sim);
         self.ctrl = Self::build_controller(&self.cfg);
-        let mut sp = self.cfg.vehicle.trajectory.sampler.to_position_sampler_params();
+        let mut sp = self
+            .cfg
+            .vehicle
+            .trajectory
+            .sampler
+            .to_position_sampler_params();
         sp.max_lag_s = self.cfg.sampler_max_lag_s;
         self.ctrl.attach_position_sampler(self.traj.clone(), sp);
 
@@ -524,7 +547,11 @@ impl RecoveryEnv {
                 rng.random_range(-1.0..1.0f32),
                 rng.random_range(-1.0..1.0f32),
             );
-            if v.norm() < 1e-3 { Vector3::x() } else { v / v.norm() }
+            if v.norm() < 1e-3 {
+                Vector3::x()
+            } else {
+                v / v.norm()
+            }
         };
         let p = p0 + unit(&mut self.rng) * dp;
         let v = v0 + unit(&mut self.rng) * dv;
@@ -535,7 +562,11 @@ impl RecoveryEnv {
 
         self.tick = 0;
         self.last_z = [0.0; NZ];
-        self.imu = NoisyImu::isotropic(self.rng.random::<u64>(), self.cfg.gyro_sigma, self.cfg.accel_sigma);
+        self.imu = NoisyImu::isotropic(
+            self.rng.random::<u64>(),
+            self.cfg.gyro_sigma,
+            self.cfg.accel_sigma,
+        );
         self.last_rate_cmd = Vector3::zeros();
         self.observe()
     }
@@ -543,7 +574,11 @@ impl RecoveryEnv {
     /// Apply `z` for one outer-loop period. Returns `(obs, reward, done, info)`.
     pub fn step(&mut self, z: &[f32; NZ]) -> ([f32; OBS_DIM], f32, bool, StepInfo) {
         let zc: [f32; NZ] = core::array::from_fn(|i| {
-            if z[i].is_finite() { z[i].clamp(-1.0, 1.0) } else { 0.0 }
+            if z[i].is_finite() {
+                z[i].clamp(-1.0, 1.0)
+            } else {
+                0.0
+            }
         });
         self.ctrl.set_cost_z(&zc);
         // OU gust update per control tick (`α = e^{−Δt/τ_w}`; the
@@ -577,9 +612,17 @@ impl RecoveryEnv {
         let mr = self.cfg.vehicle.airframe.body.max_rate_rad_s;
         let t_ref = t.min(self.traj.total_duration());
         let e_time = (self.traj.get_pos(t_ref) - p).norm();
-        let e_geom = closest_point_dist(&self.traj, p, t_ref, (self.cfg.sampler_max_lag_s + 0.1).max(0.5));
+        let e_geom = closest_point_dist(
+            &self.traj,
+            p,
+            t_ref,
+            (self.cfg.sampler_max_lag_s + 0.1).max(0.5),
+        );
         let rate2 = (w.x / mr[0]).powi(2) + (w.y / mr[1]).powi(2) + (w.z / mr[2]).powi(2);
-        let dz2 = (0..NZ).map(|i| (zc[i] - self.last_z[i]).powi(2)).sum::<f32>() / NZ as f32;
+        let dz2 = (0..NZ)
+            .map(|i| (zc[i] - self.last_z[i]).powi(2))
+            .sum::<f32>()
+            / NZ as f32;
         self.last_z = zc;
         let u = self.ctrl.last_command();
         let rate_cmd = Vector3::new(u[1], u[2], u[3]);
@@ -609,7 +652,11 @@ impl RecoveryEnv {
             truncated,
             diverged: self.ctrl.last_diverged(),
         };
-        let obs = if crashed { [0.0; OBS_DIM] } else { self.observe() };
+        let obs = if crashed {
+            [0.0; OBS_DIM]
+        } else {
+            self.observe()
+        };
         (obs, reward, crashed || truncated, info)
     }
 }

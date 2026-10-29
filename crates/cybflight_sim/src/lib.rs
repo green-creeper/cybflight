@@ -30,14 +30,14 @@ pub mod trajectory;
 pub mod viz;
 
 pub use controller::{
-    CascadeController, Controller, MpcDirectController, MpcFullIndiController,
-    MpcIndiController, ThrustCommandMap,
+    CascadeController, Controller, MpcDirectController, MpcFullIndiController, MpcIndiController,
+    ThrustCommandMap,
 };
-pub use plant::{PlantParams, QuadPlant, NX_PLANT, VEHICLE};
+pub use plant::{NX_PLANT, PlantParams, QuadPlant, VEHICLE};
 pub use report::SimulationReport;
 pub use runner::{MissionRunner, RunnerConfig, StepRecord};
 pub use scenario::{
-    default_sim_params, default_vehicle, tweaked_vehicle, PassCriteria, Scenario, Verdict,
+    PassCriteria, Scenario, Verdict, default_sim_params, default_vehicle, tweaked_vehicle,
 };
 pub use sensors::{
     FaultedGps, GpsMeasurement, GpsModel, ImuMeasurement, ImuModel, NoRotorTelemetry, NoisyGps,

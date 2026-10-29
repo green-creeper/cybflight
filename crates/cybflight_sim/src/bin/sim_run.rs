@@ -5,6 +5,8 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Parser, ValueEnum};
+#[cfg(feature = "viz")]
+use cybflight_sim::viz::RerunLogger;
 use cybflight_sim::{
     controller::{
         CascadeController, Controller, GeometricIndiController, MpcDirectController,
@@ -16,8 +18,6 @@ use cybflight_sim::{
     scenario::{Scenario, Verdict},
     sensors::{GpsModel, ImuModel, NoisyGps, NoisyImu},
 };
-#[cfg(feature = "viz")]
-use cybflight_sim::viz::RerunLogger;
 use nalgebra::Vector3;
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
@@ -156,7 +156,11 @@ fn main() -> ExitCode {
     // Plant dt must match the runner's dt_sim (default 1/8000) so the
     // runner's tick accounting and the plant's integration clock stay in
     // lockstep. Matches what autotest_mission and autotest_noisy use.
-    let mut plant = QuadPlant::new(scenario.vehicle_params.clone(), &scenario.sim_params, 1.0 / 8000.0);
+    let mut plant = QuadPlant::new(
+        scenario.vehicle_params.clone(),
+        &scenario.sim_params,
+        1.0 / 8000.0,
+    );
     let mut controller: Box<dyn Controller> = match args.controller {
         ControllerKind::MpcIndi => {
             Box::new(MpcIndiController::from_params(&scenario.vehicle_params))
@@ -164,9 +168,9 @@ fn main() -> ExitCode {
         ControllerKind::TinympcIndi => {
             Box::new(TinyMpcIndiController::from_params(&scenario.vehicle_params))
         }
-        ControllerKind::GeometricIndi => {
-            Box::new(GeometricIndiController::from_params(&scenario.vehicle_params))
-        }
+        ControllerKind::GeometricIndi => Box::new(GeometricIndiController::from_params(
+            &scenario.vehicle_params,
+        )),
         ControllerKind::MpcFullIndi => {
             Box::new(MpcFullIndiController::from_params(&scenario.vehicle_params))
         }
@@ -175,12 +179,14 @@ fn main() -> ExitCode {
             100.0,
             false,
         )),
-        ControllerKind::MpcDirect => {
-            Box::new(MpcDirectController::from_params(&scenario.vehicle_params, &scenario.sim_params))
-        }
-        ControllerKind::Cascade => {
-            Box::new(CascadeController::from_params(&scenario.vehicle_params, &scenario.sim_params))
-        }
+        ControllerKind::MpcDirect => Box::new(MpcDirectController::from_params(
+            &scenario.vehicle_params,
+            &scenario.sim_params,
+        )),
+        ControllerKind::Cascade => Box::new(CascadeController::from_params(
+            &scenario.vehicle_params,
+            &scenario.sim_params,
+        )),
     };
     let controller_name = controller.name();
 

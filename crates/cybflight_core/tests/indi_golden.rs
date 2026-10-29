@@ -11,10 +11,10 @@
 //
 // Run: cargo test -p cybflight-core --target x86_64-unknown-linux-gnu --features std --test indi_golden
 
+use air_filters::Filter;
 use air_filters::iir::biquad::{
     BiquadFilter, BiquadFilterConfigBuilder, BiquadFilterType, DirectForm2,
 };
-use air_filters::Filter;
 use cybflight_core::indi::{
     effectiveness::{IndiEffectiveness, IndiMotorParams},
     linearization::{ThrustLinearization, ThrustModel},
@@ -901,7 +901,11 @@ fn golden_ned_flu_transform() {
                 diff < tol,
                 "NED→FLU transform mismatch: row {j} motor {i}\n\
                  G1_NED = {:.6}, expected FLU = {:.6} (sign_flip={:.0}), actual FLU = {:.6}, diff = {:.2e}",
-                g1_ned[(j, i)], expected_flu, sign_flip[j], actual_flu, diff
+                g1_ned[(j, i)],
+                expected_flu,
+                sign_flip[j],
+                actual_flu,
+                diff
             );
         }
     }
@@ -1414,11 +1418,10 @@ fn controller_matches_test_state_flu_with_g2() {
     let hover_erpm = (hover_rpm * pole_pairs / 100.0) as u32; // 1400
     let hover_omega = hover_rpm / 60.0 * core::f32::consts::TAU;
 
-    let mut reference =
-        IndiTestState::with_g1(g1_flu).with_g2(
-            SVector::from_row_slice(&[0.001, -0.001, -0.001, 0.001]),
-            SVector::from_element(hover_omega),
-        );
+    let mut reference = IndiTestState::with_g1(g1_flu).with_g2(
+        SVector::from_row_slice(&[0.001, -0.001, -0.001, 0.001]),
+        SVector::from_element(hover_omega),
+    );
 
     let mut ctrl = IndiController::new(&config, LOOP_HZ);
     ctrl.update_rpm(&[cybflight_core::indi::rpm_tracker::RpmInput::Erpm(hover_erpm); NU]);

@@ -247,7 +247,13 @@ fn classify(field: &syn::Field) -> Result<(FieldKind, MetaSpec), syn::Error> {
                 let Type::Path(p) = ty else {
                     return err("unsupported param field type");
                 };
-                match p.path.segments.last().map(|s| s.ident.to_string()).as_deref() {
+                match p
+                    .path
+                    .segments
+                    .last()
+                    .map(|s| s.ident.to_string())
+                    .as_deref()
+                {
                     Some("f32") => ScalarTy::F32,
                     Some("u8") => ScalarTy::U8,
                     Some("u16") => ScalarTy::U16,

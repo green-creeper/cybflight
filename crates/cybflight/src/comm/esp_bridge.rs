@@ -16,14 +16,14 @@ use cybflight_msgs::wire::WirePositionControlSetpoint;
 // NOTE: the health records are built by `health_wire::snapshot_{system,gps}`
 // and forwarded by type inference, so `WireSystemHealth` / `WireGpsHealth`
 // need no import here — the downlink itself is live (see DECIM_HEALTH).
-use cybflight_msgs::wire::{
-    self, WireArmDisarm, WireAttitudeControlSetpoint, WireDshotTelemetry, WireFleetState,
-    WireGpsFix, WireMessage, WireOcpSolverOutput, WirePing, WirePingResp, WirePose, WirePowerStatus,
-    WireRcInput, WireRcLinkStatus, WireTimeSync, WireTimeSyncStatus, WireVehicleAttitude,
-    WireVehicleIdentity, WireVehicleOdometry,
-};
 #[cfg(feature = "dev_telem")]
 use cybflight_msgs::wire::WireMotorStateTelemetry;
+use cybflight_msgs::wire::{
+    self, WireActuatorMotors, WireArmDisarm, WireAttitudeControlSetpoint, WireDshotTelemetry,
+    WireFleetState, WireGpsFix, WireManualControlSetpoint, WireMessage, WireOcpSolverOutput,
+    WirePing, WirePingResp, WirePose, WirePowerStatus, WireRcInput, WireRcLinkStatus, WireTimeSync,
+    WireTimeSyncStatus, WireVehicleAttitude, WireVehicleIdentity, WireVehicleOdometry,
+};
 #[cfg(feature = "dev_telem")]
 use cybflight_msgs::wire::{WireBaroSample, WireImu, WireMagSample};
 
@@ -88,6 +88,106 @@ pub async fn esp_bridge_rx_task(mut rx: UartRx<'static, crate::hal::mode::Async>
                                     let rx_time = embassy_time::Instant::now();
                                     let states = NeighborStates::from_wire(&fs, rx_time);
                                     neighbor_tx.send(states);
+                                }
+                            }
+                            wire::msg_id::ATTITUDE_CONTROL_SETPOINT => {
+                                if control::OFFBOARD_ACTIVE
+                                    .load(core::sync::atomic::Ordering::Acquire)
+                                {
+                                    if let Some(w) =
+                                        WireAttitudeControlSetpoint::from_bytes(payload)
+                                    {
+                                        let thrust = w.collective_thrust_n;
+                                        let q = w.attitude_quaternion;
+                                        let rate = w.body_rate_rad_s;
+                                        let torque = w.torque_n_m;
+                                        if thrust.is_finite()
+                                            && thrust >= 0.0
+                                            && q.iter().all(|v| v.is_finite())
+                                            && rate.iter().all(|v| v.is_finite())
+                                            && torque.iter().all(|v| v.is_finite())
+                                        {
+                                            let quat =
+                                                nalgebra::Quaternion::new(q[3], q[0], q[1], q[2]);
+                                            let attitude_quaternion = if quat.norm_squared() > 1e-6
+                                            {
+                                                nalgebra::UnitQuaternion::from_quaternion(quat)
+                                            } else {
+                                                nalgebra::UnitQuaternion::identity()
+                                            };
+                                            control::RATE_COMMAND.signal(
+                                                cybflight_msgs::AttitudeControlSetpoint {
+                                                    timestamp: embassy_time::Instant::now(),
+                                                    collective_thrust_n: thrust,
+                                                    attitude_quaternion,
+                                                    body_rate_rad_s: nalgebra::Vector3::new(
+                                                        rate[0], rate[1], rate[2],
+                                                    ),
+                                                    torque_n_m: nalgebra::Vector3::new(
+                                                        torque[0], torque[1], torque[2],
+                                                    ),
+                                                },
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                            wire::msg_id::MANUAL_CONTROL_SETPOINT => {
+                                if control::OFFBOARD_ACTIVE
+                                    .load(core::sync::atomic::Ordering::Acquire)
+                                {
+                                    if let Some(w) = WireManualControlSetpoint::from_bytes(payload)
+                                    {
+                                        let thrust = w.thrust;
+                                        let rr = w.roll_rate;
+                                        let pr = w.pitch_rate;
+                                        let yr = w.yaw_rate;
+                                        if thrust.is_finite()
+                                            && thrust >= 0.0
+                                            && rr.is_finite()
+                                            && pr.is_finite()
+                                            && yr.is_finite()
+                                        {
+                                            control::RATE_COMMAND.signal(
+                                                cybflight_msgs::AttitudeControlSetpoint {
+                                                    timestamp: embassy_time::Instant::now(),
+                                                    collective_thrust_n: thrust,
+                                                    attitude_quaternion:
+                                                        nalgebra::UnitQuaternion::identity(),
+                                                    body_rate_rad_s: nalgebra::Vector3::new(
+                                                        rr, pr, yr,
+                                                    ),
+                                                    torque_n_m: nalgebra::Vector3::zeros(),
+                                                },
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                            wire::msg_id::ACTUATOR_MOTORS => {
+                                if control::OFFBOARD_ACTIVE
+                                    .load(core::sync::atomic::Ordering::Acquire)
+                                {
+                                    if let Some(w) = WireActuatorMotors::from_bytes(payload) {
+                                        let cmds = w.motor_commands;
+                                        if cmds
+                                            .iter()
+                                            .all(|v| v.is_finite() && (0.0..=1.0).contains(v))
+                                        {
+                                            let now = embassy_time::Instant::now();
+                                            control::DIRECT_MOTOR_COMMAND.signal(
+                                                cybflight_msgs::ActuatorMotors {
+                                                    timestamp: now,
+                                                    motor_commands: [
+                                                        cybflight_msgs::NormalizedThrottle::new_saturating(cmds[0]),
+                                                        cybflight_msgs::NormalizedThrottle::new_saturating(cmds[1]),
+                                                        cybflight_msgs::NormalizedThrottle::new_saturating(cmds[2]),
+                                                        cybflight_msgs::NormalizedThrottle::new_saturating(cmds[3]),
+                                                    ],
+                                                },
+                                            );
+                                        }
+                                    }
                                 }
                             }
                             _ => {

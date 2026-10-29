@@ -59,12 +59,7 @@ impl RaceOutcome {
 
     /// Apply the gate state machine and the arena rules to one completed
     /// control period. Returns `false` once the flight has ended.
-    pub fn advance(
-        &mut self,
-        track: &mut Track,
-        prev: Vector3<f32>,
-        new: Vector3<f32>,
-    ) -> bool {
+    pub fn advance(&mut self, track: &mut Track, prev: Vector3<f32>, new: Vector3<f32>) -> bool {
         self.steps += 1;
         match track.update_gate(prev, new) {
             GateEvent::Passed { .. } => self.passes += 1,

@@ -8,9 +8,9 @@
 //! - [`FullQuadProblem`]   = `MpcProblem<FullQuadModel, 13, 4>`
 //! - [`SimpleQuadProblem`] = `MpcProblem<QuadModel, 10, 4>`
 
+use super::QuadDynamicsModel;
 use super::full_quad_model::{self, FullQuadModel};
 use super::quad_model::{self, QuadModel};
-use super::QuadDynamicsModel;
 use nalgebra::{SMatrix, SVector};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -95,7 +95,8 @@ where
         grad_x: &mut SVector<f32, NX>,
         hess_xx: &mut SMatrix<f32, NX, NX>,
     ) -> f32 {
-        self.model.terminal_cost_hess_grad(x, x_ref, grad_x, hess_xx)
+        self.model
+            .terminal_cost_hess_grad(x, x_ref, grad_x, hess_xx)
     }
 
     /// Sum of stage state-cost + input-cost + constraint penalty over the

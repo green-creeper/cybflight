@@ -72,7 +72,11 @@ impl StickEndpoints {
     /// to the standard travel keeps a bad triple from inverting a stick,
     /// per the "degrade, never panic" rule in `docs/safety_protocol.md`.
     pub fn or_default(self) -> Self {
-        if self.is_usable() { self } else { Self::DEFAULT }
+        if self.is_usable() {
+            self
+        } else {
+            Self::DEFAULT
+        }
     }
 }
 

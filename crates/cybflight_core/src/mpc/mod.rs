@@ -1,12 +1,12 @@
+pub mod cost_adapt;
 pub mod full_quad_model;
 pub mod model_utils;
 pub mod mpc_problem;
 pub mod quad_model;
 pub mod sqp_solver;
 pub mod tinympc;
-pub mod cost_adapt;
 
-pub use full_quad_model::{normalize_quat, FullQuadModel, N, NU, NX};
+pub use full_quad_model::{FullQuadModel, N, NU, NX, normalize_quat};
 pub use mpc_problem::{FullQuadProblem, MpcProblem, Propagation, SimpleQuadProblem};
 pub use quad_model::QuadModel;
 pub use sqp_solver::{FullSqpSolver, SimpleSqpSolver, SolverResult, SqpSolver};
@@ -327,4 +327,3 @@ impl QuadDynamicsModel<{ quad_model::NX }, { quad_model::NU }> for QuadModel {
         QuadModel::clamp_control(self, u)
     }
 }
-

@@ -271,7 +271,11 @@ fn dispatched_sampler_position_variant_works() {
     };
     let r2 = s.sample(&inputs2, &mut buf);
     assert!(r1.tau0_s > 1.0);
-    assert!(r2.tau0_s < 0.1, "after reset, tau {} should be near 0", r2.tau0_s);
+    assert!(
+        r2.tau0_s < 0.1,
+        "after reset, tau {} should be near 0",
+        r2.tau0_s
+    );
 }
 
 #[test]
@@ -307,7 +311,11 @@ fn non_finite_state_pos_does_not_advance_tau() {
         horizon_dt: HORIZON_DT,
     };
     let r_bad = s.sample(&inputs_bad, &mut buf);
-    assert_eq!(s.prev_query_tau().unwrap_or(0.0), tau_before, "τ advanced on NaN input");
+    assert_eq!(
+        s.prev_query_tau().unwrap_or(0.0),
+        tau_before,
+        "τ advanced on NaN input"
+    );
     assert!(!r_bad.mission_done);
     assert_eq!(r_bad.tau0_s, tau_before);
     for node in &buf {

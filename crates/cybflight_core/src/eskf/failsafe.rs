@@ -377,13 +377,7 @@ mod tests {
     }
 
     fn cfg() -> EskfFailsafeConfig {
-        EskfFailsafeConfig::new(
-            2,
-            5,
-            2_000,
-            0.002,
-            ConvergenceAxes::XyOnly,
-        )
+        EskfFailsafeConfig::new(2, 5, 2_000, 0.002, ConvergenceAxes::XyOnly)
     }
 
     #[test]

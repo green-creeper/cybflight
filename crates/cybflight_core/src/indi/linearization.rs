@@ -227,7 +227,10 @@ mod tests {
         let u = 0.5;
         let d = lin.linearize(u, V_DC);
         let u_back = lin.output_curve(d, V_DC);
-        assert!((u - u_back).abs() < 1e-6, "roundtrip: u={u}, d={d}, u_back={u_back}");
+        assert!(
+            (u - u_back).abs() < 1e-6,
+            "roundtrip: u={u}, d={d}, u_back={u_back}"
+        );
     }
 
     #[test]
@@ -305,7 +308,10 @@ mod tests {
         for i in 0..=100 {
             let u = i as f32 / 100.0;
             let d = lin.linearize(u, V_DC);
-            assert!(d >= prev, "sqrtsq non-monotonic at u={u}: d={d} < prev={prev}");
+            assert!(
+                d >= prev,
+                "sqrtsq non-monotonic at u={u}: d={d} < prev={prev}"
+            );
             prev = d;
         }
     }
@@ -329,7 +335,10 @@ mod tests {
         for u_step in 1..10 {
             let u = u_step as f32 / 10.0;
             let d = lin.linearize(u, 23.0);
-            assert!((d - u).abs() < 1e-3, "linear table linearize: u={u} → d={d}");
+            assert!(
+                (d - u).abs() < 1e-3,
+                "linear table linearize: u={u} → d={d}"
+            );
             let u_back = lin.output_curve(d, 23.0);
             assert!(
                 (u_back - u).abs() < 1e-2,

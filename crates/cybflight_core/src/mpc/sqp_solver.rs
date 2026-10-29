@@ -14,10 +14,10 @@
 //! NU is pinned to 4 by [`cholesky_inv_4x4`], which carries an unrolled
 //! 4×4 Cholesky inverse. Generalising to other NU is a future refactor.
 
+use super::QuadDynamicsModel;
 use super::full_quad_model;
 use super::mpc_problem::MpcProblem;
 use super::quad_model;
-use super::QuadDynamicsModel;
 use nalgebra::{SMatrix, SVector};
 
 /// Result metadata from the SQP solver.
@@ -515,7 +515,10 @@ impl<const NX: usize, const NU: usize, const N: usize, const NP1: usize> SqpSolv
         // Active horizon: `problem.n` stages, clamped to the workspace
         // capacity `N`. Stages `n..N` of the workspace are left untouched.
         let n = problem.n.min(N);
-        debug_assert!(n >= 1, "SqpSolver::solve: horizon must be at least one stage");
+        debug_assert!(
+            n >= 1,
+            "SqpSolver::solve: horizon must be at least one stage"
+        );
 
         let mut hess_xx = SMatrix::<f32, NX, NX>::zeros();
         let mut r_diag = SVector::<f32, NU>::zeros();
@@ -649,7 +652,7 @@ impl<const NX: usize, const NU: usize, const N: usize, const NP1: usize> SqpSolv
 mod tests {
     use super::*;
     use crate::mpc::mpc_problem::SimpleQuadProblem;
-    use crate::mpc::quad_model::{PosCostMode, QuadModel, N, NU, NX};
+    use crate::mpc::quad_model::{N, NU, NX, PosCostMode, QuadModel};
 
     const NP1: usize = N + 1;
 
@@ -713,7 +716,12 @@ mod tests {
         );
         assert!(!res.diverged);
         assert!(res.converged, "hover from hover should converge");
-        assert!(solver.u_bar().iter().all(|u| u.iter().all(|v| v.is_finite())));
+        assert!(
+            solver
+                .u_bar()
+                .iter()
+                .all(|u| u.iter().all(|v| v.is_finite()))
+        );
     }
 
     /// Regression for the KKT NaN hole: a NaN initial state NaNs the
@@ -742,7 +750,12 @@ mod tests {
         assert!(res.diverged, "NaN x0 must be reported as divergence");
         assert!(!res.converged, "a diverged solve must not report converged");
         // Step rejected: the warm start survives untouched and finite.
-        assert!(solver.u_bar().iter().all(|u| u.iter().all(|v| v.is_finite())));
+        assert!(
+            solver
+                .u_bar()
+                .iter()
+                .all(|u| u.iter().all(|v| v.is_finite()))
+        );
     }
 
     /// Same contract for a NaN landing in the reference trajectory (the
@@ -760,7 +773,12 @@ mod tests {
         let res = solver.solve(&problem, &x0, &x_refs, &[hover; N], &[hover; N], 5, 1e-3);
         assert!(res.diverged);
         assert!(!res.converged);
-        assert!(solver.u_bar().iter().all(|u| u.iter().all(|v| v.is_finite())));
+        assert!(
+            solver
+                .u_bar()
+                .iter()
+                .all(|u| u.iter().all(|v| v.is_finite()))
+        );
     }
 }
 

@@ -43,15 +43,15 @@ use crate::baselines::{
     AttitudeControlSetpoint, AttitudeControlState,
     geometric_controller::GeometricAttitudeController,
 };
+use air_filters::Filter;
+use air_filters::iir::biquad::{
+    BiquadFilter, BiquadFilterConfigBuilder, BiquadFilterType, DirectForm2,
+};
+use cybflight_core::acmpc::CtbrCommand;
 use cybflight_core::attitude_control::geometric_controller::{
     GeometricTrackingController, GeometricTrackingParams, GeometricTrackingReference,
     GeometricTrackingState,
 };
-use air_filters::iir::biquad::{
-    BiquadFilter, BiquadFilterConfigBuilder, BiquadFilterType, DirectForm2,
-};
-use air_filters::Filter;
-use cybflight_core::acmpc::CtbrCommand;
 use cybflight_core::indi::{
     controller::{IndiConfig, IndiController, MotorState, NU as INDI_NU, NV},
     effectiveness::IndiMotorParams,
@@ -62,16 +62,16 @@ use cybflight_core::indi::{
 type Biquad = BiquadFilter<f32, DirectForm2<f32>>;
 use cybflight_core::mixer::{LinearAllocator, MotorEffectiveness};
 use cybflight_core::mpc::cost_adapt::{
-    situation_obs, CostNominal, CostPolicy, SituationInputs, COST_MAP_VERSION, NZ as COST_NZ,
-    OBS_DIM as COST_OBS_DIM,
+    COST_MAP_VERSION, CostNominal, CostPolicy, NZ as COST_NZ, OBS_DIM as COST_OBS_DIM,
+    SituationInputs, situation_obs,
 };
-use cybflight_core::nn::mlp::LayerShape;
 use cybflight_core::mpc::{
     FullQuadModel, FullQuadProblem, FullSqpSolver, N as FULL_N, NU, NX, QuadModel,
     SimpleQuadProblem, SimpleSqpSolver, TinyMpc, TinySettings,
     quad_model::{N as SIMPLE_N, NU as SIMPLE_NU, NX as SIMPLE_NX, PosCostMode},
     tinympc::{HOVER_NU, HOVER_NX, hover_linear_model},
 };
+use cybflight_core::nn::mlp::LayerShape;
 use cybflight_core::params::FirmwareConfig;
 use cybflight_core::position_control::{
     self, PositionControlSetpoint, PositionControlState, pd_ff_control::PositionController,
@@ -199,7 +199,12 @@ impl CtbrRateLoop {
             .iter()
             .map(|m| m.max_thrust_n)
             .fold(0.0f32, f32::max);
-        let max_collective_n = vp.airframe.motors.iter().map(|m| m.max_thrust_n).sum::<f32>();
+        let max_collective_n = vp
+            .airframe
+            .motors
+            .iter()
+            .map(|m| m.max_thrust_n)
+            .sum::<f32>();
         Self {
             allocator: LinearAllocator::new(MotorEffectiveness::from_motors(&vp.airframe.motors)),
             cmd_map: ThrustCommandMap::new(PlantParams::from_config(vp, sim)),
@@ -220,17 +225,13 @@ impl CtbrRateLoop {
     /// training environment's own allocation did: the gyroscopic coupling
     /// is a disturbance the proportional loop rejects, not a term the
     /// policy was trained to have cancelled for it.
-    pub fn command(
-        &self,
-        cmd: &CtbrCommand,
-        body_rate_rad_s: Vector3<f32>,
-    ) -> SVector<f32, NU> {
+    pub fn command(&self, cmd: &CtbrCommand, body_rate_rad_s: Vector3<f32>) -> SVector<f32, NU> {
         let alpha = self
             .rate_kp
             .component_mul(&(cmd.body_rate_rad_s - body_rate_rad_s));
         let torque = self.inertia * alpha;
-        let thrust_n = (self.mass_kg * cmd.specific_thrust_m_s2)
-            .clamp(self.idle_n, self.max_collective_n);
+        let thrust_n =
+            (self.mass_kg * cmd.specific_thrust_m_s2).clamp(self.idle_n, self.max_collective_n);
         let fractions = self
             .allocator
             .allocate(Vector4::new(thrust_n, torque.x, torque.y, torque.z));
@@ -449,7 +450,10 @@ impl OwnedCostPolicy {
         let mut shapes = Vec::with_capacity(n);
         let mut off = 16;
         for _ in 0..n {
-            shapes.push(LayerShape::new(u32_at(off)? as u16, u32_at(off + 4)? as u16));
+            shapes.push(LayerShape::new(
+                u32_at(off)? as u16,
+                u32_at(off + 4)? as u16,
+            ));
             off += 8;
         }
         let weights: Vec<f32> = bytes[off..]
@@ -460,7 +464,10 @@ impl OwnedCostPolicy {
         if weights.len() != expect {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                format!("policy file: {} weights, shapes need {expect}", weights.len()),
+                format!(
+                    "policy file: {} weights, shapes need {expect}",
+                    weights.len()
+                ),
             ));
         }
         Ok(Self { weights, shapes })
@@ -510,7 +517,11 @@ fn build_indi_config(vp: &FirmwareConfig, indi_enabled: bool) -> IndiConfig {
         let tau = m.time_const_s;
         let omega = m.max_omega_rad_s;
         IndiMotorParams {
-            time_const_s: if tau.is_finite() && tau > 1e-4 { tau } else { 0.02 },
+            time_const_s: if tau.is_finite() && tau > 1e-4 {
+                tau
+            } else {
+                0.02
+            },
             max_rpm: if omega.is_finite() && omega > 1.0 {
                 omega * 60.0 / core::f32::consts::TAU
             } else {
@@ -660,9 +671,7 @@ impl MpcIndiController {
             tick_counter: 0,
             mass,
             grav,
-            omega_filter: core::array::from_fn(|_| {
-                make_omega_biquad(indi_rate_hz, indi_sync_hz)
-            }),
+            omega_filter: core::array::from_fn(|_| make_omega_biquad(indi_rate_hz, indi_sync_hz)),
             omega_fs: SVector::zeros(),
             omega_dot_fs: SVector::zeros(),
             omega_hold: SVector::zeros(),
@@ -742,7 +751,11 @@ impl MpcIndiController {
     /// Drive the horizon from a firmware-style `PositionSampler` over
     /// `traj` (the same trajectory the runner samples by time). Parameters
     /// normally come from `vp.trajectory.sampler.to_position_sampler_params()`.
-    pub fn attach_position_sampler(&mut self, traj: PiecewisePolynomial, params: PositionSamplerParams) {
+    pub fn attach_position_sampler(
+        &mut self,
+        traj: PiecewisePolynomial,
+        params: PositionSamplerParams,
+    ) {
         let total_duration_s = traj.total_duration();
         self.position_sampler = Some(SimPositionSampler {
             sampler: PositionSampler::new(params),
@@ -769,11 +782,15 @@ impl MpcIndiController {
     /// the hover input; otherwise `q_ref` from the selected map and, with
     /// `flatness_feedforward`, `u_ref` from the pole-safe flatness map
     /// (falling back to `[m·‖α‖, 0]` on a fault).
-    fn node_reference(&self, n: &SamplerNode) -> (SVector<f32, SIMPLE_NX>, SVector<f32, SIMPLE_NU>) {
+    fn node_reference(
+        &self,
+        n: &SamplerNode,
+    ) -> (SVector<f32, SIMPLE_NX>, SVector<f32, SIMPLE_NU>) {
         let grav = self.grav;
         let hover = vector![self.mass * grav, 0.0, 0.0, 0.0];
         if n.past_end {
-            let x = stack![n.pos; UnitQuaternion::<f32>::identity().coords; Vector3::<f32>::zeros()];
+            let x =
+                stack![n.pos; UnitQuaternion::<f32>::identity().coords; Vector3::<f32>::zeros()];
             return (x, hover);
         }
         let q_ref = q_ref_with_map(n.acc, 0.0, grav, self.use_tilt_map);
@@ -787,7 +804,9 @@ impl MpcIndiController {
                 flatness_to_thrust_omega(n.acc, n.jerk, 0.0, 0.0, grav)
             };
             let u = match flat {
-                Ok((alpha_norm, _att, omega)) => vector![self.mass * alpha_norm, omega.x, omega.y, omega.z],
+                Ok((alpha_norm, _att, omega)) => {
+                    vector![self.mass * alpha_norm, omega.x, omega.y, omega.z]
+                }
                 Err(_) => {
                     let alpha = Vector3::new(n.acc.x, n.acc.y, n.acc.z + grav).norm();
                     vector![self.mass * alpha, 0.0, 0.0, 0.0]
@@ -815,7 +834,11 @@ impl MpcIndiController {
     /// closest-point state is advanced on a scratch copy). Used by the
     /// training environment to hand the policy the observation its
     /// action will apply to.
-    pub fn peek_situation(&self, x_full: &SVector<f32, NX>, horizon: &[Setpoint]) -> [f32; COST_OBS_DIM] {
+    pub fn peek_situation(
+        &self,
+        x_full: &SVector<f32, NX>,
+        horizon: &[Setpoint],
+    ) -> [f32; COST_OBS_DIM] {
         let n = self.problem.n;
         let mut nodes = [SamplerNode::default(); SIMPLE_N + 1];
         if let Some(ps) = self.position_sampler.as_ref() {
@@ -1203,7 +1226,11 @@ impl TinyMpcIndiController {
             let q_ref = q_ref_from_setpoint(sp.acceleration, sp.yaw, grav);
             self.tiny.x_ref[k] = stack![sp.position; q_ref.scaled_axis(); sp.velocity];
             if self.reference_feedforward {
-                let acc = Vector3::new(sp.acceleration.x, sp.acceleration.y, sp.acceleration.z + grav);
+                let acc = Vector3::new(
+                    sp.acceleration.x,
+                    sp.acceleration.y,
+                    sp.acceleration.z + grav,
+                );
                 self.tiny.u_ref[k][0] = self.inner.mass * acc.norm() - self.hover_thrust_n;
                 if k > 0 {
                     // Body rate that carries q_ref[k-1] to q_ref[k] in one stride.
@@ -1325,7 +1352,11 @@ impl GeometricIndiController {
         }
     }
 
-    pub fn with_params(vp: &FirmwareConfig, params: GeometricTrackingParams, indi_rate_hz: f32) -> Self {
+    pub fn with_params(
+        vp: &FirmwareConfig,
+        params: GeometricTrackingParams,
+        indi_rate_hz: f32,
+    ) -> Self {
         let inner = MpcIndiController::from_params_at_indi_rate(vp, indi_rate_hz);
         let u_bounds = inner.problem.model.u_bounds;
         Self {
@@ -1365,7 +1396,8 @@ impl GeometricIndiController {
             cmd.bodyrates.z
         ];
         let b = self.u_bounds;
-        self.inner.last_mpc_u = SVector::<f32, SIMPLE_NU>::from_fn(|i, _| u[i].clamp(b[i][0], b[i][1]));
+        self.inner.last_mpc_u =
+            SVector::<f32, SIMPLE_NU>::from_fn(|i, _| u[i].clamp(b[i][0], b[i][1]));
     }
 }
 
@@ -1599,9 +1631,7 @@ impl MpcFullIndiController {
             tick_counter: 0,
             mass,
             grav,
-            omega_filter: core::array::from_fn(|_| {
-                make_omega_biquad(INDI_LOOP_HZ, indi_sync_hz)
-            }),
+            omega_filter: core::array::from_fn(|_| make_omega_biquad(INDI_LOOP_HZ, indi_sync_hz)),
             omega_fs: SVector::zeros(),
             omega_dot_fs: SVector::zeros(),
             omega_hold: SVector::zeros(),
@@ -1673,8 +1703,7 @@ impl MpcFullIndiController {
         );
         let u_bar = self.solver.u_bar();
         let bounds = self.problem.model.u_bounds;
-        let u0 =
-            SVector::<f32, NU>::from_fn(|i, _| u_bar[0][i].clamp(bounds[i][0], bounds[i][1]));
+        let u0 = SVector::<f32, NU>::from_fn(|i, _| u_bar[0][i].clamp(bounds[i][0], bounds[i][1]));
 
         // Eq. (32): reduce the first control to (T_d, τ_d) — the RAW
         // allocation torque, held between solves. Guard: a non-finite
@@ -1790,7 +1819,12 @@ impl CascadeController {
             .iter()
             .map(|m| m.max_thrust_n)
             .fold(0.0f32, f32::max);
-        let max_collective = vp.airframe.motors.iter().map(|m| m.max_thrust_n).sum::<f32>();
+        let max_collective = vp
+            .airframe
+            .motors
+            .iter()
+            .map(|m| m.max_thrust_n)
+            .sum::<f32>();
 
         let pos_ctrl = PositionController::new(
             Vector3::new(g.pos_kp[0], g.pos_kp[1], g.pos_kp[2]),

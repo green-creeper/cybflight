@@ -64,7 +64,11 @@ impl core::fmt::Display for ParamValue {
 /// Saturating f32 → u8 (NaN and negatives → 0).
 pub fn f32_to_u8(v: f32) -> u8 {
     if v.is_finite() && v > 0.0 {
-        if v >= u8::MAX as f32 { u8::MAX } else { v as u8 }
+        if v >= u8::MAX as f32 {
+            u8::MAX
+        } else {
+            v as u8
+        }
     } else {
         0
     }
@@ -353,8 +357,16 @@ mod tests {
             gains: [1.0, 2.0, 3.0],
             mat: [[10.0, 11.0], [12.0, 13.0]],
             motors: [
-                Leaf { px: -0.1, py: 0.1, mode: Mode::A },
-                Leaf { px: 0.1, py: -0.1, mode: Mode::B },
+                Leaf {
+                    px: -0.1,
+                    py: 0.1,
+                    mode: Mode::A,
+                },
+                Leaf {
+                    px: 0.1,
+                    py: -0.1,
+                    mode: Mode::B,
+                },
             ],
             iters: 500,
             enabled: true,

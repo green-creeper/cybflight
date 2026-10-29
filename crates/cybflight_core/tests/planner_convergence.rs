@@ -137,43 +137,43 @@ fn test_vehicle_params() -> FirmwareConfig {
     FirmwareConfig {
         mahony: cybflight_core::params::MahonyParams::default(),
         airframe: cybflight_core::params::AirframeParams {
-        body: RigidBodyParams {
-            mass_kg: 0.55,
-            inertia_kg_m2: [0.0025, 0.0, 0.0, 0.0, 0.0021, 0.0, 0.0, 0.0, 0.0043],
-            max_rate_rad_s: [10.0, 10.0, 6.0],
-        },
-        motors: [
-            MotorParams {
-                position_m: [-0.075, -0.1],
-                spin_dir: SpinDir::Cw,
-                max_thrust_n: 8.5,
-                torque_coeff_m: 0.022,
-                ..MotorParams::STOCK_DYNAMICS
+            body: RigidBodyParams {
+                mass_kg: 0.55,
+                inertia_kg_m2: [0.0025, 0.0, 0.0, 0.0, 0.0021, 0.0, 0.0, 0.0, 0.0043],
+                max_rate_rad_s: [10.0, 10.0, 6.0],
             },
-            MotorParams {
-                position_m: [0.075, -0.1],
-                spin_dir: SpinDir::Ccw,
-                max_thrust_n: 8.5,
-                torque_coeff_m: 0.022,
-                ..MotorParams::STOCK_DYNAMICS
-            },
-            MotorParams {
-                position_m: [-0.075, 0.1],
-                spin_dir: SpinDir::Ccw,
-                max_thrust_n: 8.5,
-                torque_coeff_m: 0.022,
-                ..MotorParams::STOCK_DYNAMICS
-            },
-            MotorParams {
-                position_m: [0.075, 0.1],
-                spin_dir: SpinDir::Cw,
-                max_thrust_n: 8.5,
-                torque_coeff_m: 0.022,
-                ..MotorParams::STOCK_DYNAMICS
-            },
-        ],
-        install: cybflight_core::params::InstallParams::default(),
-        motor_pole_count: 14,
+            motors: [
+                MotorParams {
+                    position_m: [-0.075, -0.1],
+                    spin_dir: SpinDir::Cw,
+                    max_thrust_n: 8.5,
+                    torque_coeff_m: 0.022,
+                    ..MotorParams::STOCK_DYNAMICS
+                },
+                MotorParams {
+                    position_m: [0.075, -0.1],
+                    spin_dir: SpinDir::Ccw,
+                    max_thrust_n: 8.5,
+                    torque_coeff_m: 0.022,
+                    ..MotorParams::STOCK_DYNAMICS
+                },
+                MotorParams {
+                    position_m: [-0.075, 0.1],
+                    spin_dir: SpinDir::Ccw,
+                    max_thrust_n: 8.5,
+                    torque_coeff_m: 0.022,
+                    ..MotorParams::STOCK_DYNAMICS
+                },
+                MotorParams {
+                    position_m: [0.075, 0.1],
+                    spin_dir: SpinDir::Cw,
+                    max_thrust_n: 8.5,
+                    torque_coeff_m: 0.022,
+                    ..MotorParams::STOCK_DYNAMICS
+                },
+            ],
+            install: cybflight_core::params::InstallParams::default(),
+            motor_pole_count: 14,
         },
         sensors: cybflight_core::params::SensorParams::default(),
         eskf: cybflight_core::params::EskfParams::default(),

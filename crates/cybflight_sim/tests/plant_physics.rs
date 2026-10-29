@@ -302,9 +302,8 @@ fn drag_produces_predicted_terminal_velocity() {
 
     // Collective that keeps vertical force in balance at this tilt.
     let per_motor = p.mass_kg * p.grav / (4.0 * tilt.cos());
-    let d = SVector::<f32, 4>::from_fn(|i, _| {
-        p.command_for_omega(i, p.omega_for_thrust(i, per_motor))
-    });
+    let d =
+        SVector::<f32, 4>::from_fn(|i, _| p.command_for_omega(i, p.omega_for_thrust(i, per_motor)));
     // Terminal-velocity time constant is m/(c_dx·Σω) ≈ 5 s; 40 s leaves
     // well under 1 % of the initial gap.
     for _ in 0..(40.0 / DT) as usize {

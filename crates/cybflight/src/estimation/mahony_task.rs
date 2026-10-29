@@ -129,9 +129,7 @@ pub async fn mahony_task() {
         // eskf_imu_mocap.rs.) Saturated, a stale sample yields dt = 0
         // and the guard below skips it; `last_t` still advances.
         let dt_s = match last_t {
-            Some(prev) => {
-                imu.timestamp.saturating_duration_since(prev).as_micros() as f32 * 1e-6
-            }
+            Some(prev) => imu.timestamp.saturating_duration_since(prev).as_micros() as f32 * 1e-6,
             None => 0.0,
         };
         last_t = Some(imu.timestamp);

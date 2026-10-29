@@ -13,7 +13,7 @@
 use super::{PositionControlOutput, PositionControlSetpoint, PositionControlState, VehicleParams};
 use core::marker::Copy;
 use nalgebra as na;
-use num_traits::{float::FloatCore, NumCast};
+use num_traits::{NumCast, float::FloatCore};
 
 /// SE(3) geometric position controller (outer loop only).
 ///

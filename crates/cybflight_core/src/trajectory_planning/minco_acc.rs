@@ -39,8 +39,8 @@
 //! the solver in a `StaticCell` — never construct one on an Embassy task
 //! stack — and should size a [`MincoAccN`] to the pieces it needs.
 
-use super::banded_system::{acc_storage, BandedSystem};
 use super::MAX_PIECES;
+use super::banded_system::{BandedSystem, acc_storage};
 
 /// Scalar boundary state: [ψ, ψ̇] in rad / rad·s⁻¹.
 pub type PV1D = [f32; 2];

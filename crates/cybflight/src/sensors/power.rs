@@ -14,7 +14,11 @@ use crate::msgs;
 use crate::sensors::{POWER_STATUS, POWER_TELEM};
 use bsp_types::PowerCalibration;
 use embassy_time::{Duration, Instant, Ticker};
+#[cfg(not(feature = "board_flywoof745"))]
 use hal::adc::{Adc, AdcConfig, Averaging, Resolution};
+#[cfg(feature = "board_flywoof745")]
+use hal::adc::{Adc, AdcConfig, Resolution};
+#[cfg(not(feature = "board_flywoof745"))]
 use hal::pac::adc::vals::Pcsel;
 
 /// One `power_task` tick as the blackbox sees it (`/power` topic).
@@ -40,15 +44,15 @@ pub struct PowerTelemetry {
     pub cell_count: u8,
 }
 
-/// Sample time matching Betaflight (~387.5 ADC clock cycles).
+/// Sample time matching Betaflight (~387.5 / 480 ADC clock cycles).
+#[cfg(not(feature = "board_flywoof745"))]
 const ADC_SAMPLE_TIME: hal::pac::adc::vals::SampleTime =
     hal::pac::adc::vals::SampleTime::CYCLES387_5;
+#[cfg(feature = "board_flywoof745")]
+const ADC_SAMPLE_TIME: hal::pac::adc::vals::SampleTime = hal::pac::adc::vals::SampleTime::CYCLES480;
 
-/// Hardware oversampling depth. The H7's ADC accumulates this many
-/// conversions and right-shifts back to 12 bits itself, so the noise floor
-/// drops ~√N for zero CPU cost — the sequencer just takes ~16× longer
-/// (~190 µs, against a 10 ms tick). Nothing downstream changes: the result
-/// register still reads 0..4095.
+/// Hardware oversampling depth (H7 ADC_v3).
+#[cfg(not(feature = "board_flywoof745"))]
 const ADC_OVERSAMPLING: Averaging = Averaging::Samples16;
 
 /// Single-pole (PT1) low-pass, the same shape Betaflight runs on its vbat
@@ -130,6 +134,7 @@ impl PowerMonitor {
         core::mem::forget(curr_pin);
 
         // Embassy init: RCC enable, prescaler, voltage regulator, calibration.
+        #[cfg(not(feature = "board_flywoof745"))]
         let adc = Adc::new_with_config(
             adc3,
             AdcConfig {
@@ -137,13 +142,23 @@ impl PowerMonitor {
                 averaging: Some(ADC_OVERSAMPLING),
             },
         );
+        #[cfg(feature = "board_flywoof745")]
+        let adc = Adc::new_with_config(
+            adc3,
+            AdcConfig {
+                resolution: Some(Resolution::BITS12),
+            },
+        );
 
-        // Pre-select both channels so PCSEL bits are set once.
-        let regs = hal::pac::ADC3;
-        regs.pcsel().modify(|w| {
-            w.set_pcsel(vbat.channel as _, Pcsel::PRESELECTED);
-            w.set_pcsel(curr.channel as _, Pcsel::PRESELECTED);
-        });
+        // Pre-select both channels so PCSEL bits are set once (H7 ADC_v3).
+        #[cfg(not(feature = "board_flywoof745"))]
+        {
+            let regs = hal::pac::ADC3;
+            regs.pcsel().modify(|w| {
+                w.set_pcsel(vbat.channel as _, Pcsel::PRESELECTED);
+                w.set_pcsel(curr.channel as _, Pcsel::PRESELECTED);
+            });
+        }
 
         Self {
             _adc: adc,
@@ -159,6 +174,7 @@ impl PowerMonitor {
 
     /// Read a single ADC3 channel via PAC registers (12-bit, blocking poll).
     /// Returns 0 on timeout (should never happen with correct clock config).
+    #[cfg(not(feature = "board_flywoof745"))]
     fn read_channel(channel: u8) -> u16 {
         let regs = hal::pac::ADC3;
 
@@ -191,6 +207,39 @@ impl PowerMonitor {
         }
 
         regs.dr().read().rdata()
+    }
+
+    #[cfg(feature = "board_flywoof745")]
+    fn read_channel(channel: u8) -> u16 {
+        let regs = hal::pac::ADC3;
+
+        // On STM32F7 (adc_v2), channels 10..18 live in SMPR1, channels 0..9 in SMPR2.
+        if channel >= 10 {
+            regs.smpr1()
+                .modify(|w| w.set_smp((channel - 10) as usize, ADC_SAMPLE_TIME));
+        } else {
+            regs.smpr2()
+                .modify(|w| w.set_smp(channel as usize, ADC_SAMPLE_TIME));
+        }
+
+        // Sequence length = 1 conversion (L=0 in SQR1), SQ1 in SQR3.
+        regs.sqr1().modify(|w| w.set_l(0));
+        regs.sqr3().modify(|w| w.set_sq(0, channel));
+
+        // Clear EOC, start software conversion, poll for EOC.
+        regs.sr().modify(|w| w.set_eoc(false));
+        regs.cr2().modify(|w| w.set_swstart(true));
+
+        let mut timeout = 100_000u32;
+        while !regs.sr().read().eoc() {
+            timeout -= 1;
+            if timeout == 0 {
+                defmt::warn!("ADC3 read timeout ch{}", channel);
+                return 0;
+            }
+        }
+
+        regs.dr().read().data()
     }
 
     /// BF `voltage.c:165` — convert a 12-bit ADC reading to centivolts.

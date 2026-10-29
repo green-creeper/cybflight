@@ -4,7 +4,7 @@ use core::{default::Default, marker::Copy};
 
 use crate::rotation::vee;
 use nalgebra as na;
-use num_traits::{float::FloatCore, NumCast};
+use num_traits::{NumCast, float::FloatCore};
 
 pub enum AttitudeErrorLaw {
     GeometricSO3,
@@ -391,11 +391,17 @@ impl GeometricTrackingController {
         // a_des = e_acc + a_ref − g_vec  (g_vec points down, so this adds +g·ẑ)
         let desired_acceleration = pid_error_acc + reference.acceleration - g_vec;
 
-        let collective_thrust_per_mass =
-            self.compute_desired_collective_normalized_thrust(&state.orientation, &desired_acceleration);
-        let desired_attitude =
-            self.compute_desired_attitude(&desired_acceleration, reference.heading, &state.orientation);
-        let feedback_bodyrates = self.compute_feedback_bodyrates(&desired_attitude, &state.orientation);
+        let collective_thrust_per_mass = self.compute_desired_collective_normalized_thrust(
+            &state.orientation,
+            &desired_acceleration,
+        );
+        let desired_attitude = self.compute_desired_attitude(
+            &desired_acceleration,
+            reference.heading,
+            &state.orientation,
+        );
+        let feedback_bodyrates =
+            self.compute_feedback_bodyrates(&desired_attitude, &state.orientation);
 
         GeometricTrackingCommand {
             collective_thrust_per_mass,
@@ -488,7 +494,9 @@ impl GeometricTrackingController {
         desired_acc: &na::Vector3<f32>,
     ) -> f32 {
         let body_z = attitude_estimate * na::Vector3::z();
-        desired_acc.dot(&body_z).max(self.params.min_normalized_thrust)
+        desired_acc
+            .dot(&body_z)
+            .max(self.params.min_normalized_thrust)
     }
 
     /// `computeDesiredAttitude`: z_B along `a_des`, x_B from the heading
@@ -610,7 +618,11 @@ mod tracking_tests {
             ..Default::default()
         };
         let ff = c.compute_nominal_reference_inputs(&r, &na::UnitQuaternion::identity());
-        assert!((ff.bodyrates.y - 2.0 / 9.81).abs() < 1e-5, "{}", ff.bodyrates);
+        assert!(
+            (ff.bodyrates.y - 2.0 / 9.81).abs() < 1e-5,
+            "{}",
+            ff.bodyrates
+        );
         assert!(ff.bodyrates.x.abs() < 1e-6 && ff.bodyrates.z.abs() < 1e-6);
     }
 }

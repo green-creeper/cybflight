@@ -1,10 +1,10 @@
 //! Barometer sensor task — reads samples from a baro driver and publishes
 //! `BaroSample` messages to the appropriate channel.
 
+use cybflight_drivers::baro::ReadBaro;
 use cybflight_drivers::baro::dps310::{Dps310, I2cBusWrapper, SpiBusWrapper};
 use cybflight_drivers::baro::icp20100::Icp20100;
 use cybflight_drivers::baro::spl06::{I2cBusWrapper as Spl06I2cBusWrapper, Spl06};
-use cybflight_drivers::baro::ReadBaro;
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_embedded_hal::shared_bus::asynch::spi::SpiDevice;
 use embassy_sync::blocking_mutex::raw::{CriticalSectionRawMutex, NoopRawMutex};
@@ -21,13 +21,10 @@ use hal::gpio::Output;
 // (see `sensors::imu::SpiBusMtx`): `CriticalSectionRawMutex` so the
 // bus can be safely shared between the IMU reader on the control
 // executor (P10) and the DPS310 baro reader on the thread executor.
-pub type Dps310SpiDev = Dps310<
-    SpiBusWrapper<SpiDevice<'static, CriticalSectionRawMutex, SpiBus, Output<'static>>>,
->;
-pub type Dps310I2cDev =
-    Dps310<I2cBusWrapper<I2cDevice<'static, NoopRawMutex, I2cBus>>>;
-pub type Spl06I2cDev =
-    Spl06<Spl06I2cBusWrapper<I2cDevice<'static, NoopRawMutex, I2cBus>>>;
+pub type Dps310SpiDev =
+    Dps310<SpiBusWrapper<SpiDevice<'static, CriticalSectionRawMutex, SpiBus, Output<'static>>>>;
+pub type Dps310I2cDev = Dps310<I2cBusWrapper<I2cDevice<'static, NoopRawMutex, I2cBus>>>;
+pub type Spl06I2cDev = Spl06<Spl06I2cBusWrapper<I2cDevice<'static, NoopRawMutex, I2cBus>>>;
 pub type Icp20100Dev = Icp20100<I2cDevice<'static, NoopRawMutex, I2cBus>>;
 
 pub struct BaroReader<D: ReadBaro> {

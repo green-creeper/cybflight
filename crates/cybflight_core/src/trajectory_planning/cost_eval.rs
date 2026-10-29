@@ -5,14 +5,14 @@ use num_traits::Float;
 
 use nalgebra::Vector3;
 
-use super::flatness::{self, AlphaState, FlatnessState};
+use super::MAX_PLANNED_PIECES;
 use super::PlannerMinco;
+use super::flatness::{self, AlphaState, FlatnessState};
 use super::penalties::{
-    back_propagate_t, eval_dynamics_derivatives, forward_t, smoothed_l1_inv, DynDerivatives,
+    DynDerivatives, back_propagate_t, eval_dynamics_derivatives, forward_t, smoothed_l1_inv,
 };
 use super::quad_planning_config::QuadPlanningConfig;
-use super::types::{Vec3, ZERO3, PVA3D};
-use super::MAX_PLANNED_PIECES;
+use super::types::{PVA3D, Vec3, ZERO3};
 use crate::params::PlannerParams;
 
 const JERK_COEFFS: usize = 6;

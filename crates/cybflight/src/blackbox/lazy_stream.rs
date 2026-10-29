@@ -27,7 +27,7 @@
 
 use aligned::Aligned;
 use block_device_adapters::BufStreamError;
-use block_device_driver::{slice_to_blocks, slice_to_blocks_mut, BlockDevice};
+use block_device_driver::{BlockDevice, slice_to_blocks, slice_to_blocks_mut};
 use embedded_io_async::{Read, Seek, SeekFrom, Write};
 
 pub struct LazyBufStream<T: BlockDevice<SIZE>, const SIZE: usize> {

@@ -545,7 +545,15 @@ impl QuadModel {
         grad_x: &mut SVector<f32, NX>,
         hess_xx: &mut SMatrix<f32, NX, NX>,
     ) -> f32 {
-        self.state_cost_hess_grad_w(x, xref, &self.w_pos, &self.w_vel, &self.w_att, grad_x, hess_xx)
+        self.state_cost_hess_grad_w(
+            x,
+            xref,
+            &self.w_pos,
+            &self.w_vel,
+            &self.w_att,
+            grad_x,
+            hess_xx,
+        )
     }
 
     /// Terminal-stage Hessian + gradient: the stage state cost evaluated
@@ -749,7 +757,12 @@ mod drag_tests {
             xm[c] -= eps;
             let fd = (m.dynamics(&xp, &u) - m.dynamics(&xm, &u)) / (2.0 * eps);
             for r in 7..10 {
-                assert!((jx[(r, c)] - fd[r]).abs() < 2e-2, "jx({r},{c}) {} vs fd {}", jx[(r, c)], fd[r]);
+                assert!(
+                    (jx[(r, c)] - fd[r]).abs() < 2e-2,
+                    "jx({r},{c}) {} vs fd {}",
+                    jx[(r, c)],
+                    fd[r]
+                );
             }
         }
         let (mut up, mut um) = (u, u);
@@ -757,7 +770,12 @@ mod drag_tests {
         um[0] -= eps;
         let fd = (m.dynamics(&x, &up) - m.dynamics(&x, &um)) / (2.0 * eps);
         for r in 7..10 {
-            assert!((ju[(r, 0)] - fd[r]).abs() < 2e-2, "ju({r},0) {} vs fd {}", ju[(r, 0)], fd[r]);
+            assert!(
+                (ju[(r, 0)] - fd[r]).abs() < 2e-2,
+                "ju({r},0) {} vs fd {}",
+                ju[(r, 0)],
+                fd[r]
+            );
         }
         // Sanity: the drag term alone opposes motion and is a few m/s² at
         // 8.6 m/s (Σω ≈ 2·√(12/4.3e-7) ≈ 10 500 rad/s, c/m ≈ 4.4e-5).
@@ -772,6 +790,10 @@ mod drag_tests {
         );
         let v = nalgebra::Vector3::new(x[7], x[8], x[9]);
         assert!(a.dot(&v) < 0.0, "drag must oppose motion: {a}");
-        assert!(a.norm() > 1.0 && a.norm() < 12.0, "drag magnitude {}", a.norm());
+        assert!(
+            a.norm() > 1.0 && a.norm() < 12.0,
+            "drag magnitude {}",
+            a.norm()
+        );
     }
 }

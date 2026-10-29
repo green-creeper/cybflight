@@ -94,11 +94,18 @@ pub fn capture() {
     let rcc = pac::RCC;
     let pwr = pac::PWR;
 
+    #[cfg(not(feature = "board_flywoof745"))]
     let rsr = rcc.rsr().read();
+    #[cfg(feature = "board_flywoof745")]
+    let rsr = rcc.csr().read();
     let csr1 = pwr.csr1().read();
 
     let mut packed = flags::CAPTURED;
-    if rsr.iwdg1rstf() {
+    #[cfg(not(feature = "board_flywoof745"))]
+    let iwdg_rst = rsr.iwdg1rstf();
+    #[cfg(feature = "board_flywoof745")]
+    let iwdg_rst = rsr.wdgrstf();
+    if iwdg_rst {
         packed |= flags::IWDG_RESET;
     }
     if csr1.pvdo() {
@@ -108,7 +115,11 @@ pub fn capture() {
     if rsr.sftrstf() {
         packed |= flags::SOFTWARE_RESET;
     }
-    if rsr.pinrstf() {
+    #[cfg(not(feature = "board_flywoof745"))]
+    let pin_rst = rsr.pinrstf();
+    #[cfg(feature = "board_flywoof745")]
+    let pin_rst = rsr.padrstf();
+    if pin_rst {
         packed |= flags::PIN_RESET;
     }
     if rsr.porrstf() {
@@ -129,9 +140,10 @@ pub fn capture() {
     }
 
     // Clear the latch so the next reset starts with a clean slate.
-    // RMVF is bit 16 of RSR — write 1 to clear (rs1cw semantics on
-    // STM32H7).
+    #[cfg(not(feature = "board_flywoof745"))]
     rcc.rsr().modify(|w| w.set_rmvf(true));
+    #[cfg(feature = "board_flywoof745")]
+    rcc.csr().modify(|w| w.set_rmvf(true));
 }
 
 /// Read the stashed value. Idempotent — does not clear the static, so

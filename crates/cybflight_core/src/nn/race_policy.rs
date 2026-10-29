@@ -49,9 +49,7 @@ use nalgebra::{Matrix3, UnitQuaternion, Vector3};
 use num_traits::Float;
 
 use super::mlp::{Activation, LayerShape, Mlp, MlpError};
-use crate::rotation::{
-    euler_angles_rpy_to_quaternion, rotation_matrix_to_euler_angles_rpy,
-};
+use crate::rotation::{euler_angles_rpy_to_quaternion, rotation_matrix_to_euler_angles_rpy};
 
 /// Motors driven by the policy.
 pub const NUM_MOTORS: usize = 4;
@@ -88,7 +86,10 @@ pub struct Gate {
 
 impl Gate {
     pub const fn new(position_m: Vector3<f32>, heading_rad: f32) -> Self {
-        Self { position_m, heading_rad }
+        Self {
+            position_m,
+            heading_rad,
+        }
     }
 }
 
@@ -164,7 +165,10 @@ pub enum PolicyError {
     GatesAhead(usize),
     /// The network's input dimension disagrees with the observation the
     /// configured track and look-ahead produce.
-    ObsDim { network: usize, config: usize },
+    ObsDim {
+        network: usize,
+        config: usize,
+    },
     /// `motor_map` is not a permutation of `0..NUM_MOTORS`.
     MotorMap,
 }
@@ -470,7 +474,10 @@ impl<'a> RacePolicy<'a> {
             });
         }
         if mlp.output_dim() != NUM_MOTORS {
-            return Err(PolicyError::ObsDim { network: mlp.output_dim(), config: NUM_MOTORS });
+            return Err(PolicyError::ObsDim {
+                network: mlp.output_dim(),
+                config: NUM_MOTORS,
+            });
         }
         Ok(Self { track, mlp })
     }
@@ -498,7 +505,9 @@ impl<'a> RacePolicy<'a> {
         let n = self.track.obs_len();
         self.track.observe(state, &mut obs[..n]);
         let mut raw = [0.0f32; NUM_MOTORS];
-        self.mlp.forward(&obs[..n], &mut raw).map_err(PolicyError::Mlp)?;
+        self.mlp
+            .forward(&obs[..n], &mut raw)
+            .map_err(PolicyError::Mlp)?;
         Ok(self.actions_to_commands(&raw))
     }
 }
@@ -540,10 +549,8 @@ mod tests {
     #[test]
     fn level_attitude_converts_to_expected_ned_euler() {
         let q = UnitQuaternion::identity();
-        let rpy = rotation_matrix_to_euler_angles_rpy(&attitude_in_frame(
-            &q,
-            PolicyFrame::LegacyNed,
-        ));
+        let rpy =
+            rotation_matrix_to_euler_angles_rpy(&attitude_in_frame(&q, PolicyFrame::LegacyNed));
         assert!(rpy[0].abs() < 1e-6, "roll {}", rpy[0]);
         assert!(rpy[1].abs() < 1e-6, "pitch {}", rpy[1]);
         assert!(
@@ -560,10 +567,8 @@ mod tests {
         // +0.2 rad about body y in FLU tilts the nose DOWN (right-hand rule
         // about +y_left is nose-down), so FRD pitch must be negative.
         let q = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), 0.2);
-        let rpy = rotation_matrix_to_euler_angles_rpy(&attitude_in_frame(
-            &q,
-            PolicyFrame::LegacyNed,
-        ));
+        let rpy =
+            rotation_matrix_to_euler_angles_rpy(&attitude_in_frame(&q, PolicyFrame::LegacyNed));
         assert!((rpy[1] + 0.2).abs() < 1e-5, "frd pitch {}", rpy[1]);
     }
 

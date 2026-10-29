@@ -159,9 +159,20 @@ unsafe fn HardFault(frame: &cortex_m_rt::ExceptionFrame) -> ! {
 /// date by the post-mortem task, so all this handler has to do is
 /// record the fatal kind + finalize. Realistic budget: 2–3 µs vs. a
 /// 2–10 ms PVD-to-BOR window — three orders of magnitude of margin.
-#[cfg(feature = "postmortem")]
+#[cfg(all(feature = "postmortem", not(feature = "board_flywoof745")))]
 #[interrupt]
 fn PVD_AVD() {
+    pvd_irq_body();
+}
+
+#[cfg(all(feature = "postmortem", feature = "board_flywoof745"))]
+#[interrupt]
+fn PVD() {
+    pvd_irq_body();
+}
+
+#[cfg(feature = "postmortem")]
+fn pvd_irq_body() {
     let depth = FAULT_DEPTH.fetch_add(1, Ordering::AcqRel);
     if depth >= 1 {
         cortex_m::asm::udf();
@@ -248,7 +259,10 @@ pub fn enable_pvd_brownout() {
     // PVD_AVD is not bound by any HAL driver so cortex-m-rt's
     // exception entry routes the IRQ to our handler directly.
     unsafe {
+        #[cfg(not(feature = "board_flywoof745"))]
         cortex_m::peripheral::NVIC::unmask(pac::Interrupt::PVD_AVD);
+        #[cfg(feature = "board_flywoof745")]
+        cortex_m::peripheral::NVIC::unmask(pac::Interrupt::PVD);
     }
 }
 

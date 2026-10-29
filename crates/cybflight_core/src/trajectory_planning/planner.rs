@@ -7,17 +7,17 @@
 #[allow(unused_imports)]
 use num_traits::Float;
 
+use super::MAX_PLANNED_PIECES;
+use super::PlannerMinco;
 use super::bfgs_trust::{
-    bfgs_trust_init, bfgs_trust_optimize_budgeted, bfgs_trust_resume, BfgsTrustResult,
-    BfgsWorkspace,
+    BfgsTrustResult, BfgsWorkspace, bfgs_trust_init, bfgs_trust_optimize_budgeted,
+    bfgs_trust_resume,
 };
 use super::cost_eval::CostEvaluator;
-use super::PlannerMinco;
 use super::penalties::{backward_t, forward_t};
 use super::piecewise_polynomial::PiecewisePolynomial;
 use super::quad_planning_config::QuadPlanningConfig;
 use super::types::*;
-use super::MAX_PLANNED_PIECES;
 
 /// Solver convergence status.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -569,15 +569,15 @@ mod tests {
     /// independent of any vehicle definition.
     fn test_config() -> QuadPlanningConfig {
         QuadPlanningConfig {
-        mass: 0.55,
-        grav: 9.81,
-        inertia_kg_m2: [0.0025, 0.0021, 0.0043],
-        mass_inv: 1.0 / 0.55,
-        max_collective_thrust_n: 4.0 * 8.5,
-        min_collective_thrust_n: 2.0,
-        max_rate_rad_s: [10.0, 10.0, 6.0],
-        planner: PlannerParams::default(),
-    }
+            mass: 0.55,
+            grav: 9.81,
+            inertia_kg_m2: [0.0025, 0.0021, 0.0043],
+            mass_inv: 1.0 / 0.55,
+            max_collective_thrust_n: 4.0 * 8.5,
+            min_collective_thrust_n: 2.0,
+            max_rate_rad_s: [10.0, 10.0, 6.0],
+            planner: PlannerParams::default(),
+        }
     }
 
     #[test]
@@ -673,7 +673,12 @@ mod tests {
             // Within a few percent of the default-radius optimum — far from
             // the seed, whose cost is ~2.5× larger.
             let rel = (r.final_cost - reference.final_cost).abs() / reference.final_cost;
-            assert!(rel < 0.05, "{label}: cost {} vs reference {}", r.final_cost, reference.final_cost);
+            assert!(
+                rel < 0.05,
+                "{label}: cost {} vs reference {}",
+                r.final_cost,
+                reference.final_cost
+            );
         }
     }
 

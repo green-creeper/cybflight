@@ -25,12 +25,12 @@ use std::hint::black_box;
 use std::time::Instant;
 
 use cybflight_core::mpc::quad_model::{
-    PosCostMode, N as SIMPLE_N, NU as SIMPLE_NU, NX as SIMPLE_NX,
+    N as SIMPLE_N, NU as SIMPLE_NU, NX as SIMPLE_NX, PosCostMode,
 };
 use cybflight_core::mpc::{
-    FullQuadModel, FullQuadProblem, FullSqpSolver, MpcProblem, QuadDynamicsModel, QuadModel,
-    SimpleQuadProblem, SimpleSqpSolver, SolverResult, SqpSolver, N as FULL_N, NU as FULL_NU,
-    NX as FULL_NX,
+    FullQuadModel, FullQuadProblem, FullSqpSolver, MpcProblem, N as FULL_N, NU as FULL_NU,
+    NX as FULL_NX, QuadDynamicsModel, QuadModel, SimpleQuadProblem, SimpleSqpSolver, SolverResult,
+    SqpSolver,
 };
 use nalgebra::{SVector, Unit, UnitQuaternion, Vector3, Vector4};
 
@@ -221,10 +221,7 @@ fn case_quat(c: &Case) -> UnitQuaternion<f32> {
     if c.angle_deg == 0.0 {
         UnitQuaternion::identity()
     } else {
-        UnitQuaternion::from_axis_angle(
-            &Unit::new_normalize(c.axis),
-            c.angle_deg.to_radians(),
-        )
+        UnitQuaternion::from_axis_angle(&Unit::new_normalize(c.axis), c.angle_deg.to_radians())
     }
 }
 
@@ -362,9 +359,9 @@ fn rate_barrier_matches_finite_differences() {
     // Rates spanning both barrier branches: log branch (margin ≫ δ),
     // near-boundary log branch, and quadratic-extension branch (violated).
     for &omega in &[
-        [2.0f32, -4.0, 1.0],  // interior
-        [9.5, -9.5, 5.5],     // near the limits
-        [11.0, -12.0, 6.5],   // beyond the limits (quadratic extension)
+        [2.0f32, -4.0, 1.0], // interior
+        [9.5, -9.5, 5.5],    // near the limits
+        [11.0, -12.0, 6.5],  // beyond the limits (quadratic extension)
     ] {
         x[10] = omega[0];
         x[11] = omega[1];
@@ -560,10 +557,22 @@ fn barrier_restrains_predicted_rates() {
     for c in cases() {
         let x0 = full_x0(&c);
         let _ = solver_unc.solve(
-            &unc.problem, &x0, &unc.x_refs, &unc.u_refs, &unc.u_init, CONV_MAX_ITERS, KKT_TOL,
+            &unc.problem,
+            &x0,
+            &unc.x_refs,
+            &unc.u_refs,
+            &unc.u_init,
+            CONV_MAX_ITERS,
+            KKT_TOL,
         );
         let _ = solver_con.solve(
-            &con.problem, &x0, &con.x_refs, &con.u_refs, &con.u_init, CONV_MAX_ITERS, KKT_TOL,
+            &con.problem,
+            &x0,
+            &con.x_refs,
+            &con.u_refs,
+            &con.u_init,
+            CONV_MAX_ITERS,
+            KKT_TOL,
         );
         // NB: after the final iteration x_bar is not re-propagated; re-roll
         // the trajectory from the returned u_bar for a consistent readout.
@@ -687,12 +696,26 @@ fn bench_tilt_barrier_overhead() {
     for c in &tilt_cases {
         let x0 = full_x0(c);
         let (t_off, _) = time_solve(
-            &mut s_off, &base.problem, &x0, &base.x_refs, &base.u_refs, &base.u_init, 1,
-            WARMUP, MEASURE,
+            &mut s_off,
+            &base.problem,
+            &x0,
+            &base.x_refs,
+            &base.u_refs,
+            &base.u_init,
+            1,
+            WARMUP,
+            MEASURE,
         );
         let (t_on, r_on) = time_solve(
-            &mut s_on, &tilt_problem, &x0, &base.x_refs, &base.u_refs, &base.u_init, 1,
-            WARMUP, MEASURE,
+            &mut s_on,
+            &tilt_problem,
+            &x0,
+            &base.x_refs,
+            &base.u_refs,
+            &base.u_init,
+            1,
+            WARMUP,
+            MEASURE,
         );
         assert!(
             r_on.cost.is_finite() && s_on.u_bar()[0][0].is_finite(),
@@ -753,41 +776,83 @@ fn bench_runtime_comparison() {
 
         // ── RTI mode: max_iters = 1 (firmware call pattern) ──
         let (t, _) = time_solve(
-            &mut s_solver, &simple.problem, &sx0, &simple.x_refs, &simple.u_refs,
-            &simple.u_init, 1, RTI_WARMUP, RTI_MEASURE,
+            &mut s_solver,
+            &simple.problem,
+            &sx0,
+            &simple.x_refs,
+            &simple.u_refs,
+            &simple.u_init,
+            1,
+            RTI_WARMUP,
+            RTI_MEASURE,
         );
         rti_us[ci][0] = t;
         let (t, _) = time_solve(
-            &mut u_solver, &unc.problem, &fx0, &unc.x_refs, &unc.u_refs, &unc.u_init, 1,
-            RTI_WARMUP, RTI_MEASURE,
+            &mut u_solver,
+            &unc.problem,
+            &fx0,
+            &unc.x_refs,
+            &unc.u_refs,
+            &unc.u_init,
+            1,
+            RTI_WARMUP,
+            RTI_MEASURE,
         );
         rti_us[ci][1] = t;
         let (t, _) = time_solve(
-            &mut c_solver, &con.problem, &fx0, &con.x_refs, &con.u_refs, &con.u_init, 1,
-            RTI_WARMUP, RTI_MEASURE,
+            &mut c_solver,
+            &con.problem,
+            &fx0,
+            &con.x_refs,
+            &con.u_refs,
+            &con.u_init,
+            1,
+            RTI_WARMUP,
+            RTI_MEASURE,
         );
         rti_us[ci][2] = t;
 
         // ── Convergence mode: max_iters = CONV_MAX_ITERS ──
         let (t, r) = time_solve(
-            &mut s_solver, &simple.problem, &sx0, &simple.x_refs, &simple.u_refs,
-            &simple.u_init, CONV_MAX_ITERS, CONV_WARMUP, CONV_MEASURE,
+            &mut s_solver,
+            &simple.problem,
+            &sx0,
+            &simple.x_refs,
+            &simple.u_refs,
+            &simple.u_init,
+            CONV_MAX_ITERS,
+            CONV_WARMUP,
+            CONV_MEASURE,
         );
         conv_us[ci][0] = t;
         conv_iters[ci][0] = r.iters;
         conv_ok[ci][0] = r.converged;
         conv_div[ci][0] = !r.cost.is_finite() || !s_solver.u_bar()[0][0].is_finite();
         let (t, r) = time_solve(
-            &mut u_solver, &unc.problem, &fx0, &unc.x_refs, &unc.u_refs, &unc.u_init,
-            CONV_MAX_ITERS, CONV_WARMUP, CONV_MEASURE,
+            &mut u_solver,
+            &unc.problem,
+            &fx0,
+            &unc.x_refs,
+            &unc.u_refs,
+            &unc.u_init,
+            CONV_MAX_ITERS,
+            CONV_WARMUP,
+            CONV_MEASURE,
         );
         conv_us[ci][1] = t;
         conv_iters[ci][1] = r.iters;
         conv_ok[ci][1] = r.converged;
         conv_div[ci][1] = !r.cost.is_finite() || !u_solver.u_bar()[0][0].is_finite();
         let (t, r) = time_solve(
-            &mut c_solver, &con.problem, &fx0, &con.x_refs, &con.u_refs, &con.u_init,
-            CONV_MAX_ITERS, CONV_WARMUP, CONV_MEASURE,
+            &mut c_solver,
+            &con.problem,
+            &fx0,
+            &con.x_refs,
+            &con.u_refs,
+            &con.u_init,
+            CONV_MAX_ITERS,
+            CONV_WARMUP,
+            CONV_MEASURE,
         );
         conv_us[ci][2] = t;
         conv_iters[ci][2] = r.iters;
@@ -797,13 +862,19 @@ fn bench_runtime_comparison() {
 
     // ── Report ────────────────────────────────────────────────────────────
     println!();
-    println!("═══════════════════════════════════════════════════════════════════════════════════════");
+    println!(
+        "═══════════════════════════════════════════════════════════════════════════════════════"
+    );
     println!(
         "RTI mode — one SQP iteration per call (max_iters=1), {} calls after {} warm-up",
         RTI_MEASURE, RTI_WARMUP
     );
-    println!("  simple = SimpleSqpSolver (NX=10) | full = FullSqpSolver (NX=13) | full+sc = + state constraints");
-    println!("═══════════════════════════════════════════════════════════════════════════════════════");
+    println!(
+        "  simple = SimpleSqpSolver (NX=10) | full = FullSqpSolver (NX=13) | full+sc = + state constraints"
+    );
+    println!(
+        "═══════════════════════════════════════════════════════════════════════════════════════"
+    );
     println!(
         "{:<12} {:>12} {:>12} {:>12} {:>12} {:>10}",
         "case", "simple[µs]", "full[µs]", "full+sc[µs]", "full/simple", "sc/full"
@@ -833,12 +904,16 @@ fn bench_runtime_comparison() {
     );
 
     println!();
-    println!("═══════════════════════════════════════════════════════════════════════════════════════");
+    println!(
+        "═══════════════════════════════════════════════════════════════════════════════════════"
+    );
     println!(
         "Convergence mode — solve to KKT tol {} (max {} iters), {} calls after {} warm-up",
         KKT_TOL, CONV_MAX_ITERS, CONV_MEASURE, CONV_WARMUP
     );
-    println!("═══════════════════════════════════════════════════════════════════════════════════════");
+    println!(
+        "═══════════════════════════════════════════════════════════════════════════════════════"
+    );
     println!(
         "{:<12} {:>14} {:>14} {:>16} {:>14}",
         "case", "simple[µs|it]", "full[µs|it]", "full+sc[µs|it]", "sc/full time"
@@ -857,9 +932,24 @@ fn bench_runtime_comparison() {
         println!(
             "{:<12} {:>14} {:>14} {:>16} {:>13.2}×",
             c.label,
-            fmt(conv_us[ci][0], conv_iters[ci][0], conv_ok[ci][0], conv_div[ci][0]),
-            fmt(conv_us[ci][1], conv_iters[ci][1], conv_ok[ci][1], conv_div[ci][1]),
-            fmt(conv_us[ci][2], conv_iters[ci][2], conv_ok[ci][2], conv_div[ci][2]),
+            fmt(
+                conv_us[ci][0],
+                conv_iters[ci][0],
+                conv_ok[ci][0],
+                conv_div[ci][0]
+            ),
+            fmt(
+                conv_us[ci][1],
+                conv_iters[ci][1],
+                conv_ok[ci][1],
+                conv_div[ci][1]
+            ),
+            fmt(
+                conv_us[ci][2],
+                conv_iters[ci][2],
+                conv_ok[ci][2],
+                conv_div[ci][2]
+            ),
             conv_us[ci][2] / conv_us[ci][1],
         );
     }
@@ -871,8 +961,12 @@ fn bench_runtime_comparison() {
         mean(2, &conv_us),
         mean(2, &conv_us) / mean(1, &conv_us),
     );
-    println!("  ('!' = hit the iteration cap without meeting KKT tolerance; 'D' = diverged, NaN result)");
-    println!("═══════════════════════════════════════════════════════════════════════════════════════");
+    println!(
+        "  ('!' = hit the iteration cap without meeting KKT tolerance; 'D' = diverged, NaN result)"
+    );
+    println!(
+        "═══════════════════════════════════════════════════════════════════════════════════════"
+    );
 
     // Sanity assertions.
     for ci in 0..n {

@@ -34,11 +34,11 @@ use cybflight_sim::{
     controller::{Controller, MpcFullIndiController, MpcIndiController},
     plant::QuadPlant,
     runner::{MissionRunner, RunnerConfig},
-    scenario::{default_sim_params, tweaked_vehicle, PassCriteria, Scenario},
+    scenario::{PassCriteria, Scenario, default_sim_params, tweaked_vehicle},
     trajectory::MissionSetpoints,
 };
 use nalgebra::{UnitQuaternion, Vector3};
-use vehicle_yaml::mission::{load_mission, Mission};
+use vehicle_yaml::mission::{Mission, load_mission};
 
 fn out_dir() -> PathBuf {
     let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("campaign_completion");
@@ -50,8 +50,8 @@ fn load(name: &str) -> Mission {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../missions")
         .join(format!("{name}.yaml"));
-    let yaml = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    let yaml =
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
     load_mission(name, &yaml).expect("mission loads")
 }
 
@@ -210,10 +210,15 @@ fn demand_probe() {
     // ω_sum at high thrust ≈ 4·√(T/4/c_T); c_T from the YAML comment.
     let c_t = 1.3695e-6f32;
     for name in [
-        "indoor_splits_slow", "indoor_splits_mid", "indoor_splits_fast",
-        "outdoor_drag-super_mid", "outdoor_splits_mid",
-        "outdoor_splits-large_mid", "outdoor_splits-large_fast",
-        "outdoor_splits-super_slow", "outdoor_splits-super_fast",
+        "indoor_splits_slow",
+        "indoor_splits_mid",
+        "indoor_splits_fast",
+        "outdoor_drag-super_mid",
+        "outdoor_splits_mid",
+        "outdoor_splits-large_mid",
+        "outdoor_splits-large_fast",
+        "outdoor_splits-super_slow",
+        "outdoor_splits-super_fast",
     ] {
         let m = load(name);
         let mut sp_src = plan_fixed_time(&m);
@@ -294,7 +299,12 @@ fn splits_mid_full_matrix() {
         let mut c = MpcFullIndiController::with_options_at_rate(&vp, 100.0, true, 8000.0);
         c.use_tilt_map = tilt_map;
         c.complete_references = s1;
-        run_case("outdoor_splits_mid", label, scenario_for("outdoor_splits_mid", &m, vp), &mut c);
+        run_case(
+            "outdoor_splits_mid",
+            label,
+            scenario_for("outdoor_splits_mid", &m, vp),
+            &mut c,
+        );
     }
 }
 
@@ -327,7 +337,11 @@ fn run_case_trace(
         s.terminal_pos_err_m,
         s.peak_tilt_rad.to_degrees(),
         s.peak_motor_saturation_pct,
-        if completed { "COMPLETED".into() } else { format!("INCOMPLETE ({:?})", s.early_exit_reason) }
+        if completed {
+            "COMPLETED".into()
+        } else {
+            format!("INCOMPLETE ({:?})", s.early_exit_reason)
+        }
     );
     let hist: Vec<serde_json::Value> = out
         .history
@@ -369,7 +383,12 @@ fn fast_mission_solve_rate() {
         let mut c = MpcFullIndiController::with_options_at_rate(&vp, 100.0, true, 8000.0);
         c.use_tilt_map = true;
         c.complete_references = true;
-        run_case_trace("indoor_splits_fast", label, scenario_for("indoor_splits_fast", &m, vp), &mut c);
+        run_case_trace(
+            "indoor_splits_fast",
+            label,
+            scenario_for("indoor_splits_fast", &m, vp),
+            &mut c,
+        );
     }
 }
 
@@ -423,7 +442,12 @@ fn focus_experiments() {
         let mut c = MpcFullIndiController::with_options_at_rate(&vp, 100.0, true, 8000.0);
         c.use_tilt_map = true;
         c.complete_references = false;
-        run_case("outdoor_splits-large_mid", "f_full_nos1", scenario_for("outdoor_splits-large_mid", &m, vp), &mut c);
+        run_case(
+            "outdoor_splits-large_mid",
+            "f_full_nos1",
+            scenario_for("outdoor_splits-large_mid", &m, vp),
+            &mut c,
+        );
     }
     // indoor_splits_fast: S2 governor × thrust floor, both stacks
     // (S1 + tilt map always on, matching the campaign config).
@@ -443,7 +467,12 @@ fn focus_experiments() {
             if floor > 0.0 {
                 c.set_thrust_floor(floor);
             }
-            run_case_trace("indoor_splits_fast", label, scenario_for("indoor_splits_fast", &m, vp), &mut c);
+            run_case_trace(
+                "indoor_splits_fast",
+                label,
+                scenario_for("indoor_splits_fast", &m, vp),
+                &mut c,
+            );
         }
         for (label, err_sat, floor) in [
             ("f_mpc_s2", 1.0f32, 0.0f32),
@@ -459,7 +488,12 @@ fn focus_experiments() {
             if floor > 0.0 {
                 c.set_thrust_floor(floor);
             }
-            run_case_trace("indoor_splits_fast", label, scenario_for("indoor_splits_fast", &m, vp), &mut c);
+            run_case_trace(
+                "indoor_splits_fast",
+                label,
+                scenario_for("indoor_splits_fast", &m, vp),
+                &mut c,
+            );
         }
     }
 }

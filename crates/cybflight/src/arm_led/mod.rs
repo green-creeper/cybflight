@@ -42,11 +42,11 @@ use core::sync::atomic::{AtomicBool, Ordering};
 
 use embassy_futures::select::select;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal};
-use embassy_time::{with_timeout, Duration, Timer};
+use embassy_time::{Duration, Timer, with_timeout};
 
 pub mod ws2812;
 
-use ws2812::{Rgb, Ws2812, NUM_LEDS};
+use ws2812::{NUM_LEDS, Rgb, Ws2812};
 
 const LEDS_PER_GROUP: usize = 4;
 

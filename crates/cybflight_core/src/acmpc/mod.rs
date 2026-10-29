@@ -46,11 +46,11 @@ use nalgebra::Vector3;
 
 use crate::nn::mlp::{Activation, LayerShape, Mlp};
 use crate::nn::race_policy::{
-    raw_state_in_frame, Gate, PolicyConfig, PolicyError, PolicyFrame, Track, VehicleState,
-    MAX_OBS as MAX_TRACK_OBS,
+    Gate, MAX_OBS as MAX_TRACK_OBS, PolicyConfig, PolicyError, PolicyFrame, Track, VehicleState,
+    raw_state_in_frame,
 };
 use ddp::{ControlBox, LineSearch, QuadCost};
-use model::{Control, DroneDx, State, G, NTAU, NU, NX};
+use model::{Control, DroneDx, G, NTAU, NU, NX, State};
 
 /// Prediction steps in the plan. Fixed by the published ACMPC settings
 /// and baked into the cost network's output width, which
@@ -115,7 +115,10 @@ impl Default for AcmpcConfig {
             mpc_dt: 0.02,
             range_q: 1e5,
             range_p: 1e5,
-            line_search: LineSearch { decay: 0.2, max_iter: 5 },
+            line_search: LineSearch {
+                decay: 0.2,
+                max_iter: 5,
+            },
         }
     }
 }
@@ -155,7 +158,10 @@ impl<'a> AcmpcPolicy<'a> {
             });
         }
         if cost_net.output_dim() != COST_OUT {
-            return Err(PolicyError::ObsDim { network: cost_net.output_dim(), config: COST_OUT });
+            return Err(PolicyError::ObsDim {
+                network: cost_net.output_dim(),
+                config: COST_OUT,
+            });
         }
         let w = cfg.ctbr.max_body_rate;
         Ok(Self {
@@ -189,10 +195,15 @@ impl<'a> AcmpcPolicy<'a> {
     pub fn action(&self, obs: &[f32]) -> Result<[f32; NU], PolicyError> {
         let n = self.track.obs_len();
         if obs.len() < n + NX {
-            return Err(PolicyError::ObsDim { network: n + NX, config: obs.len() });
+            return Err(PolicyError::ObsDim {
+                network: n + NX,
+                config: obs.len(),
+            });
         }
         let mut logits = [0.0f32; COST_OUT];
-        self.cost_net.forward(&obs[..n], &mut logits).map_err(PolicyError::Mlp)?;
+        self.cost_net
+            .forward(&obs[..n], &mut logits)
+            .map_err(PolicyError::Mlp)?;
 
         // Sigmoid head → per-step diagonal Q and linear p. `+0.1` keeps Q
         // strictly positive (so it is PSD); the thrust entry of p gets the
@@ -241,7 +252,12 @@ impl<'a> AcmpcPolicy<'a> {
         Ok(if action.iter().all(|v| v.is_finite()) {
             action.map(|v| v.clamp(-1.0, 1.0))
         } else {
-            [2.0 * G / self.cfg.ctbr.max_specific_thrust - 1.0, 0.0, 0.0, 0.0]
+            [
+                2.0 * G / self.cfg.ctbr.max_specific_thrust - 1.0,
+                0.0,
+                0.0,
+                0.0,
+            ]
         })
     }
 

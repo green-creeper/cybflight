@@ -43,8 +43,7 @@ use embassy_time::Instant;
 use nalgebra::Vector3;
 
 use cybflight_core::eskf::{
-    Eskf, EskfGpsGuard, GpsFix, GpsGuardOutcome, ReinitCause, UsabilityReason,
-    is_pvt_origin_anchor,
+    Eskf, EskfGpsGuard, GpsFix, GpsGuardOutcome, ReinitCause, UsabilityReason, is_pvt_origin_anchor,
 };
 use cybflight_core::geodetic::{LlhOrigin, ned_to_enu};
 
@@ -52,10 +51,10 @@ use core::f64::consts::PI;
 use core::sync::atomic::Ordering;
 
 use crate::estimation::{
-    attitude_health_bits, evaluate_faults, AttitudeHealthParams, ATTITUDE_HEALTH, ESKF_DEGRADED, ESKF_FAULTS,
-    ESKF_HEALTH, ESKF_LAST_ATT_UPDATE, ESKF_LAST_JUMP_CASCADE, ESKF_LAST_NAN_RESET,
-    ESKF_LAST_POS_UPDATE, ESKF_LAST_REJECT_CASCADE, ESKF_LAST_VEL_UPDATE, ESKF_SEVERE_FAULT,
-    ESTIMATOR_READY, ESTIMATOR_STATUS, EstimatorPhase, FaultEvalInputs,
+    ATTITUDE_HEALTH, AttitudeHealthParams, ESKF_DEGRADED, ESKF_FAULTS, ESKF_HEALTH,
+    ESKF_LAST_ATT_UPDATE, ESKF_LAST_JUMP_CASCADE, ESKF_LAST_NAN_RESET, ESKF_LAST_POS_UPDATE,
+    ESKF_LAST_REJECT_CASCADE, ESKF_LAST_VEL_UPDATE, ESKF_SEVERE_FAULT, ESTIMATOR_READY,
+    ESTIMATOR_STATUS, EstimatorPhase, FaultEvalInputs, attitude_health_bits, evaluate_faults,
 };
 use crate::motors::IS_ARMED;
 use crate::sensors;
@@ -246,7 +245,10 @@ pub async fn estimation_task() {
                 }
             };
             break (origin, pvt.timestamp.as_millis(), pvt);
-        } else if pvt.fix_type >= 3 && pvt.num_sv >= cfg.gps_min_sv && pvt.h_acc_mm <= cfg.gps_h_acc_max_mm {
+        } else if pvt.fix_type >= 3
+            && pvt.num_sv >= cfg.gps_min_sv
+            && pvt.h_acc_mm <= cfg.gps_h_acc_max_mm
+        {
             defmt::info!(
                 "GPS waiting for RTK fixed: fix_type={} num_sv={} h_acc_mm={} carr_soln={} (need 2)",
                 pvt.fix_type,
@@ -263,7 +265,6 @@ pub async fn estimation_task() {
             );
         }
     };
-
 
     // Seed position: the vehicle's ENU location inside the anchored frame.
     //
@@ -336,13 +337,15 @@ pub async fn estimation_task() {
     // identity prior stands and yaw converges later through the loop's updates.
     if fuse_gps_heading {
         if let Some(h) = sensors::gps::LATEST_GPS_HEADING.lock(|c| c.get()) {
-            let fresh =
-                Instant::now().duration_since(h.timestamp).as_millis() < cfg.gps_stale_ms;
+            let fresh = Instant::now().duration_since(h.timestamp).as_millis() < cfg.gps_stale_ms;
             if h.carr_soln >= 1 && fresh {
                 let b_world = heading_to_world_baseline(&h);
                 let sigma_h = h.heading_sigma_rad.max(heading_sigma_floor);
                 let sigma_p = h.pitch_sigma_rad.max(heading_sigma_floor);
-                if eskf.update_baseline(b_world, b_body, sigma_h, sigma_p).is_accepted() {
+                if eskf
+                    .update_baseline(b_world, b_body, sigma_h, sigma_p)
+                    .is_accepted()
+                {
                     defmt::info!(
                         "ESKF yaw seeded from dual-antenna heading: {} deg (carr_soln={})",
                         eskf.orientation().euler_angles().2.to_degrees(),
@@ -417,7 +420,13 @@ pub async fn estimation_task() {
     let mut prev_rtk_quality_ok = false;
 
     loop {
-        match select3(imu_sub.next_message(), gps_signal.wait(), heading_signal.wait()).await {
+        match select3(
+            imu_sub.next_message(),
+            gps_signal.wait(),
+            heading_signal.wait(),
+        )
+        .await
+        {
             Either3::First(result) => {
                 let sample = match result {
                     WaitResult::Message(m) => m,
@@ -466,8 +475,8 @@ pub async fn estimation_task() {
                 // first stale sample straight into this subtraction.
                 // Saturated, stale samples yield dt = 0 and the guard
                 // below skips them.
-                let dt = now.saturating_duration_since(last_predict_ts).as_micros() as f32
-                    / 1_000_000.0;
+                let dt =
+                    now.saturating_duration_since(last_predict_ts).as_micros() as f32 / 1_000_000.0;
                 last_predict_ts = now;
 
                 if dt <= 0.0 || dt > max_predict_dt_s {
@@ -651,10 +660,7 @@ pub async fn estimation_task() {
                         );
                     }
                     GpsGuardOutcome::PvtRejectedFilter { reason } => {
-                        defmt::warn!(
-                            "ESKF: GPS pos update rejected ({})",
-                            filter_tag(reason),
-                        );
+                        defmt::warn!("ESKF: GPS pos update rejected ({})", filter_tag(reason),);
                     }
                     GpsGuardOutcome::Reinitialised { at_enu, cause } => {
                         // NaN re-init is a hard fault (covariance went

@@ -5,32 +5,32 @@ use crate::bsp;
 use crate::comm;
 use crate::control::ATTITUDE_CONTROL_SETPOINT;
 use crate::control::OCP_SOLVER_OUTPUT;
-use crate::estimation::{EstimatorPhase, ESTIMATOR_STATUS};
+use crate::estimation::{ESTIMATOR_STATUS, EstimatorPhase};
 use crate::hal;
 use crate::motors::ACTUATOR_MOTORS;
 use crate::msgs;
 use crate::platform;
 use crate::sensors::gps::{
-    carr_soln_str, GPS_HEALTH, LATEST_GPS_HEADING, LATEST_NAV_PVT, NAV_PVT_MAX_INTERVAL_RECENT_US,
-    NAV_PVT_MEAN_INTERVAL_RECENT_US,
+    GPS_HEALTH, LATEST_GPS_HEADING, LATEST_NAV_PVT, NAV_PVT_MAX_INTERVAL_RECENT_US,
+    NAV_PVT_MEAN_INTERVAL_RECENT_US, carr_soln_str,
 };
 use crate::sensors::{
     BARO_1, BARO_2, DSHOT_TELEMETRY, GPS_FIX, IMU_1, IMU_2, MAG_EXT, MAG_INT, POWER_STATUS,
     RC_INPUT, RC_LINK_STATUS, VEHICLE_ATTITUDE, VICON_POSE,
 };
-use crate::shell::format::ShellMsg;
-use crate::shell::write_all;
+use crate::shell::SHELL_OUT;
 use crate::shell::ShellLine;
 use crate::shell::WriteBuf;
-use crate::shell::SHELL_OUT;
+use crate::shell::format::ShellMsg;
+use crate::shell::write_all;
 use embassy_futures::join::join;
-use embassy_futures::select::{select, Either};
+use embassy_futures::select::{Either, select};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::pubsub::{PubSubChannel, Subscriber, WaitResult};
-use embassy_time::{with_timeout, Duration, Instant, Timer};
+use embassy_time::{Duration, Instant, Timer, with_timeout};
+use embassy_usb::Builder;
 use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
 use embassy_usb::driver::EndpointError;
-use embassy_usb::Builder;
 use hal::usb::Driver;
 use nalgebra::Vector3;
 
@@ -885,8 +885,11 @@ async fn dispatch<'d>(
             const RAD2DEG: f32 = 180.0 / core::f32::consts::PI;
             match hsnap {
                 None => {
-                    write!(w, "  heading  = n/a (no UNIHEADING / single-antenna receiver)\r\n")
-                        .ok();
+                    write!(
+                        w,
+                        "  heading  = n/a (no UNIHEADING / single-antenna receiver)\r\n"
+                    )
+                    .ok();
                 }
                 Some(hd) => {
                     let h_age = Instant::now().duration_since(hd.timestamp).as_millis();
@@ -937,7 +940,11 @@ async fn dispatch<'d>(
                     .ok();
                     for i in 0..(ns.count as usize).min(ns.states.len()) {
                         let s = ns.states[i];
-                        let me = if i == ns.self_idx as usize { " (self)" } else { "" };
+                        let me = if i == ns.self_idx as usize {
+                            " (self)"
+                        } else {
+                            ""
+                        };
                         if s.valid {
                             write!(
                                 w,
@@ -1302,12 +1309,22 @@ async fn dispatch_blackbox_status<'d>(
                 }
             }
             let io = s.io;
-            let avg = if io.writes > 0 { io.blocks_written / io.writes } else { 0 };
+            let avg = if io.writes > 0 {
+                io.blocks_written / io.writes
+            } else {
+                0
+            };
             let _ = write!(
                 w,
                 "\x20                 card io: {} writes ({} blocks, avg {} max {} per cmd), \
                  {} reads ({} blocks), {} CMD25 fallbacks\r\n",
-                io.writes, io.blocks_written, avg, io.max_batch, io.reads, io.blocks_read, io.fallbacks,
+                io.writes,
+                io.blocks_written,
+                avg,
+                io.max_batch,
+                io.reads,
+                io.blocks_read,
+                io.fallbacks,
             );
         }
     }
@@ -1398,7 +1415,7 @@ async fn dispatch_blackbox_set<'d>(
 async fn dispatch_blackbox_ls<'d>(
     class: &mut CdcAcmClass<'d, UsbDriver<'d>>,
 ) -> Result<(), EndpointError> {
-    use crate::blackbox::{LsReport, LS_REQUEST, LS_RESULT};
+    use crate::blackbox::{LS_REQUEST, LS_RESULT, LsReport};
 
     const LABEL: &str = "blackbox ls";
 
@@ -1494,7 +1511,7 @@ async fn dispatch_blackbox_get<'d>(
     class: &mut CdcAcmClass<'d, UsbDriver<'d>>,
     line: &str,
 ) -> Result<(), EndpointError> {
-    use crate::blackbox::{GetChunk, GetReport, GetRequest, GET_REQUEST, GET_RESULT, GET_STREAM};
+    use crate::blackbox::{GET_REQUEST, GET_RESULT, GET_STREAM, GetChunk, GetReport, GetRequest};
 
     const LABEL: &str = "blackbox get";
     const USAGE: &[u8] = b"usage: blackbox get <file> [<offset> [<len>]]\r\n";
@@ -1625,7 +1642,7 @@ async fn dispatch_blackbox_rm<'d>(
     class: &mut CdcAcmClass<'d, UsbDriver<'d>>,
     line: &str,
 ) -> Result<(), EndpointError> {
-    use crate::blackbox::{RmReport, RM_REQUEST, RM_RESULT};
+    use crate::blackbox::{RM_REQUEST, RM_RESULT, RmReport};
 
     const LABEL: &str = "blackbox rm";
 
@@ -1703,12 +1720,16 @@ async fn dispatch_blackbox_rm<'d>(
 async fn dispatch_blackbox_clean<'d>(
     class: &mut CdcAcmClass<'d, UsbDriver<'d>>,
 ) -> Result<(), EndpointError> {
-    use crate::blackbox::{CleanReport, CLEAN_REQUEST, CLEAN_RESULT};
+    use crate::blackbox::{CLEAN_REQUEST, CLEAN_RESULT, CleanReport};
 
     const LABEL: &str = "blackbox clean";
 
     if !bsp::HAS_BLACKBOX_STORAGE {
-        return write_all(class, b"blackbox clean: no storage backend on this board\r\n").await;
+        return write_all(
+            class,
+            b"blackbox clean: no storage backend on this board\r\n",
+        )
+        .await;
     }
     if crate::blackbox::should_record() {
         return write_all(
@@ -1886,16 +1907,12 @@ async fn dispatch_postmortem_clear<'d>(
 fn blackbox_fat_reason(stage: crate::blackbox::fat::OpError) -> &'static str {
     use crate::blackbox::fat::OpError;
     match stage {
-        OpError::NoSubscriberSlot => {
-            "topic has no free subscriber slot (bump SUBS on the channel)"
-        }
+        OpError::NoSubscriberSlot => "topic has no free subscriber slot (bump SUBS on the channel)",
         OpError::NoMessageInTimeout => {
             "no fresh message on the topic within the op's timeout \
              (sensor driver stalled or topic silent?)"
         }
-        OpError::CardAcquire => {
-            "card acquire failed (CMD0/ACMD41 — card missing/unseated/locked?)"
-        }
+        OpError::CardAcquire => "card acquire failed (CMD0/ACMD41 — card missing/unseated/locked?)",
         OpError::NoPartitionTable => {
             "sector 0 has neither MBR signature nor FAT BPB \
              (card blank/GPT/corrupted; reformat as FAT32)"
@@ -1917,9 +1934,7 @@ fn blackbox_fat_reason(stage: crate::blackbox::fat::OpError) -> &'static str {
             "write faulted mid-session, but the partial log was flushed and closed \
              (file is readable up to the fault; see defmt log)"
         }
-        OpError::Unmount => {
-            "unmount-flush failed (file may not have hit the card; see defmt log)"
-        }
+        OpError::Unmount => "unmount-flush failed (file may not have hit the card; see defmt log)",
         OpError::NotFound => "file not found in FAT root",
         OpError::Open => "open failed (see defmt log)",
         OpError::Read => {
@@ -1989,6 +2004,8 @@ fn build_facts_iter() -> impl Iterator<Item = (&'static str, &'static str)> {
         "foxeerh743"
     } else if cfg!(feature = "board_micoair743v2") {
         "micoair743v2"
+    } else if cfg!(feature = "board_flywoof745") {
+        "flywoof745"
     } else {
         "<none>"
     };
@@ -2273,8 +2290,7 @@ async fn dispatch_param<'d>(
             }
             let mut count = 0u32;
             for idx in 0..PARAM_COUNT {
-                let (Some(cur), Some(bak)) = (params.param_get(idx), baked.param_get(idx))
-                else {
+                let (Some(cur), Some(bak)) = (params.param_get(idx), baked.param_get(idx)) else {
                     continue;
                 };
                 if cur.as_f32().to_le_bytes() == bak.as_f32().to_le_bytes() {
@@ -2456,7 +2472,9 @@ async fn dispatch_param<'d>(
             // the previous selection. (Without this, the atomic only
             // resyncs on the next reboot via `init_from_flash`.)
             #[cfg(feature = "outer_mpc")]
-            crate::control::offline_mission::init_active_from_index(defaults.trajectory.mission_profile);
+            crate::control::offline_mission::init_active_from_index(
+                defaults.trajectory.mission_profile,
+            );
             crate::params::set(defaults);
             write_all(class, b"params reset to defaults (not saved)\r\n").await?;
         }
@@ -2516,7 +2534,7 @@ async fn dispatch_mission<'d>(
             }
         }
         "get" => {
-            use crate::control::{MissionState, MISSION_STATE};
+            use crate::control::{MISSION_STATE, MissionState};
             use offline_mission::FlatnessMap;
 
             let p = offline_mission::active();
@@ -2547,7 +2565,11 @@ async fn dispatch_mission<'d>(
                 "{} (idx={}{}) state={}\r\n  env/variant/speed: {} / {} / {}\r\n",
                 p.name,
                 idx,
-                if idx == offline_mission::DEFAULT_PROFILE_INDEX { ", vehicle default" } else { "" },
+                if idx == offline_mission::DEFAULT_PROFILE_INDEX {
+                    ", vehicle default"
+                } else {
+                    ""
+                },
                 state,
                 p.env,
                 p.variant,
@@ -2578,7 +2600,12 @@ async fn dispatch_mission<'d>(
                 let mut w = WriteBuf::new(&mut buf);
                 let [sx, sy, sz] = p.start_pos;
                 if crate::control::mission_planner::OFFLINE_USE_YAML_START {
-                    write!(w, "  head: YAML start [{:.3}, {:.3}, {:.3}]\r\n", sx, sy, sz).ok();
+                    write!(
+                        w,
+                        "  head: YAML start [{:.3}, {:.3}, {:.3}]\r\n",
+                        sx, sy, sz
+                    )
+                    .ok();
                 } else {
                     write!(
                         w,
@@ -2592,7 +2619,12 @@ async fn dispatch_mission<'d>(
 
             let mut buf = [0u8; 160];
             let mut w = WriteBuf::new(&mut buf);
-            write!(w, "  end:  [{:.3}, {:.3}, {:.3}]\r\n", end[0], end[1], end[2]).ok();
+            write!(
+                w,
+                "  end:  [{:.3}, {:.3}, {:.3}]\r\n",
+                end[0], end[1], end[2]
+            )
+            .ok();
             // Same precedence as the planner (`mission_planner.rs`, yaw
             // source): lookahead wins, then headings, else hold entry yaw.
             if p.lookahead {
@@ -2603,10 +2635,18 @@ async fn dispatch_mission<'d>(
                 )
                 .ok();
             } else if let Some(h) = p.headings {
-                write!(w, "  yaw: lookahead off, spline through {} waypoint headings\r\n", h.len())
-                    .ok();
+                write!(
+                    w,
+                    "  yaw: lookahead off, spline through {} waypoint headings\r\n",
+                    h.len()
+                )
+                .ok();
             } else {
-                write!(w, "  yaw: lookahead off, hold yaw latched at mission entry\r\n").ok();
+                write!(
+                    w,
+                    "  yaw: lookahead off, hold yaw latched at mission entry\r\n"
+                )
+                .ok();
             }
             write_all(class, w.as_slice()).await?;
 
@@ -2684,11 +2724,7 @@ async fn dispatch_mission<'d>(
                     write_all(class, w.as_slice()).await?;
                 }
                 None => {
-                    write_all(
-                        class,
-                        b"unknown mission (try 'mission list')\r\n",
-                    )
-                    .await?;
+                    write_all(class, b"unknown mission (try 'mission list')\r\n").await?;
                 }
             }
         }
@@ -2876,7 +2912,9 @@ where
 {
     // Bail out on a dead channel so a missing IMU reads as "no data"
     // rather than as 0 Hz after a full window of silence.
-    with_timeout(ONESHOT_TIMEOUT, next_message(sub)).await.ok()?;
+    with_timeout(ONESHOT_TIMEOUT, next_message(sub))
+        .await
+        .ok()?;
 
     let t0 = Instant::now();
     let deadline = t0 + IMU_RATE_WINDOW;

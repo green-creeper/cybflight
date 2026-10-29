@@ -23,8 +23,8 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 
-use cybflight_core::trajectory_planning::planner::{PlannerInput, PlannerResult, plan};
 use cybflight_core::params::PlannerParams;
+use cybflight_core::trajectory_planning::planner::{PlannerInput, PlannerResult, plan};
 use cybflight_core::trajectory_planning::quad_planning_config::QuadPlanningConfig;
 
 /// Legacy oracle baseline — the values of the deleted
@@ -33,15 +33,15 @@ use cybflight_core::trajectory_planning::quad_planning_config::QuadPlanningConfi
 /// (REGEN_TRAJECTORY_ORACLE=1).
 fn oracle_config() -> QuadPlanningConfig {
     QuadPlanningConfig {
-    mass: 0.55,
-    grav: 9.81,
-    inertia_kg_m2: [0.0025, 0.0021, 0.0043],
-    mass_inv: 1.0 / 0.55,
-    max_collective_thrust_n: 4.0 * 8.5,
-    min_collective_thrust_n: 2.0,
-    max_rate_rad_s: [10.0, 10.0, 6.0],
-    planner: PlannerParams::default(),
-}
+        mass: 0.55,
+        grav: 9.81,
+        inertia_kg_m2: [0.0025, 0.0021, 0.0043],
+        mass_inv: 1.0 / 0.55,
+        max_collective_thrust_n: 4.0 * 8.5,
+        min_collective_thrust_n: 2.0,
+        max_rate_rad_s: [10.0, 10.0, 6.0],
+        planner: PlannerParams::default(),
+    }
 }
 
 const EPS_REL: f32 = 1e-4;

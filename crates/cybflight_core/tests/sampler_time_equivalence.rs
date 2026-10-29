@@ -186,7 +186,10 @@ fn case_mid_mission() {
     // Trajectory total ≈ 2.3 s; pick τ₀ ≈ 0.4 s into a 3-piece poly so
     // node 0 lands inside piece 0 and the horizon spans into piece 1.
     let (_, total) = build_test_trajectory();
-    assert!(total > 1.5, "test trajectory shorter than expected: {total}");
+    assert!(
+        total > 1.5,
+        "test trajectory shorter than expected: {total}"
+    );
     run_case("mid_mission", 0.4);
 }
 

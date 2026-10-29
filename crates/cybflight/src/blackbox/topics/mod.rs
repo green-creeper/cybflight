@@ -97,20 +97,20 @@ pub struct TopicDef {
 /// were moved to 13/14 to resolve it; 12 stays with
 /// `/estimator_state`, which was never in conflict.
 pub const ALL: &[TopicDef] = &[
-    imu::DEF,              // 1
-    attitude::DEF,         // 2
-    rc::DEF,               // 3
-    events::DEF,           // 4
-    odometry::DEF,         // 5
-    mpc::DEF,              // 6
-    motors::DEF,           // 7
-    motor_state::DEF,      // 8
-    tracking_error::DEF,   // 9
-    health::DEF,           // 10
-    gps_health::DEF,       // 11
+    imu::DEF,            // 1
+    attitude::DEF,       // 2
+    rc::DEF,             // 3
+    events::DEF,         // 4
+    odometry::DEF,       // 5
+    mpc::DEF,            // 6
+    motors::DEF,         // 7
+    motor_state::DEF,    // 8
+    tracking_error::DEF, // 9
+    health::DEF,         // 10
+    gps_health::DEF,     // 11
     #[cfg(feature = "est_eskf")]
-    estimator_state::DEF,  // 12
-    imu_raw::DEF,          // 13
+    estimator_state::DEF, // 12
+    imu_raw::DEF,        // 13
     control_setpoint::DEF, // 14
-    power::DEF,            // 15
+    power::DEF,          // 15
 ];

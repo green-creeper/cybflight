@@ -1,0 +1,23 @@
+[package]
+license = "Apache-2.0"
+repository = "https://github.com/cybird-robotics/cybflight"
+name = "cybflight-gs"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+cybflight-core = { path = "../cybflight_core" }
+cybflight-sim = { path = "../cybflight_sim" }
+vehicle-yaml = { path = "../vehicle_yaml" }
+nalgebra = { version = "0.34.1", features = ["std", "macros"] }
+eframe = "0.31"
+egui = "0.31"
+serialport = { version = "4.7", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+clap = { version = "4", features = ["derive"] }
+
+[[bin]]
+name = "cybflight-gs"
+path = "src/main.rs"

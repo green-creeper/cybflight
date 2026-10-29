@@ -28,23 +28,38 @@ pub const IMU_PUBSUB_SUBS: usize = 8;
 // at this build's ODR, so consumer-stall tolerance is the same wall-clock
 // on every build. See `crate::rates::IMU_PUBSUB_CAP` for the numbers.
 // SUBS=`IMU_PUBSUB_SUBS` (see its doc for the budget), PUBS=1.
-pub static IMU_1: PubSubChannel<CriticalSectionRawMutex, msgs::Imu, IMU_PUBSUB_CAP, IMU_PUBSUB_SUBS, 1> =
-    PubSubChannel::new();
+pub static IMU_1: PubSubChannel<
+    CriticalSectionRawMutex,
+    msgs::Imu,
+    IMU_PUBSUB_CAP,
+    IMU_PUBSUB_SUBS,
+    1,
+> = PubSubChannel::new();
 
 // IMU 1 raw (pre-biquad-LP): same CAP/SUBS/PUBS as IMU_1. Mirror of
 // IMU_1 emitted before the sensor task's accel/gyro biquads. Subscribed
 // by the blackbox recorder in the Sysid + Large tiers; left empty
 // on tiers that don't ask for it. Sized identically to IMU_1 so the
 // recorder's drain budgets / drop-priority logic stays uniform.
-pub static IMU_1_RAW: PubSubChannel<CriticalSectionRawMutex, msgs::Imu, IMU_PUBSUB_CAP, IMU_PUBSUB_SUBS, 1> =
-    PubSubChannel::new();
+pub static IMU_1_RAW: PubSubChannel<
+    CriticalSectionRawMutex,
+    msgs::Imu,
+    IMU_PUBSUB_CAP,
+    IMU_PUBSUB_SUBS,
+    1,
+> = PubSubChannel::new();
 
 // IMU 2: same sizing as IMU_1. Empty on single-IMU boards (shell prints "no data").
 // Shares IMU_1's CAP because `#[embassy_executor::task]` cannot be
 // generic, so all three channels must have one concrete type for the
 // reader tasks in `sensors::imu` to accept them.
-pub static IMU_2: PubSubChannel<CriticalSectionRawMutex, msgs::Imu, IMU_PUBSUB_CAP, IMU_PUBSUB_SUBS, 1> =
-    PubSubChannel::new();
+pub static IMU_2: PubSubChannel<
+    CriticalSectionRawMutex,
+    msgs::Imu,
+    IMU_PUBSUB_CAP,
+    IMU_PUBSUB_SUBS,
+    1,
+> = PubSubChannel::new();
 
 // CAP=4, SUBS=6 (attitude_control + nmpc + CRSF telem + esp_bridge + shell stream + spare),
 // PUBS=1 (single attitude estimator).

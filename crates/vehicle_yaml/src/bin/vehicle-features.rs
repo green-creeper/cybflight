@@ -254,6 +254,10 @@ mod tests {
                 "sakura_ublox_f9",
                 "board_sakurah743,rx_crsf,est_eskf,est_pos_gps,outer_mpc",
             ),
+            (
+                "goku_f745",
+                "board_flywoof745,rx_crsf,est_eskf,est_pos_gps,outer_rate",
+            ),
         ] {
             let vehicle = read_vehicle(&root, name).unwrap();
             assert_eq!(

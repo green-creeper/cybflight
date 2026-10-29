@@ -22,7 +22,7 @@
 //! Each helper carries a `const { assert!(NX >= 7) }` (or 10 / 13 as needed)
 //! so calling it with an incompatible state size is a compile-time error.
 
-use nalgebra::{matrix, SMatrix, SVector, Vector3};
+use nalgebra::{SMatrix, SVector, Vector3, matrix};
 
 // ───────────────────────────────────────────────────────────────────────────
 // Quaternion projection
@@ -265,8 +265,8 @@ pub fn write_contour_lag_cost_grad<const NX: usize>(
         let e_contour_sq = pos_err.dot(&pos_err) - e_lag * e_lag;
         let cost = dt * (w_contour * e_contour_sq + w_lag * e_lag * e_lag);
         // grad = 2·dt · (w_c·e + (w_l − w_c)·e_lag·t̂)
-        let grad3 = pos_err * (2.0 * dt * w_contour)
-            + t_hat * (2.0 * dt * (w_lag - w_contour) * e_lag);
+        let grad3 =
+            pos_err * (2.0 * dt * w_contour) + t_hat * (2.0 * dt * (w_lag - w_contour) * e_lag);
         (cost, grad3)
     };
     grad_x.fixed_rows_mut::<3>(0).copy_from(&grad3);
@@ -581,7 +581,12 @@ pub fn rotor_drag_accel_jac(
     coeff: &[f32; 3],
     c_t: f32,
     mass_inv: f32,
-) -> (Vector3<f32>, SMatrix<f32, 3, 3>, SMatrix<f32, 3, 4>, Vector3<f32>) {
+) -> (
+    Vector3<f32>,
+    SMatrix<f32, 3, 3>,
+    SMatrix<f32, 3, 4>,
+    Vector3<f32>,
+) {
     drag_accel_jac(q_xyzw, v_world, thrust_n, coeff, c_t, &[0.0; 3], mass_inv)
 }
 
@@ -600,14 +605,20 @@ pub fn drag_accel_jac(
     c_t: f32,
     quad_coeff: &[f32; 3],
     mass_inv: f32,
-) -> (Vector3<f32>, SMatrix<f32, 3, 3>, SMatrix<f32, 3, 4>, Vector3<f32>) {
+) -> (
+    Vector3<f32>,
+    SMatrix<f32, 3, 3>,
+    SMatrix<f32, 3, 4>,
+    Vector3<f32>,
+) {
     let mut a = Vector3::zeros();
     let mut da_dv = SMatrix::<f32, 3, 3>::zeros();
     let mut da_dq = SMatrix::<f32, 3, 4>::zeros();
     let mut da_dt = Vector3::zeros();
     // `!(c_t > 0)` also rejects NaN (a NaN `max_thrust_n/ω_max²` from a
     // bad config must disable the term, not poison the acceleration).
-    let rotor_on = c_t > 0.0 && coeff.iter().all(|c| c.is_finite()) && coeff.iter().any(|&c| c != 0.0);
+    let rotor_on =
+        c_t > 0.0 && coeff.iter().all(|c| c.is_finite()) && coeff.iter().any(|&c| c != 0.0);
     let quad_on = quad_coeff.iter().all(|c| c.is_finite()) && quad_coeff.iter().any(|&c| c != 0.0);
     if !rotor_on && !quad_on {
         return (a, da_dv, da_dq, da_dt);
@@ -615,18 +626,32 @@ pub fn drag_accel_jac(
     const T_EPS: f32 = 0.05;
     let t = thrust_n.max(T_EPS);
     // Rotor speed from the commanded collective (zero when the rotor term is off).
-    let s = if rotor_on { 2.0 * libm::sqrtf(t / c_t) } else { 0.0 };
+    let s = if rotor_on {
+        2.0 * libm::sqrtf(t / c_t)
+    } else {
+        0.0
+    };
     // Derivative of the clamped `Σω(t)`: continuous across the floor and
     // bounded by `1/√(T_EPS·c_T)`, so the thrust column of the Jacobian
     // cannot jump sign when the solve dips to zero collective.
-    let ds_dt = if rotor_on { 1.0 / libm::sqrtf(t * c_t) } else { 0.0 };
+    let ds_dt = if rotor_on {
+        1.0 / libm::sqrtf(t * c_t)
+    } else {
+        0.0
+    };
 
     let (x, y, z, w) = (q_xyzw[0], q_xyzw[1], q_xyzw[2], q_xyzw[3]);
     // R(q) (body → world), scalar-last quaternion, polynomial form.
     let r = nalgebra::Matrix3::new(
-        1.0 - 2.0 * (y * y + z * z), 2.0 * (x * y - w * z), 2.0 * (x * z + w * y),
-        2.0 * (x * y + w * z), 1.0 - 2.0 * (x * x + z * z), 2.0 * (y * z - w * x),
-        2.0 * (x * z - w * y), 2.0 * (y * z + w * x), 1.0 - 2.0 * (x * x + y * y),
+        1.0 - 2.0 * (y * y + z * z),
+        2.0 * (x * y - w * z),
+        2.0 * (x * z + w * y),
+        2.0 * (x * y + w * z),
+        1.0 - 2.0 * (x * x + z * z),
+        2.0 * (y * z - w * x),
+        2.0 * (x * z - w * y),
+        2.0 * (y * z + w * x),
+        1.0 - 2.0 * (x * x + y * y),
     );
     let vb = r.transpose() * v_world;
     let cvec = Vector3::from(*coeff);
@@ -657,10 +682,50 @@ pub fn drag_accel_jac(
     // not the unit-quaternion tangent formulas — the SQP linearizes the
     // polynomial, so its derivatives must be the polynomial's.
     let dr = [
-        nalgebra::Matrix3::new(0.0, 2.0 * y, 2.0 * z, 2.0 * y, -4.0 * x, -2.0 * w, 2.0 * z, 2.0 * w, -4.0 * x),
-        nalgebra::Matrix3::new(-4.0 * y, 2.0 * x, 2.0 * w, 2.0 * x, 0.0, 2.0 * z, -2.0 * w, 2.0 * z, -4.0 * y),
-        nalgebra::Matrix3::new(-4.0 * z, -2.0 * w, 2.0 * x, 2.0 * w, -4.0 * z, 2.0 * y, 2.0 * x, 2.0 * y, 0.0),
-        nalgebra::Matrix3::new(0.0, -2.0 * z, 2.0 * y, 2.0 * z, 0.0, -2.0 * x, -2.0 * y, 2.0 * x, 0.0),
+        nalgebra::Matrix3::new(
+            0.0,
+            2.0 * y,
+            2.0 * z,
+            2.0 * y,
+            -4.0 * x,
+            -2.0 * w,
+            2.0 * z,
+            2.0 * w,
+            -4.0 * x,
+        ),
+        nalgebra::Matrix3::new(
+            -4.0 * y,
+            2.0 * x,
+            2.0 * w,
+            2.0 * x,
+            0.0,
+            2.0 * z,
+            -2.0 * w,
+            2.0 * z,
+            -4.0 * y,
+        ),
+        nalgebra::Matrix3::new(
+            -4.0 * z,
+            -2.0 * w,
+            2.0 * x,
+            2.0 * w,
+            -4.0 * z,
+            2.0 * y,
+            2.0 * x,
+            2.0 * y,
+            0.0,
+        ),
+        nalgebra::Matrix3::new(
+            0.0,
+            -2.0 * z,
+            2.0 * y,
+            2.0 * z,
+            0.0,
+            -2.0 * x,
+            -2.0 * y,
+            2.0 * x,
+            0.0,
+        ),
     ];
     let r_k = r * dfb_dvb;
     for j in 0..4 {

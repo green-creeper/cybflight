@@ -27,7 +27,7 @@ use core::fmt;
 
 use embassy_time::Instant;
 
-use crate::sensors::rc::{arm_config, BlockReason, LATEST_BLOCK_REASON};
+use crate::sensors::rc::{BlockReason, LATEST_BLOCK_REASON, arm_config};
 
 /// Live link snapshot supplied by the caller. We don't read this from a
 /// global because the canonical source is the ArmStateMachine running on
@@ -98,8 +98,7 @@ impl SystemHealth {
     pub fn snapshot(link: LinkSnapshot, throttle: Option<u16>) -> Self {
         use core::sync::atomic::Ordering;
 
-        let failsafe_active =
-            crate::control::failsafe::FAILSAFE_ACTIVE.load(Ordering::Acquire);
+        let failsafe_active = crate::control::failsafe::FAILSAFE_ACTIVE.load(Ordering::Acquire);
         let armed = crate::motors::IS_ARMED.load(Ordering::Acquire);
 
         #[cfg(any(feature = "est_pos_mocap", feature = "est_pos_gps"))]
@@ -114,7 +113,7 @@ impl SystemHealth {
             attitude_health_bits,
             attitude_health_required,
         ) = {
-            use crate::estimation::{att_health, EstimatorPhase};
+            use crate::estimation::{EstimatorPhase, att_health};
             let phase = crate::estimation::ESTIMATOR_STATUS.lock(|c| c.get());
             let phase_summary = match phase {
                 EstimatorPhase::AwaitingExteroceptive => {
@@ -317,11 +316,7 @@ impl SystemHealth {
             writeln!(w, "{}", tl_dr)?;
         }
         let cfg = arm_config();
-        writeln!(
-            w,
-            "  failsafe_active : {}",
-            yes_no(self.failsafe_active)
-        )?;
+        writeln!(w, "  failsafe_active : {}", yes_no(self.failsafe_active))?;
         writeln!(w, "  armed           : {}", yes_no(self.armed))?;
         writeln!(
             w,
@@ -500,11 +495,7 @@ impl SystemHealth {
 }
 
 fn yes_no(b: bool) -> &'static str {
-    if b {
-        "yes"
-    } else {
-        "no"
-    }
+    if b { "yes" } else { "no" }
 }
 
 /// `BlockReason` derives `defmt::Format` but not `Debug`. Wrap it so we can

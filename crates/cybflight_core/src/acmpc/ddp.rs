@@ -30,7 +30,7 @@
 
 use nalgebra::{SMatrix, SVector};
 
-use super::model::{Control, DroneDx, Jacobian, State, NTAU, NU, NX};
+use super::model::{Control, DroneDx, Jacobian, NTAU, NU, NX, State};
 
 type Gain = SMatrix<f32, NU, NX>;
 type Hessian = SMatrix<f32, NU, NU>;
@@ -161,7 +161,10 @@ pub fn solve<const T: usize>(
                 q_ux_free.row_mut(i).fill(0.0);
             }
         }
-        let k = -qp.free_hessian.solve(&q_ux_free).unwrap_or_else(Gain::zeros);
+        let k = -qp
+            .free_hessian
+            .solve(&q_ux_free)
+            .unwrap_or_else(Gain::zeros);
         let kt = k.transpose();
 
         v_mat = q_xx + q_xu * k + &kt * q_ux + &kt * q_uu * k;
@@ -261,7 +264,11 @@ fn pnqp(h: &Hessian, q: &Control, b: &ControlBox, warm: Option<&Control>) -> Pnq
         }
         iter += 1;
         if converged || iter == 20 {
-            return Pnqp { step: x, free_hessian: lu, free };
+            return Pnqp {
+                step: x,
+                free_hessian: lu,
+                free,
+            };
         }
     }
 }
@@ -337,7 +344,10 @@ mod tests {
             &DroneDx::new(0.02),
             &bounds,
             &Control::new(G, 0.0, 0.0, 0.0),
-            &LineSearch { decay: 0.2, max_iter: 5 },
+            &LineSearch {
+                decay: 0.2,
+                max_iter: 5,
+            },
         );
         for i in 0..NU {
             assert!(u[i] >= bounds.lower[i] && u[i] <= bounds.upper[i], "{u}");

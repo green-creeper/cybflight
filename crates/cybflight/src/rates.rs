@@ -262,12 +262,21 @@ const _: () = {
     // 8 kHz window by accident.
     assert!(rate_dot_sg_window(8000.0) == 13, "8 kHz ICM window changed");
     assert!(rate_dot_sg_window(1000.0) == 5, "imu_1khz window changed");
-    assert!(rate_dot_sg_window(3200.0) == 13, "3.2 kHz BMI270 window changed");
-    assert!(rate_dot_sg_window(2000.0) == 9, "2 kHz (8 kHz / indi_ctrl_div 4) window changed");
+    assert!(
+        rate_dot_sg_window(3200.0) == 13,
+        "3.2 kHz BMI270 window changed"
+    );
+    assert!(
+        rate_dot_sg_window(2000.0) == 9,
+        "2 kHz (8 kHz / indi_ctrl_div 4) window changed"
+    );
     // Structural invariants of whatever this build resolved to: the SG
     // filter requires an odd window in [3, 19].
     assert!(RATE_DOT_SG_WINDOW % 2 == 1, "SG window must be odd");
-    assert!(RATE_DOT_SG_WINDOW >= 3, "SG window below the filter minimum");
+    assert!(
+        RATE_DOT_SG_WINDOW >= 3,
+        "SG window below the filter minimum"
+    );
     assert!(
         RATE_DOT_SG_WINDOW <= RATE_DOT_SG_WINDOW_MAX,
         "SG window above the cap",
@@ -276,18 +285,42 @@ const _: () = {
     // Same three rates for the PubSub depth. These pin the float
     // arithmetic in `imu_pubsub_cap` — the derivation rounds, so the
     // table in its doc comment is only trustworthy if it is asserted.
-    assert!(imu_pubsub_cap(8000.0) == 192, "8 kHz IMU pubsub CAP changed");
+    assert!(
+        imu_pubsub_cap(8000.0) == 192,
+        "8 kHz IMU pubsub CAP changed"
+    );
     assert!(imu_pubsub_cap(1000.0) == 24, "imu_1khz pubsub CAP changed");
-    assert!(imu_pubsub_cap(3200.0) == 76, "3.2 kHz IMU pubsub CAP changed");
+    assert!(
+        imu_pubsub_cap(3200.0) == 76,
+        "3.2 kHz IMU pubsub CAP changed"
+    );
     // Never shallower than the pre-derivation value that flew.
-    assert!(IMU_PUBSUB_CAP >= 4, "IMU pubsub CAP below the historical floor");
+    assert!(
+        IMU_PUBSUB_CAP >= 4,
+        "IMU pubsub CAP below the historical floor"
+    );
 
     // Odometry is 1 kHz in every build, so unlike the IMU CAP this is a
     // single value rather than a table — pin it, and keep it at or above
     // the CAP=8 that flew before 2026-09-09.
-    assert!(BLACKBOX_ODOM_HZ >= 100.0, "blackbox odometry below the 100 Hz sysid floor");
-    assert!(BLACKBOX_ODOM_PUBSUB_CAP == 25, "blackbox odometry pubsub CAP changed");
-    assert!(BLACKBOX_POWER_HZ >= 10.0, "blackbox power below the 10 Hz floor");
-    assert!(INDI_TELEM_PUBSUB_CAP == 48, "INDI telemetry pubsub CAP changed");
-    assert!(INDI_TELEM_PUBSUB_CAP >= 16, "INDI telemetry CAP below the historical floor");
+    assert!(
+        BLACKBOX_ODOM_HZ >= 100.0,
+        "blackbox odometry below the 100 Hz sysid floor"
+    );
+    assert!(
+        BLACKBOX_ODOM_PUBSUB_CAP == 25,
+        "blackbox odometry pubsub CAP changed"
+    );
+    assert!(
+        BLACKBOX_POWER_HZ >= 10.0,
+        "blackbox power below the 10 Hz floor"
+    );
+    assert!(
+        INDI_TELEM_PUBSUB_CAP == 48,
+        "INDI telemetry pubsub CAP changed"
+    );
+    assert!(
+        INDI_TELEM_PUBSUB_CAP >= 16,
+        "INDI telemetry CAP below the historical floor"
+    );
 };

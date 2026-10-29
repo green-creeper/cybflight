@@ -215,7 +215,11 @@ impl<I2C: I2c> Dps310<I2cBusWrapper<I2C>> {
     /// Probe for a DPS310 via I2C. Returns true if WHO_AM_I matches.
     pub async fn probe_i2c(i2c: &mut I2C, addr: u8) -> bool {
         let mut buf = [0u8];
-        if i2c.write_read(addr, &[REG_PRODUCT_ID], &mut buf).await.is_ok() {
+        if i2c
+            .write_read(addr, &[REG_PRODUCT_ID], &mut buf)
+            .await
+            .is_ok()
+        {
             buf[0] == PRODUCT_ID
         } else {
             false
@@ -245,9 +249,7 @@ impl<B: Dps310Bus> Dps310<B> {
         }
 
         // 2. Soft reset
-        bus.write_reg(REG_RESET, 0x09)
-            .await
-            .map_err(Error::Bus)?;
+        bus.write_reg(REG_RESET, 0x09).await.map_err(Error::Bus)?;
         delay.delay_ms(40).await;
 
         // 3. Wait for COEF_RDY + SENSOR_RDY
@@ -287,17 +289,13 @@ impl<B: Dps310Bus> Dps310<B> {
 
         // 7. Configure for max performance
         // PRS_CFG: 32 Hz rate, 16x oversampling
-        bus.write_reg(REG_PRS_CFG, 0x54)
-            .await
-            .map_err(Error::Bus)?;
+        bus.write_reg(REG_PRS_CFG, 0x54).await.map_err(Error::Bus)?;
         // TMP_CFG: 32 Hz rate, 16x OSR, temp_coef_source
         bus.write_reg(REG_TMP_CFG, 0x54 | temp_coef_src)
             .await
             .map_err(Error::Bus)?;
         // CFG_REG: bit-shift enabled for P and T (required for >8x OSR)
-        bus.write_reg(REG_CFG_REG, 0x0C)
-            .await
-            .map_err(Error::Bus)?;
+        bus.write_reg(REG_CFG_REG, 0x0C).await.map_err(Error::Bus)?;
         // MEAS_CFG: continuous P+T measurement
         bus.write_reg(REG_MEAS_CFG, 0x07)
             .await
@@ -311,7 +309,6 @@ impl<B: Dps310Bus> Dps310<B> {
             temp_coef_src,
         })
     }
-
 }
 
 impl<B: Dps310Bus> ReadBaro for Dps310<B>

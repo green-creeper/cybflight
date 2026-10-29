@@ -1,10 +1,10 @@
 use nalgebra::Vector3;
 
-use super::banded_system::{jerk_storage, BandedSystem};
+use super::MAX_PIECES;
+use super::banded_system::{BandedSystem, jerk_storage};
 use super::piecewise_polynomial::PiecewisePolynomial;
 use super::polynomial::Polynomial;
-use super::types::{Vec3, ZERO3, PVA3D};
-use super::MAX_PIECES;
+use super::types::{PVA3D, Vec3, ZERO3};
 
 /// MINCO min-jerk trajectory solver (polynomial degree 5, s=3), sized
 /// for at most `P` pieces.
@@ -247,10 +247,8 @@ impl<const P: usize, const C: usize, const S: usize> MincoJerkN<P, C, S> {
             let t3 = self.t3[i];
             let t4 = self.t4[i];
             let t5 = self.t5[i];
-            grad_c[base + 3] +=
-                (b3 * (72.0 * t1) + b4 * (144.0 * t2) + b5 * (240.0 * t3)) * scale;
-            grad_c[base + 4] +=
-                (b3 * (144.0 * t2) + b4 * (384.0 * t3) + b5 * (720.0 * t4)) * scale;
+            grad_c[base + 3] += (b3 * (72.0 * t1) + b4 * (144.0 * t2) + b5 * (240.0 * t3)) * scale;
+            grad_c[base + 4] += (b3 * (144.0 * t2) + b4 * (384.0 * t3) + b5 * (720.0 * t4)) * scale;
             grad_c[base + 5] +=
                 (b3 * (240.0 * t3) + b4 * (720.0 * t4) + b5 * (1440.0 * t5)) * scale;
             // rows 0,1,2 unchanged (energy is independent of them).
@@ -288,8 +286,12 @@ impl<const P: usize, const C: usize, const S: usize> MincoJerkN<P, C, S> {
         let n = self.n;
         let sys_size = 6 * n;
 
-        for gp in grad_points.iter_mut() { *gp = Vector3::zeros(); }
-        for gt in grad_times.iter_mut() { *gt = 0.0; }
+        for gp in grad_points.iter_mut() {
+            *gp = Vector3::zeros();
+        }
+        for gt in grad_times.iter_mut() {
+            *gt = 0.0;
+        }
 
         // Solve A^T * adjGrad = partial_grad_c
         let mut adj_grad = [Vector3::<f32>::zeros(); C];
@@ -304,7 +306,9 @@ impl<const P: usize, const C: usize, const S: usize> MincoJerkN<P, C, S> {
         // Compute gradient w.r.t. times via ∂A/∂T for interior segments.
         for i in 0..(n - 1) {
             let o = i * 6;
-            let t1 = self.t1[i]; let t2 = self.t2[i]; let t3 = self.t3[i];
+            let t1 = self.t1[i];
+            let t2 = self.t2[i];
+            let t3 = self.t3[i];
             let t4 = self.t4[i];
 
             // k=0: jerk continuity row → negative snap at end
@@ -325,9 +329,8 @@ impl<const P: usize, const C: usize, const S: usize> MincoJerkN<P, C, S> {
                 + self.b[o + 4] * (12.0 * t2)
                 + self.b[o + 5] * (20.0 * t3));
             // k=5: acceleration continuity → negative jerk at end
-            let b1_5 = -(self.b[o + 3] * 6.0
-                + self.b[o + 4] * (24.0 * t1)
-                + self.b[o + 5] * (60.0 * t2));
+            let b1_5 =
+                -(self.b[o + 3] * 6.0 + self.b[o + 4] * (24.0 * t1) + self.b[o + 5] * (60.0 * t2));
 
             let sum = b1_0.dot(&adj_grad[6 * i + 3])
                 + b1_1.dot(&adj_grad[6 * i + 4])
@@ -342,7 +345,9 @@ impl<const P: usize, const C: usize, const S: usize> MincoJerkN<P, C, S> {
         {
             let last = n - 1;
             let o = last * 6;
-            let t1 = self.t1[last]; let t2 = self.t2[last]; let t3 = self.t3[last];
+            let t1 = self.t1[last];
+            let t2 = self.t2[last];
+            let t3 = self.t3[last];
             let t4 = self.t4[last];
 
             let neg_vel = -(self.b[o + 1]
@@ -354,9 +359,8 @@ impl<const P: usize, const C: usize, const S: usize> MincoJerkN<P, C, S> {
                 + self.b[o + 3] * (6.0 * t1)
                 + self.b[o + 4] * (12.0 * t2)
                 + self.b[o + 5] * (20.0 * t3));
-            let neg_jerk = -(self.b[o + 3] * 6.0
-                + self.b[o + 4] * (24.0 * t1)
-                + self.b[o + 5] * (60.0 * t2));
+            let neg_jerk =
+                -(self.b[o + 3] * 6.0 + self.b[o + 4] * (24.0 * t1) + self.b[o + 5] * (60.0 * t2));
 
             let sum = neg_vel.dot(&adj_grad[6 * n - 3])
                 + neg_acc.dot(&adj_grad[6 * n - 2])
@@ -372,8 +376,8 @@ impl<const P: usize, const C: usize, const S: usize> MincoJerkN<P, C, S> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::types::ZERO3;
+    use super::*;
 
     #[test]
     fn test_single_piece_min_jerk() {

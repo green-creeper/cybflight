@@ -380,8 +380,7 @@ impl EskfGpsGuard {
         // together; the failsafe story belongs to the pos channel). σ_vel from
         // u-blox `s_acc_mm_s` with the cfg-level floor.
         if self.cfg.fuse_velocity && pos_outcome.is_accepted() {
-            let sigma_vel =
-                ((fix.s_acc_mm_s as f32) * 1e-3).max(self.cfg.vel_sigma_floor_m_s);
+            let sigma_vel = ((fix.s_acc_mm_s as f32) * 1e-3).max(self.cfg.vel_sigma_floor_m_s);
             let vel_outcome = eskf.update_vel(fix.enu_vel, sigma_vel);
             self.failsafe.record_vel_outcome(vel_outcome);
         }

@@ -24,7 +24,6 @@ const GRAV: f32 = 9.81;
 const INERTIA: [f32; 3] = [0.0025, 0.0021, 0.0043];
 const MAX_THRUST_N: f32 = 8.5;
 
-
 /// Legacy baseline — the values of the deleted `QuadModel::default()`,
 /// pinned so these convergence cases are independent of any vehicle
 /// definition.
@@ -906,7 +905,7 @@ fn final_steady_state_error() {
     );
 
     let max_steps: usize = (15.0 / SIM_DT) as usize; // 7500 steps = 15 s
-                                                     // Time checkpoints (in seconds) at which to record position error.
+    // Time checkpoints (in seconds) at which to record position error.
     let checkpoints_s: SVector<f32, 6> = SVector::from_row_slice(&[0.5, 1.0, 2.0, 5.0, 10.0, 15.0]);
     let checkpoint_steps: [usize; 6] = [
         (0.5 / SIM_DT) as usize,
@@ -1115,7 +1114,7 @@ mod simple_quad {
     use cybflight_core::mpc::{QuadModel, SimpleQuadProblem, SimpleSqpSolver};
     use nalgebra::{SVector, UnitQuaternion, Vector3};
 
-    use super::{generate_initial_orientations, GRAV, MASS, NUM_ORIENTATIONS, POS_TOL, SIM_DT};
+    use super::{GRAV, MASS, NUM_ORIENTATIONS, POS_TOL, SIM_DT, generate_initial_orientations};
 
     /// Build the legacy-baseline `QuadModel` and override its dt for the
     /// prediction horizon (50 ms — same as the FullQuadModel test). All

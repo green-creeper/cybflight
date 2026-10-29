@@ -122,7 +122,11 @@ fn template(kind: Kind, rng: &mut impl Rng) -> (Vec<Vec3>, Vec3) {
             let n = 16;
             for i in 1..=n {
                 let x = 2.0 * lam * i as f32 / n as f32;
-                pts.push(Vec3::new(x, amp * (2.0 * core::f32::consts::PI * x / lam).sin(), 0.0));
+                pts.push(Vec3::new(
+                    x,
+                    amp * (2.0 * core::f32::consts::PI * x / lam).sin(),
+                    0.0,
+                ));
             }
         }
         Kind::ClimbDive => {
@@ -131,7 +135,11 @@ fn template(kind: Kind, rng: &mut impl Rng) -> (Vec<Vec3>, Vec3) {
             let n = 16;
             for i in 1..=n {
                 let x = 2.0 * lam * i as f32 / n as f32;
-                pts.push(Vec3::new(x, 0.0, amp * (2.0 * core::f32::consts::PI * x / lam).sin()));
+                pts.push(Vec3::new(
+                    x,
+                    0.0,
+                    amp * (2.0 * core::f32::consts::PI * x / lam).sin(),
+                ));
             }
         }
         Kind::SplitS | Kind::Immelmann => {
@@ -164,7 +172,11 @@ fn template(kind: Kind, rng: &mut impl Rng) -> (Vec<Vec3>, Vec3) {
                 let dyaw = rng.random_range(-1.75..1.75f32);
                 let dpitch = rng.random_range(-0.6..0.6f32);
                 let yaw = dir.y.atan2(dir.x) + dyaw;
-                dir = Vec3::new(yaw.cos() * dpitch.cos(), yaw.sin() * dpitch.cos(), dpitch.sin());
+                dir = Vec3::new(
+                    yaw.cos() * dpitch.cos(),
+                    yaw.sin() * dpitch.cos(),
+                    dpitch.sin(),
+                );
                 let len = rng.random_range(0.8..2.5f32);
                 p += dir * len;
                 p.x = p.x.clamp(-4.0, 6.0);
@@ -205,7 +217,10 @@ pub fn peak_demand(traj: &PiecewisePolynomial, env: &Envelope) -> (f32, f32) {
         let j = traj.get_jerk(t);
         let (thrust, omega) = match flatness_to_thrust_omega(a, j, 0.0, 0.0, env.grav) {
             Ok((alpha, _, w)) => (env.mass_kg * alpha, w),
-            Err(_) => (env.mass_kg * Vector3::new(a.x, a.y, a.z + env.grav).norm(), ZERO3),
+            Err(_) => (
+                env.mass_kg * Vector3::new(a.x, a.y, a.z + env.grav).norm(),
+                ZERO3,
+            ),
         };
         pt = pt.max(thrust / env.thrust_max_n);
         for i in 0..3 {
@@ -239,7 +254,11 @@ pub fn random_primitive(rng: &mut impl Rng, env: &Envelope, start: Vec3) -> Prim
     // straight run (as every planned mission does) or the min-snap fit
     // rings at the first piece. Hover starts need no lead-in.
     let mut pts: Vec<Vec3> = Vec::new();
-    let lead_in = if kind == Kind::HoverSprint { 0.0 } else { rng.random_range(1.0..3.0f32) };
+    let lead_in = if kind == Kind::HoverSprint {
+        0.0
+    } else {
+        rng.random_range(1.0..3.0f32)
+    };
     if lead_in > 0.0 {
         pts.push(Vec3::new(lead_in * 0.5, 0.0, 0.0));
         pts.push(Vec3::new(lead_in, 0.0, 0.0));
@@ -251,7 +270,11 @@ pub fn random_primitive(rng: &mut impl Rng, env: &Envelope, start: Vec3) -> Prim
     // Chain a second primitive half the time so "what comes next" varies.
     if rng.random_bool(0.5) && kind != Kind::HoverSprint {
         let k2 = KINDS[rng.random_range(0..KINDS.len())];
-        let k2 = if k2 == Kind::HoverSprint { Kind::Sprint } else { k2 };
+        let k2 = if k2 == Kind::HoverSprint {
+            Kind::Sprint
+        } else {
+            k2
+        };
         let (p2, h2) = template(k2, rng);
         let anchor = *pts.last().unwrap();
         let yaw2 = heading.y.atan2(heading.x);
@@ -278,9 +301,17 @@ pub fn random_primitive(rng: &mut impl Rng, env: &Envelope, start: Vec3) -> Prim
         p.z += lift;
     }
     let heading = rot_z(heading, yaw);
-    let v_in = if kind == Kind::HoverSprint { ZERO3 } else { rot_z(Vec3::x(), yaw) * speed };
+    let v_in = if kind == Kind::HoverSprint {
+        ZERO3
+    } else {
+        rot_z(Vec3::x(), yaw) * speed
+    };
     // End at rest 30 % of the time (brake), otherwise carry the speed out.
-    let v_out = if rng.random_bool(0.3) { ZERO3 } else { heading * speed };
+    let v_out = if rng.random_bool(0.3) {
+        ZERO3
+    } else {
+        heading * speed
+    };
 
     // Durations from segment length at the commanded speed, with a floor
     // that keeps the MINCO pieces well conditioned.
@@ -307,7 +338,11 @@ pub fn random_primitive(rng: &mut impl Rng, env: &Envelope, start: Vec3) -> Prim
     // time-optimal missions are rather than stuck at whatever the
     // commanded speed happened to demand.
     let intermediate: Vec<Vec3> = pts[..n - 1].to_vec();
-    let mut minco = Box::new(MincoSnap::new(&[start, v_in, ZERO3, ZERO3], &[pts[n - 1], v_out, ZERO3, ZERO3], n));
+    let mut minco = Box::new(MincoSnap::new(
+        &[start, v_in, ZERO3, ZERO3],
+        &[pts[n - 1], v_out, ZERO3, ZERO3],
+        n,
+    ));
     let mut stretches = 0u32;
     let mut scale = 1.0f32;
     let mut last_dir = 0i8;
@@ -326,8 +361,17 @@ pub fn random_primitive(rng: &mut impl Rng, env: &Envelope, start: Vec3) -> Prim
         // at a 1.2 s minimum episode (a straight sprint never reaches the
         // thrust budget and would otherwise shrink to nothing).
         let dur_total: f32 = durations.iter().sum::<f32>() * scale;
-        let too_easy = pt < 0.85 * thrust_budget && scale > 0.1 && speed / scale < 65.0 && dur_total * 0.92 > 1.2;
-        let dir: i8 = if too_hard { 1 } else if too_easy { -1 } else { 0 };
+        let too_easy = pt < 0.85 * thrust_budget
+            && scale > 0.1
+            && speed / scale < 65.0
+            && dur_total * 0.92 > 1.2;
+        let dir: i8 = if too_hard {
+            1
+        } else if too_easy {
+            -1
+        } else {
+            0
+        };
         // Stop when inside the band, when the direction flips (the band
         // is between two grid points), or at the iteration cap.
         if dir == 0 || (last_dir != 0 && dir != last_dir) || stretches >= 30 {
@@ -369,21 +413,40 @@ mod tests {
         let mut by_kind: std::collections::BTreeMap<&str, Vec<f32>> = Default::default();
         for _ in 0..200 {
             let p = random_primitive(&mut rng, &env, Vec3::new(0.0, 0.0, 1.5));
-            by_kind.entry(p.kind.name()).or_default().push(p.peak_thrust_frac);
+            by_kind
+                .entry(p.kind.name())
+                .or_default()
+                .push(p.peak_thrust_frac);
             assert!(p.traj.total_duration() > 0.3, "{:?}", p.kind);
             assert!(p.traj.get_pos(0.0).iter().all(|v| v.is_finite()));
-            assert!(p.peak_thrust_frac < 1.3 && p.peak_thrust_frac.is_finite(), "{:?} never fit: pt={} pr={}", p.kind, p.peak_thrust_frac, p.peak_rate_frac);
+            assert!(
+                p.peak_thrust_frac < 1.3 && p.peak_thrust_frac.is_finite(),
+                "{:?} never fit: pt={} pr={}",
+                p.kind,
+                p.peak_thrust_frac,
+                p.peak_rate_frac
+            );
             peak.push(p.peak_thrust_frac);
         }
         let lo = peak.iter().filter(|&&f| f < 0.5).count();
         let hi = peak.iter().filter(|&&f| f > 0.7).count();
         for (k, v) in &by_kind {
-            eprintln!("{k:<18} n={:3} mean pt={:.2} max={:.2}", v.len(), v.iter().sum::<f32>() / v.len() as f32, v.iter().cloned().fold(0.0, f32::max));
+            eprintln!(
+                "{k:<18} n={:3} mean pt={:.2} max={:.2}",
+                v.len(),
+                v.iter().sum::<f32>() / v.len() as f32,
+                v.iter().cloned().fold(0.0, f32::max)
+            );
         }
         let mut sorted = peak.clone();
         sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        eprintln!("peak thrust frac quartiles: {:.2} {:.2} {:.2} {:.2} {:.2}",
-            sorted[0], sorted[50], sorted[100], sorted[150], sorted[199]);
-        assert!(lo > 10 && hi >= 8, "margin sweep too narrow: lo={lo} hi={hi}");
+        eprintln!(
+            "peak thrust frac quartiles: {:.2} {:.2} {:.2} {:.2} {:.2}",
+            sorted[0], sorted[50], sorted[100], sorted[150], sorted[199]
+        );
+        assert!(
+            lo > 10 && hi >= 8,
+            "margin sweep too narrow: lo={lo} hi={hi}"
+        );
     }
 }

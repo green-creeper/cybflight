@@ -237,7 +237,10 @@ impl<I2C: I2c> Spl06<I2cBusWrapper<I2C>> {
     pub async fn probe_i2c(i2c: &mut I2C, addr: u8) -> bool {
         for _ in 0..5 {
             let mut buf = [0u8];
-            if i2c.write_read(addr, &[REG_PRODUCT_ID], &mut buf).await.is_ok()
+            if i2c
+                .write_read(addr, &[REG_PRODUCT_ID], &mut buf)
+                .await
+                .is_ok()
                 && buf[0] == PRODUCT_ID
             {
                 return true;
@@ -319,7 +322,9 @@ impl<B: Spl06Bus> Spl06<B> {
         // CFG_REG: P/T bit-shift enabled (required for >8x OSR).
         bus.write_reg(REG_CFG_REG, 0x0C).await.map_err(Error::Bus)?;
         // MEAS_CFG: continuous P+T measurement.
-        bus.write_reg(REG_MEAS_CFG, 0x07).await.map_err(Error::Bus)?;
+        bus.write_reg(REG_MEAS_CFG, 0x07)
+            .await
+            .map_err(Error::Bus)?;
         Ok(())
     }
 }

@@ -12,7 +12,7 @@
 
 use cybflight_core::indi::{
     controller::NU,
-    linearization::{ThrustLinearization, ThrustModel, TABLE_N},
+    linearization::{TABLE_N, ThrustLinearization, ThrustModel},
     thrust_table::ThrustTable,
 };
 
@@ -153,7 +153,10 @@ fn compare_three_models_against_table_baseline() {
         // particular fit quality — the fit is identified offline).
         assert!(max_err_quad.is_finite() && rms_quad.is_finite());
         assert!(max_err_sq.is_finite() && rms_sq.is_finite());
-        assert!(max_err_quad < 0.15, "Quadratic L∞ regressed: {max_err_quad}");
+        assert!(
+            max_err_quad < 0.15,
+            "Quadratic L∞ regressed: {max_err_quad}"
+        );
         assert!(max_err_sq < 0.15, "SqrtSquared L∞ regressed: {max_err_sq}");
     }
 
@@ -169,7 +172,5 @@ fn compare_three_models_against_table_baseline() {
         "\nTable voltage sensitivity at u={:.2}: d({:.2}V)={:.4}, d({:.2}V)={:.4}, |Δd|={:.4}",
         u_check, V_TEST[0], d_lo, V_TEST[2], d_hi, voltage_compensation
     );
-    println!(
-        "(Quadratic & SqrtSquared can never reproduce this — they are voltage-blind.)"
-    );
+    println!("(Quadratic & SqrtSquared can never reproduce this — they are voltage-blind.)");
 }

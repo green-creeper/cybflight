@@ -25,7 +25,6 @@
 //! search over the row at runtime. Cost: ~7 iters × a few muls per call,
 //! still well under 1 µs on M7.
 
-
 /// Pre-computed `(thrust, voltage) → command` bilinear lookup.
 ///
 /// `N` is the grid resolution (square). Storage is `4·N²` bytes (`f32`).
@@ -87,16 +86,36 @@ impl<const N: usize> ThrustTable<N> {
         // NaN guard: collapse non-finite to the midpoint. The table's job
         // is to never feed NaN to the WLS solver downstream — single
         // branch, predictable, costs nothing on the happy path.
-        let t = if thrust_n.is_finite() { thrust_n } else { 0.5 * (self.thrust_min_n + self.thrust_max_n) };
-        let v = if voltage_v.is_finite() { voltage_v } else { 0.5 * (self.voltage_min_v + self.voltage_max_v) };
+        let t = if thrust_n.is_finite() {
+            thrust_n
+        } else {
+            0.5 * (self.thrust_min_n + self.thrust_max_n)
+        };
+        let v = if voltage_v.is_finite() {
+            voltage_v
+        } else {
+            0.5 * (self.voltage_min_v + self.voltage_max_v)
+        };
 
         // Normalized cell coordinates ∈ [0, N-1]. Clamp first so the cast
         // to integer can't go out of range even for huge inputs.
         let n_minus_1 = (N - 1) as f32;
         let xt_unclamped = (t - self.thrust_min_n) * self.inv_delta_thrust;
         let xv_unclamped = (v - self.voltage_min_v) * self.inv_delta_voltage;
-        let xt = if xt_unclamped < 0.0 { 0.0 } else if xt_unclamped > n_minus_1 { n_minus_1 } else { xt_unclamped };
-        let xv = if xv_unclamped < 0.0 { 0.0 } else if xv_unclamped > n_minus_1 { n_minus_1 } else { xv_unclamped };
+        let xt = if xt_unclamped < 0.0 {
+            0.0
+        } else if xt_unclamped > n_minus_1 {
+            n_minus_1
+        } else {
+            xt_unclamped
+        };
+        let xv = if xv_unclamped < 0.0 {
+            0.0
+        } else if xv_unclamped > n_minus_1 {
+            n_minus_1
+        } else {
+            xv_unclamped
+        };
 
         // Cell origin and barycentric weight inside the cell.
         let it = (xt as usize).min(N - 2);
@@ -123,10 +142,20 @@ impl<const N: usize> ThrustTable<N> {
     ///
     /// Out-of-range or non-monotone inputs return the boundary thrust.
     pub fn invert(&self, command: f32, voltage_v: f32) -> f32 {
-        let v = if voltage_v.is_finite() { voltage_v } else { 0.5 * (self.voltage_min_v + self.voltage_max_v) };
+        let v = if voltage_v.is_finite() {
+            voltage_v
+        } else {
+            0.5 * (self.voltage_min_v + self.voltage_max_v)
+        };
         let n_minus_1 = (N - 1) as f32;
         let xv_unclamped = (v - self.voltage_min_v) * self.inv_delta_voltage;
-        let xv = if xv_unclamped < 0.0 { 0.0 } else if xv_unclamped > n_minus_1 { n_minus_1 } else { xv_unclamped };
+        let xv = if xv_unclamped < 0.0 {
+            0.0
+        } else if xv_unclamped > n_minus_1 {
+            n_minus_1
+        } else {
+            xv_unclamped
+        };
         let iv = (xv as usize).min(N - 2);
         let fv = xv - iv as f32;
 
@@ -141,7 +170,11 @@ impl<const N: usize> ThrustTable<N> {
         };
 
         // Binary search for the largest `it` such that row[it] ≤ command.
-        let target = if command.is_finite() { command } else { return self.thrust_min_n };
+        let target = if command.is_finite() {
+            command
+        } else {
+            return self.thrust_min_n;
+        };
         let mut lo: usize = 0;
         let mut hi: usize = N - 1;
         // Boundary checks.
@@ -162,17 +195,35 @@ impl<const N: usize> ThrustTable<N> {
         let row_lo = row_at(lo);
         let row_hi = row_at(hi);
         let denom = row_hi - row_lo;
-        let frac = if denom > 0.0 { (target - row_lo) / denom } else { 0.0 };
-        let frac = if frac < 0.0 { 0.0 } else if frac > 1.0 { 1.0 } else { frac };
+        let frac = if denom > 0.0 {
+            (target - row_lo) / denom
+        } else {
+            0.0
+        };
+        let frac = if frac < 0.0 {
+            0.0
+        } else if frac > 1.0 {
+            1.0
+        } else {
+            frac
+        };
 
         let delta_thrust = (self.thrust_max_n - self.thrust_min_n) / n_minus_1;
         self.thrust_min_n + (lo as f32 + frac) * delta_thrust
     }
 
-    pub fn thrust_min_n(&self) -> f32 { self.thrust_min_n }
-    pub fn thrust_max_n(&self) -> f32 { self.thrust_max_n }
-    pub fn voltage_min_v(&self) -> f32 { self.voltage_min_v }
-    pub fn voltage_max_v(&self) -> f32 { self.voltage_max_v }
+    pub fn thrust_min_n(&self) -> f32 {
+        self.thrust_min_n
+    }
+    pub fn thrust_max_n(&self) -> f32 {
+        self.thrust_max_n
+    }
+    pub fn voltage_min_v(&self) -> f32 {
+        self.voltage_min_v
+    }
+    pub fn voltage_max_v(&self) -> f32 {
+        self.voltage_max_v
+    }
 }
 
 #[cfg(test)]
@@ -184,11 +235,7 @@ mod tests {
     fn linear_table_3x3() -> ThrustTable<3> {
         // thrust ∈ [0, 10] N, voltage ∈ [20, 25] V.
         // command = thrust / 10, regardless of voltage.
-        let grid = [
-            [0.0, 0.5, 1.0],
-            [0.0, 0.5, 1.0],
-            [0.0, 0.5, 1.0],
-        ];
+        let grid = [[0.0, 0.5, 1.0], [0.0, 0.5, 1.0], [0.0, 0.5, 1.0]];
         ThrustTable::<3>::new(grid, 0.0, 10.0, 20.0, 25.0).unwrap()
     }
 
@@ -198,8 +245,8 @@ mod tests {
         // Row 2 (high V): nominal.
         let grid = [
             [0.0, 0.75, 1.0], // 20 V — saturates earlier
-            [0.0, 0.6,  1.0], // 22.5 V
-            [0.0, 0.5,  1.0], // 25 V — best efficiency
+            [0.0, 0.6, 1.0],  // 22.5 V
+            [0.0, 0.5, 1.0],  // 25 V — best efficiency
         ];
         ThrustTable::<3>::new(grid, 0.0, 10.0, 20.0, 25.0).unwrap()
     }
@@ -231,7 +278,10 @@ mod tests {
             let expected = thrust / 10.0;
             for v in [20.0_f32, 22.5, 25.0] {
                 let got = t.lookup(thrust, v);
-                assert!((got - expected).abs() < 1e-5, "thrust={thrust} V={v}: {got} vs {expected}");
+                assert!(
+                    (got - expected).abs() < 1e-5,
+                    "thrust={thrust} V={v}: {got} vs {expected}"
+                );
             }
         }
     }
@@ -276,7 +326,10 @@ mod tests {
             for v in [20.0_f32, 22.5, 25.0] {
                 let cmd = t.lookup(thrust, v);
                 let back = t.invert(cmd, v);
-                assert!((back - thrust).abs() < 1e-3, "thrust={thrust} V={v} cmd={cmd} back={back}");
+                assert!(
+                    (back - thrust).abs() < 1e-3,
+                    "thrust={thrust} V={v} cmd={cmd} back={back}"
+                );
             }
         }
     }
@@ -298,7 +351,10 @@ mod tests {
         // At the corner of voltage we know exactly: row [20V] = [0, 0.75, 1.0]
         // for thrusts [0, 5, 10]. So command 0.75 at 20V → thrust 5.
         let r = t.invert(0.75, 20.0);
-        assert!((r - 5.0).abs() < 1e-3, "invert(0.75, 20V) = {r}, expected 5");
+        assert!(
+            (r - 5.0).abs() < 1e-3,
+            "invert(0.75, 20V) = {r}, expected 5"
+        );
         // At 25V: command 0.5 → thrust 5.
         let r = t.invert(0.5, 25.0);
         assert!((r - 5.0).abs() < 1e-3, "invert(0.5, 25V) = {r}, expected 5");

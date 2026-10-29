@@ -211,6 +211,12 @@ check-all:
         --features board_micoair743v2,est_pos_mocap,rx_crsf,defmt_uart,outer_mpc
     cargo check -p cybflight --no-default-features \
         --features board_micoair743v2,est_pos_gps,rx_crsf,defmt_uart,outer_mpc
+    cargo check -p cybflight --no-default-features \
+        --features board_flywoof745,est_pos_gps,rx_crsf,defmt_uart,outer_rate,postmortem
+    cargo check -p cybflight --no-default-features \
+        --features board_flywoof745,est_pos_gps,rx_crsf,defmt_uart,outer_mpc,postmortem
+    cargo check -p cybflight --no-default-features \
+        --features board_flywoof745,est_pos_mocap,rx_crsf,defmt_uart,outer_mpc,postmortem
     # 1 kHz low-noise IMU mode (`imu_rate: 1khz`) on the ICM boards.
     cargo check -p cybflight --no-default-features \
         --features board_sakurah743,est_pos_gps,rx_crsf,defmt_uart,outer_mpc,imu_1khz
@@ -356,3 +362,8 @@ blackbox-pull *ARGS:
 params-doc:
     cargo run -p cybflight-sim --target {{HOST}} --bin param_doc > docs/parameters.md
     @echo "wrote docs/parameters.md"
+
+# Launch the Cybflight Configurator & Ground Station GUI (egui).
+gs $VEHICLE="goku_f745":
+    cargo run -p cybflight-gs --target {{HOST}} --profile release-host -- --vehicle {{VEHICLE}}
+

@@ -62,11 +62,11 @@
 
 use core::sync::atomic::Ordering;
 
-use embassy_sync::pubsub::publisher::ImmediatePublisher;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_time::{Duration, Instant};
+use embassy_sync::pubsub::publisher::ImmediatePublisher;
 #[cfg(feature = "plan_online")]
 use embassy_time::Timer;
+use embassy_time::{Duration, Instant};
 use static_cell::StaticCell;
 
 #[cfg(not(feature = "plan_online"))]
@@ -74,30 +74,30 @@ use cybflight_core::trajectory_planning::banded_system::{acc_storage, snap_stora
 #[cfg(feature = "plan_online")]
 use cybflight_core::trajectory_planning::bfgs_trust::BfgsWorkspace;
 #[cfg(not(feature = "plan_online"))]
-use cybflight_core::trajectory_planning::minco_acc::{unwrap_nearest, MincoAccN};
+use cybflight_core::trajectory_planning::minco_acc::{MincoAccN, unwrap_nearest};
 #[cfg(not(feature = "plan_online"))]
 use cybflight_core::trajectory_planning::minco_snap::MincoSnapN;
 use cybflight_core::trajectory_planning::piecewise_polynomial::PiecewisePolynomial;
+use cybflight_core::trajectory_planning::planner::SolverStatus;
 #[cfg(feature = "plan_online")]
 use cybflight_core::trajectory_planning::planner::{
-    plan_finalize, plan_init, plan_resume, PlannerInput,
+    PlannerInput, plan_finalize, plan_init, plan_resume,
 };
-use cybflight_core::trajectory_planning::planner::SolverStatus;
 #[cfg(feature = "plan_online")]
 use cybflight_core::trajectory_planning::quad_planning_config::QuadPlanningConfig;
 use cybflight_core::trajectory_planning::types::Vec3;
 #[cfg(not(feature = "plan_online"))]
 use cybflight_core::trajectory_planning::types::ZERO3;
 
-use cybflight_core::params::PlannerParams;
 use crate::msgs;
+use cybflight_core::params::PlannerParams;
 
 use super::offline_mission;
 #[cfg(not(feature = "plan_online"))]
 use super::offline_mission::OFFLINE_MAX_PIECES;
 use super::{
-    read_active_setpoint, MissionState, MissionTrajectory, MissionYawMode,
-    MISSION_ABORT_REQUESTED, MISSION_STATE, MISSION_STATUS, MISSION_TRAJECTORY_SLOT, PLAN_REQUEST,
+    MISSION_ABORT_REQUESTED, MISSION_STATE, MISSION_STATUS, MISSION_TRAJECTORY_SLOT, MissionState,
+    MissionTrajectory, MissionYawMode, PLAN_REQUEST, read_active_setpoint,
 };
 
 // ─── Offline-schema options ────────────────────────────────────────────
@@ -157,11 +157,8 @@ type OfflineMincoSnap = MincoSnapN<
 /// The offline yaw-spline solver (s=2, 1D) for `headings` missions,
 /// sized like [`OfflineMincoSnap`]. ~18 KiB at 105 pieces.
 #[cfg(not(feature = "plan_online"))]
-type OfflineMincoAcc = MincoAccN<
-    OFFLINE_MAX_PIECES,
-    { 4 * OFFLINE_MAX_PIECES },
-    { acc_storage(OFFLINE_MAX_PIECES) },
->;
+type OfflineMincoAcc =
+    MincoAccN<OFFLINE_MAX_PIECES, { 4 * OFFLINE_MAX_PIECES }, { acc_storage(OFFLINE_MAX_PIECES) }>;
 
 /// MINCO-snap scratch for the offline planner. BSS-resident; init once
 /// on first plan, then rebound per request via `set_piece_count` /
@@ -502,9 +499,7 @@ async fn plan_online(
     // so the pilot/defmt reader knows why; both yield a `Reject`.
     if result.status == SolverStatus::TimeExceeded {
         let reject_reason = if !crate::motors::IS_ARMED.load(Ordering::Acquire) {
-            defmt::warn!(
-                "mission_planner: disarm detected mid-solve — aborting (no trajectory)"
-            );
+            defmt::warn!("mission_planner: disarm detected mid-solve — aborting (no trajectory)");
             msgs::SOLVE_REJECT_DISARMED
         } else {
             defmt::warn!(
@@ -705,10 +700,8 @@ fn plan_offline(
 
     let dur = trajectory.total_duration();
     let (dur_min_s, dur_max_s) = duration_bounds();
-    let basic_valid = dur.is_finite()
-        && dur >= dur_min_s
-        && dur <= dur_max_s
-        && final_cost.is_finite();
+    let basic_valid =
+        dur.is_finite() && dur >= dur_min_s && dur <= dur_max_s && final_cost.is_finite();
 
     let mk_solve = |reason: u8, peak: f32| msgs::SolveDiagnostics {
         // `status` field is BFGS-shaped; on the offline path we have
@@ -965,9 +958,7 @@ fn publish_outcome(
         if MISSION_ABORT_REQUESTED.swap(false, Ordering::AcqRel) {
             return;
         }
-        if MissionState::from_u8(MISSION_STATE.load(Ordering::Acquire))
-            != MissionState::Planning
-        {
+        if MissionState::from_u8(MISSION_STATE.load(Ordering::Acquire)) != MissionState::Planning {
             return;
         }
         *slot.borrow_mut() = Some(MissionTrajectory {
@@ -1044,8 +1035,11 @@ pub async fn mission_planner_task() {
     ));
     // Yaw-spline solver for `headings` missions; same rebind-per-request
     // pattern as `offline_minco` above.
-    let offline_minco_yaw: &mut OfflineMincoAcc =
-        OFFLINE_MINCO_YAW.init(OfflineMincoAcc::new(&[0.0, 0.0], &[0.0, 0.0], OFFLINE_MAX_PIECES));
+    let offline_minco_yaw: &mut OfflineMincoAcc = OFFLINE_MINCO_YAW.init(OfflineMincoAcc::new(
+        &[0.0, 0.0],
+        &[0.0, 0.0],
+        OFFLINE_MAX_PIECES,
+    ));
     let mission_status_pub = MISSION_STATUS.immediate_publisher();
 
     defmt::info!("mission_planner: ready (idle, schema=offline)");

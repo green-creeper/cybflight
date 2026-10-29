@@ -164,8 +164,7 @@ fn sc_knife_edge_drop() -> Scenario {
         xref_at(Vector3::new(0.0, 0.0, 1.0), UnitQuaternion::identity())
     }
     fn ok(x: &SVector<f32, NX>) -> bool {
-        tilt_of(x) < 15.0_f32.to_radians()
-            && (pos_of(x) - Vector3::new(0.0, 0.0, 1.0)).norm() < 0.5
+        tilt_of(x) < 15.0_f32.to_radians() && (pos_of(x) - Vector3::new(0.0, 0.0, 1.0)).norm() < 0.5
     }
     Scenario {
         name: "knife_edge_drop",
@@ -196,14 +195,16 @@ fn sc_yaw_reversal() -> Scenario {
         // Yaw error < 10° and position held.
         let q = quat_of(x);
         let (_, _, yaw) = q.euler_angles();
-        yaw.abs() < 10.0_f32.to_radians()
-            && (pos_of(x) - Vector3::new(0.0, 0.0, 1.0)).norm() < 0.5
+        yaw.abs() < 10.0_f32.to_radians() && (pos_of(x) - Vector3::new(0.0, 0.0, 1.0)).norm() < 0.5
     }
     Scenario {
         name: "yaw_reversal",
         x0: make_state(
             Vector3::new(0.0, 0.0, 1.0),
-            UnitQuaternion::from_axis_angle(&Unit::new_normalize(Vector3::z()), 179.0_f32.to_radians()),
+            UnitQuaternion::from_axis_angle(
+                &Unit::new_normalize(Vector3::z()),
+                179.0_f32.to_radians(),
+            ),
             Vector3::zeros(),
             Vector3::zeros(),
         ),
@@ -226,7 +227,10 @@ fn sc_dash_reversal() -> Scenario {
         name: "dash_reversal",
         x0: make_state(
             Vector3::new(0.0, 0.0, 1.0),
-            UnitQuaternion::from_axis_angle(&Unit::new_normalize(Vector3::y()), 20.0_f32.to_radians()),
+            UnitQuaternion::from_axis_angle(
+                &Unit::new_normalize(Vector3::y()),
+                20.0_f32.to_radians(),
+            ),
             Vector3::new(7.0, 0.0, 0.0),
             Vector3::zeros(),
         ),
@@ -434,10 +438,18 @@ fn state_constraints_active_and_effective_under_aggression() {
     ];
 
     println!();
-    println!("═════════════════════════════════════════════════════════════════════════════════════════════");
-    println!("Closed-loop aggression suite — FullSqpSolver RTI (1 it @ 100 Hz), FullQuadModel plant @ 500 Hz");
-    println!("  util = max_i |ω_i|/lim_i on the PLANT state; ride% = time at util∈[0.85,1.05] (limit-riding)");
-    println!("═════════════════════════════════════════════════════════════════════════════════════════════");
+    println!(
+        "═════════════════════════════════════════════════════════════════════════════════════════════"
+    );
+    println!(
+        "Closed-loop aggression suite — FullSqpSolver RTI (1 it @ 100 Hz), FullQuadModel plant @ 500 Hz"
+    );
+    println!(
+        "  util = max_i |ω_i|/lim_i on the PLANT state; ride% = time at util∈[0.85,1.05] (limit-riding)"
+    );
+    println!(
+        "═════════════════════════════════════════════════════════════════════════════════════════════"
+    );
     println!(
         "{:<18} {:<8} {:>9} {:>7} {:>7} {:>11} {:>10} {:>8}",
         "scenario", "config", "peak", "viol%", "ride%", "lastviol[s]", "finalerr", "success"
@@ -482,7 +494,9 @@ fn state_constraints_active_and_effective_under_aggression() {
             con,
         });
     }
-    println!("═════════════════════════════════════════════════════════════════════════════════════════════");
+    println!(
+        "═════════════════════════════════════════════════════════════════════════════════════════════"
+    );
 
     // ── Assertions ────────────────────────────────────────────────────────
     for r in &rows {
@@ -595,7 +609,10 @@ fn margin_enforcement_absorbs_knot_overshoot() {
         "yaw_reversal peak vs vehicle limit: enforced@1.00 → {:.3}, enforced@0.85 → {:.3}",
         raw.peak_util, margined.peak_util
     );
-    assert!(margined.success, "margined run must still complete the task");
+    assert!(
+        margined.success,
+        "margined run must still complete the task"
+    );
     assert!(
         margined.peak_util < 1.05,
         "margin-enforced yaw peak {:.3} should respect the vehicle limit (< 1.05)",

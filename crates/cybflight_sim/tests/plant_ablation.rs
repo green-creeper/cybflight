@@ -19,7 +19,7 @@
 use cybflight_sim::controller::{MpcDirectController, MpcIndiController};
 use cybflight_sim::plant::QuadPlant;
 use cybflight_sim::runner::{MissionRunner, RunnerConfig, SummaryMetrics};
-use cybflight_sim::scenario::{default_sim_params, Scenario};
+use cybflight_sim::scenario::{Scenario, default_sim_params};
 use cybflight_sim::sensors::NoRotorTelemetry;
 use nalgebra::Vector3;
 use vehicle_yaml::SimYaml;
@@ -47,11 +47,7 @@ fn mission() -> Scenario {
 /// (which disables INDI's G2 columns), and optionally overriding plant
 /// parameters after construction — that last hook is how rotor lag is
 /// removed from the *plant* while leaving the controller's belief intact.
-fn run(
-    sim: SimYaml,
-    rotor_telemetry: bool,
-    tweak: impl FnOnce(&mut QuadPlant),
-) -> SummaryMetrics {
+fn run(sim: SimYaml, rotor_telemetry: bool, tweak: impl FnOnce(&mut QuadPlant)) -> SummaryMetrics {
     let mut scenario = mission().with_sim_params(sim.clone());
     if !rotor_telemetry {
         scenario = scenario.with_rotor(Box::new(NoRotorTelemetry));
@@ -251,7 +247,10 @@ fn mismatch_sensitivity_of_modelled_terms() {
     for mult in [0.5f32, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0] {
         let tau = 0.04 * mult;
         let s = run(full.clone(), true, move |p| p.plant.tau_s = [tau; 4]);
-        row(&format!("plant τ = {:.0} ms ({mult:.2}×)", tau * 1000.0), &s);
+        row(
+            &format!("plant τ = {:.0} ms ({mult:.2}×)", tau * 1000.0),
+            &s,
+        );
         sweep.push((mult, s));
     }
 
@@ -404,7 +403,7 @@ fn indi_inner_loop_beats_open_loop_thrust_commands() {
 }
 
 fn both_flyable(a: &SummaryMetrics, b: &SummaryMetrics) -> bool {
-    [a, b].iter().all(|s| {
-        s.rms_pos_err_m.is_finite() && s.rms_pos_err_m < 1.0 && !s.geofence_violation
-    })
+    [a, b]
+        .iter()
+        .all(|s| s.rms_pos_err_m.is_finite() && s.rms_pos_err_m < 1.0 && !s.geofence_violation)
 }

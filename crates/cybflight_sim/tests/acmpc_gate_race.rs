@@ -33,9 +33,9 @@
 
 mod common;
 
-use common::{fixture, RaceOutcome};
+use common::{RaceOutcome, fixture};
 use cybflight_core::acmpc::{
-    ddp::LineSearch, AcmpcConfig, AcmpcPolicy, CtbrLimits, COST_OUT, HORIZON,
+    AcmpcConfig, AcmpcPolicy, COST_OUT, CtbrLimits, HORIZON, ddp::LineSearch,
 };
 use cybflight_core::mpc::NU;
 use cybflight_core::nn::mlp::{Activation, LayerShape, Mlp};
@@ -43,8 +43,8 @@ use cybflight_core::nn::race_policy::{PolicyConfig, PolicyFrame, VehicleState};
 use cybflight_sim::controller::CtbrRateLoop;
 use cybflight_sim::plant::QuadPlant;
 use cybflight_sim::rl_reference::{
-    rl_track, world_state_ned_to_enu, RateLoopConfig, RlParams, RlReferencePlant, RL_DT_S,
-    RL_GATE_SIZE_M, RL_OMEGA_NORM_MAX, RL_START_POS_ENU, RL_START_YAW_ENU,
+    RL_DT_S, RL_GATE_SIZE_M, RL_OMEGA_NORM_MAX, RL_START_POS_ENU, RL_START_YAW_ENU, RateLoopConfig,
+    RlParams, RlReferencePlant, rl_track, world_state_ned_to_enu,
 };
 use nalgebra::{SVector, UnitQuaternion, Vector3};
 
@@ -96,7 +96,10 @@ fn upstream_config() -> AcmpcConfig {
         mpc_dt: 0.02,
         range_q: 1e5,
         range_p: 1e5,
-        line_search: LineSearch { decay: 0.2, max_iter: 5 },
+        line_search: LineSearch {
+            decay: 0.2,
+            max_iter: 5,
+        },
     }
 }
 
@@ -230,10 +233,36 @@ fn observation_matches_python_ground_truth() {
     }
     println!("  raw-state quaternion sign differed on {sign_flips}/{n} samples");
     let labels = [
-        "pos_g.x", "pos_g.y", "pos_g.z", "vel_g.x", "vel_g.y", "vel_g.z", "roll", "pitch",
-        "yaw_rel", "p", "q", "r", "w0", "w1", "w2", "w3", "ahead.x", "ahead.y", "ahead.z",
-        "ahead.yaw", "raw.px", "raw.py", "raw.pz", "raw.qw", "raw.qx", "raw.qy", "raw.qz",
-        "raw.vx", "raw.vy", "raw.vz",
+        "pos_g.x",
+        "pos_g.y",
+        "pos_g.z",
+        "vel_g.x",
+        "vel_g.y",
+        "vel_g.z",
+        "roll",
+        "pitch",
+        "yaw_rel",
+        "p",
+        "q",
+        "r",
+        "w0",
+        "w1",
+        "w2",
+        "w3",
+        "ahead.x",
+        "ahead.y",
+        "ahead.z",
+        "ahead.yaw",
+        "raw.px",
+        "raw.py",
+        "raw.pz",
+        "raw.qw",
+        "raw.qx",
+        "raw.qy",
+        "raw.qz",
+        "raw.vx",
+        "raw.vy",
+        "raw.vz",
     ];
     println!("observation: worst |Δ| per entry over {n} samples");
     for i in 0..OBS_LEN {
@@ -399,7 +428,11 @@ fn reference_plant_tracks_python_trajectory() {
 
     println!("reference plant vs Python, position error:");
     for &k in &[1usize, 10, 25, 50, 100, 150, 199] {
-        println!("  step {k:>3} ({:>4.2} s)  {:.3e} m", k as f32 * RL_DT_S, err(k));
+        println!(
+            "  step {k:>3} ({:>4.2} s)  {:.3e} m",
+            k as f32 * RL_DT_S,
+            err(k)
+        );
     }
 
     // A sign or axis error anywhere in the chain — observation, solver,

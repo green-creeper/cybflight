@@ -1,0 +1,21 @@
+[package]
+license = "Apache-2.0"
+repository = "https://github.com/cybird-robotics/cybflight"
+name = "bsp-flywoof745"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+embassy-stm32 = { version = "0.5.0", features = [
+  "stm32f745vg",
+  "defmt",
+  "memory-x",
+  "time-driver-any",
+  "exti",
+  "unstable-pac",
+] }
+
+defmt = "1.0.1"
+bsp-types = { path = "../types" }
+cybflight-drivers = { path = "../../drivers" }

@@ -128,7 +128,10 @@ mod tests {
             let (_, dpsi) = head(t);
             // On a circle the look-at heading rotates at ω.
             assert!((dpsi - w).abs() < 1e-3, "t={t}: analytic {dpsi} vs ω {w}");
-            assert!((dpsi - fd).abs() < 1e-2, "t={t}: analytic {dpsi} vs FD {fd}");
+            assert!(
+                (dpsi - fd).abs() < 1e-2,
+                "t={t}: analytic {dpsi} vs FD {fd}"
+            );
         }
     }
 
@@ -180,7 +183,12 @@ mod tests {
     fn reversal_flip_is_rate_limited_and_takes_short_way() {
         // Raw heading flips from +170° to −170°: the short way is +20°
         // through ±180°, not −340°.
-        let (psi, dpsi) = slew_heading(170f32.to_radians(), Some((-170f32.to_radians(), 0.0)), 4.0, 0.02);
+        let (psi, dpsi) = slew_heading(
+            170f32.to_radians(),
+            Some((-170f32.to_radians(), 0.0)),
+            4.0,
+            0.02,
+        );
         assert!(dpsi > 0.0);
         assert!(close(psi, 170f32.to_radians() + 0.08, 1e-5));
         // And the output stays wrapped.

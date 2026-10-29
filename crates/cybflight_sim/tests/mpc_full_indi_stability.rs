@@ -22,15 +22,15 @@
 
 use std::path::PathBuf;
 
+use cybflight_core::params::FirmwareConfig;
 use cybflight_sim::{
     controller::{Controller, MpcFullIndiController},
     plant::QuadPlant,
     report,
     runner::{MissionRunner, RunOutput},
-    scenario::{tweaked_vehicle, Scenario, Verdict},
+    scenario::{Scenario, Verdict, tweaked_vehicle},
     sensors::NoisyImu,
 };
-use cybflight_core::params::FirmwareConfig;
 use nalgebra::Vector3;
 
 fn out_dir(name: &str) -> PathBuf {
@@ -49,8 +49,11 @@ fn mpc_full_vehicle() -> FirmwareConfig {
 }
 
 fn run_with<C: Controller>(mut scenario: Scenario, mut controller: C) -> RunOutput {
-    let mut plant =
-        QuadPlant::new(scenario.vehicle_params.clone(), &scenario.sim_params, 1.0 / 8000.0);
+    let mut plant = QuadPlant::new(
+        scenario.vehicle_params.clone(),
+        &scenario.sim_params,
+        1.0 / 8000.0,
+    );
     let runner = MissionRunner::new(Default::default());
     let out = runner.run(&mut scenario, &mut plant, &mut controller);
 

@@ -31,11 +31,9 @@ use cybflight_core::trajectory_planning::quad_planning_config::QuadPlanningConfi
 use nalgebra::{UnitQuaternion, Vector3};
 
 use crate::plant::VEHICLE;
-use crate::sensors::{
-    GpsModel, ImuModel, PerfectImu, PerfectRotorTelemetry, RotorModel,
-};
-use vehicle_yaml::SimYaml;
+use crate::sensors::{GpsModel, ImuModel, PerfectImu, PerfectRotorTelemetry, RotorModel};
 use crate::trajectory::{HoverSetpoint, MissionSetpoints, SetpointSource};
+use vehicle_yaml::SimYaml;
 
 /// Return a fresh copy of the canonical host-side vehicle parameters.
 /// Convenience for scenarios that want the defaults without reaching into

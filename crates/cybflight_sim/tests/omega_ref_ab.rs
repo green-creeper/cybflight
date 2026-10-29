@@ -19,14 +19,16 @@ use cybflight_sim::{
     controller::{Controller, MpcIndiController},
     plant::QuadPlant,
     runner::{MissionRunner, RunnerConfig},
-    scenario::{default_sim_params, tweaked_vehicle, PassCriteria, Scenario},
+    scenario::{PassCriteria, Scenario, default_sim_params, tweaked_vehicle},
     trajectory::MissionSetpoints,
 };
 use nalgebra::{UnitQuaternion, Vector3};
-use vehicle_yaml::mission::{load_mission, Mission};
+use vehicle_yaml::mission::{Mission, load_mission};
 
 fn load(name: &str) -> Mission {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../missions").join(format!("{name}.yaml"));
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../missions")
+        .join(format!("{name}.yaml"));
     load_mission(name, &std::fs::read_to_string(&path).unwrap()).expect("mission loads")
 }
 
@@ -34,8 +36,14 @@ fn plan_fixed_time(m: &Mission) -> Box<MincoSnap> {
     let n = m.waypoints.len();
     let mut durations = Vec::with_capacity(n);
     let mut prev = 0.0f32;
-    for &t in &m.timestamps { durations.push(t - prev); prev = t; }
-    let intermediate: Vec<Vec3> = m.waypoints[..n - 1].iter().map(|w| Vec3::from(*w)).collect();
+    for &t in &m.timestamps {
+        durations.push(t - prev);
+        prev = t;
+    }
+    let intermediate: Vec<Vec3> = m.waypoints[..n - 1]
+        .iter()
+        .map(|w| Vec3::from(*w))
+        .collect();
     let head = [Vec3::from(m.start), ZERO3, ZERO3, ZERO3];
     let tail = [Vec3::from(m.waypoints[n - 1]), ZERO3, ZERO3, ZERO3];
     let mut minco = Box::new(MincoSnap::new(&head, &tail, n));
@@ -46,8 +54,16 @@ fn plan_fixed_time(m: &Mission) -> Box<MincoSnap> {
 fn geofence(m: &Mission) -> (Vector3<f32>, Vector3<f32>) {
     let mut lo = Vector3::from(m.start);
     let mut hi = lo;
-    for w in &m.waypoints { for a in 0..3 { lo[a] = lo[a].min(w[a]); hi[a] = hi[a].max(w[a]); } }
-    (Vector3::new(lo.x - 10.0, lo.y - 10.0, -1.0), hi.add_scalar(10.0))
+    for w in &m.waypoints {
+        for a in 0..3 {
+            lo[a] = lo[a].min(w[a]);
+            hi[a] = hi[a].max(w[a]);
+        }
+    }
+    (
+        Vector3::new(lo.x - 10.0, lo.y - 10.0, -1.0),
+        hi.add_scalar(10.0),
+    )
 }
 
 fn run_arm(name: &str, m: &Mission, closed_form: bool) {
@@ -72,11 +88,17 @@ fn run_arm(name: &str, m: &Mission, closed_form: bool) {
         initial_position: Vector3::from(m.start),
         initial_velocity: Vector3::zeros(),
         initial_attitude: UnitQuaternion::identity(),
-        setpoints: Box::new(MissionSetpoints::from_trajectory(plan_fixed_time(m).get_trajectory())),
+        setpoints: Box::new(MissionSetpoints::from_trajectory(
+            plan_fixed_time(m).get_trajectory(),
+        )),
         imu_model: Box::new(cybflight_sim::sensors::PerfectImu),
         gps_model: None,
         rotor_model: Box::new(cybflight_sim::sensors::PerfectRotorTelemetry),
-        pass_criteria: PassCriteria { geofence_min: gmin, geofence_max: gmax, ..PassCriteria::default() },
+        pass_criteria: PassCriteria {
+            geofence_min: gmin,
+            geofence_max: gmax,
+            ..PassCriteria::default()
+        },
         terminal_hold_s: 3.0,
     };
     let mut c = MpcIndiController::from_params_at_indi_rate(&vp, 1000.0);
@@ -84,17 +106,33 @@ fn run_arm(name: &str, m: &Mission, closed_form: bool) {
     c.flatness_feedforward = true;
     c.closed_form_omega_ref = closed_form;
     let mut plant = QuadPlant::new(vp, &scenario.sim_params, 1.0 / 8000.0);
-    let runner = MissionRunner::new(RunnerConfig { dt_sim: 1.0 / 8000.0, max_sim_time_s: 120.0, history_rate_hz: 100.0 });
+    let runner = MissionRunner::new(RunnerConfig {
+        dt_sim: 1.0 / 8000.0,
+        max_sim_time_s: 120.0,
+        history_rate_hz: 100.0,
+    });
     let out = runner.run(&mut scenario, &mut plant, &mut c as &mut dyn Controller);
     let s = &out.summary;
     println!(
         "{:<26} [{:<11}][fence {}] rms={:.4}m peak={:.4}m term={:.4}m tilt={:.1}° sat={:.0}% {:?} {}",
         name,
-        if closed_form { "closed-form" } else { "min-norm" },
+        if closed_form {
+            "closed-form"
+        } else {
+            "min-norm"
+        },
         if fence_on { "on " } else { "off" },
-        s.rms_pos_err_m, s.peak_pos_err_m, s.terminal_pos_err_m,
-        s.peak_tilt_rad.to_degrees(), s.peak_motor_saturation_pct, out.verdict,
-        if out.failure_reasons.is_empty() { String::new() } else { format!("fail: {}", out.failure_reasons.join("; ")) }
+        s.rms_pos_err_m,
+        s.peak_pos_err_m,
+        s.terminal_pos_err_m,
+        s.peak_tilt_rad.to_degrees(),
+        s.peak_motor_saturation_pct,
+        out.verdict,
+        if out.failure_reasons.is_empty() {
+            String::new()
+        } else {
+            format!("fail: {}", out.failure_reasons.join("; "))
+        }
     );
 }
 
@@ -127,9 +165,27 @@ fn closed_form_omega_is_snap_independent() {
     assert!(worst < 1e-5);
 }
 
-#[test] fn circle_mid() { ab("indoor_circle_mid"); }
-#[test] fn circle_timeopt() { ab("indoor_circle_timeopt"); }
-#[test] fn figure8_mid() { ab("indoor_figure8_mid"); }
-#[test] fn splits_mid() { ab("indoor_splits_mid"); }
-#[test] fn slalom_timeopt() { ab("indoor_slalom_timeopt"); }
-#[test] fn splits_large_mid() { ab("outdoor_splits-large_mid"); }
+#[test]
+fn circle_mid() {
+    ab("indoor_circle_mid");
+}
+#[test]
+fn circle_timeopt() {
+    ab("indoor_circle_timeopt");
+}
+#[test]
+fn figure8_mid() {
+    ab("indoor_figure8_mid");
+}
+#[test]
+fn splits_mid() {
+    ab("indoor_splits_mid");
+}
+#[test]
+fn slalom_timeopt() {
+    ab("indoor_slalom_timeopt");
+}
+#[test]
+fn splits_large_mid() {
+    ab("outdoor_splits-large_mid");
+}

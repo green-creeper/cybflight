@@ -120,9 +120,7 @@ fn saturating_noise_imu_does_not_explode_covariance() {
     let vel_trace = e.vel_cov_trace();
     assert!(pos_trace.is_finite() && pos_trace > 0.0);
     assert!(vel_trace.is_finite() && vel_trace > 0.0);
-    println!(
-        "saturating-noise IMU: pos_cov_trace={pos_trace:.2} vel_cov_trace={vel_trace:.2}"
-    );
+    println!("saturating-noise IMU: pos_cov_trace={pos_trace:.2} vel_cov_trace={vel_trace:.2}");
 }
 
 #[test]

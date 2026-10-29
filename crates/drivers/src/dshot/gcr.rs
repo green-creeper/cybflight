@@ -6,10 +6,8 @@
 ///
 /// Invalid entries are 0xFF (BF uses 0, but we use 0xFF for explicit error detection).
 const GCR_DECODE: [u8; 32] = [
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 9,    10,   11,   0xFF, 13,   14,   15,
-    0xFF, 0xFF, 2,    3,    0xFF, 5,    6,    7,
-    0xFF, 0,    8,    1,    0xFF, 4,    12,   0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 9, 10, 11, 0xFF, 13, 14, 15, 0xFF, 0xFF,
+    2, 3, 0xFF, 5, 6, 7, 0xFF, 0, 8, 1, 0xFF, 4, 12, 0xFF,
 ];
 
 /// Detect actual GCR ticks-per-bit from the minimum inter-edge gap.
@@ -20,11 +18,7 @@ const GCR_DECODE: [u8; 32] = [
 ///
 /// Returns `None` if fewer than 3 edges or the detected period is out of the
 /// plausible range `[nominal/2, nominal*2]`.
-pub fn detect_ticks_per_bit(
-    edge_timings: &[u32],
-    count: usize,
-    nominal: u32,
-) -> Option<u32> {
+pub fn detect_ticks_per_bit(edge_timings: &[u32], count: usize, nominal: u32) -> Option<u32> {
     if count < 3 || edge_timings.len() < 3 {
         return None;
     }
@@ -101,10 +95,7 @@ pub fn decode_telemetry_packet(
         return None;
     }
 
-    let decoded: u32 = (n0 as u32)
-        | ((n1 as u32) << 4)
-        | ((n2 as u32) << 8)
-        | ((n3 as u32) << 12);
+    let decoded: u32 = (n0 as u32) | ((n1 as u32) << 4) | ((n2 as u32) << 8) | ((n3 as u32) << 12);
 
     // Checksum: XOR of all nibbles must equal 0xF
     let csum = decoded ^ (decoded >> 8);
@@ -126,8 +117,8 @@ mod tests {
 
     /// GCR 4-to-5 encode table (from AP bdshot_encoder.py:58).
     const GCR_ENCODE: [u8; 16] = [
-        0x19, 0x1B, 0x12, 0x13, 0x1D, 0x15, 0x16, 0x17,
-        0x1A, 0x09, 0x0A, 0x0B, 0x1E, 0x0D, 0x0E, 0x0F,
+        0x19, 0x1B, 0x12, 0x13, 0x1D, 0x15, 0x16, 0x17, 0x1A, 0x09, 0x0A, 0x0B, 0x1E, 0x0D, 0x0E,
+        0x0F,
     ];
 
     /// Test-only: GCR-encode a 12-bit value into edge timings.
@@ -169,7 +160,9 @@ mod tests {
     #[test]
     fn decode_known_vector_0x000() {
         // V=0x000: Encoded16=0x000F, checksum=0xF
-        let edges: &[u32] = &[0, 16, 32, 80, 96, 112, 160, 176, 192, 240, 272, 288, 304, 320];
+        let edges: &[u32] = &[
+            0, 16, 32, 80, 96, 112, 160, 176, 192, 240, 272, 288, 304, 320,
+        ];
         let result = decode_telemetry_packet(edges, edges.len(), 16);
         assert_eq!(result, Some(0x000));
     }
@@ -177,7 +170,9 @@ mod tests {
     #[test]
     fn decode_known_vector_0xfff() {
         // V=0xFFF: Encoded16=0xFFF0, GCR nibbles=[0x0f,0x0f,0x0f,0x19]
-        let edges: &[u32] = &[0, 32, 48, 64, 80, 112, 128, 144, 160, 192, 208, 224, 240, 256, 272, 320];
+        let edges: &[u32] = &[
+            0, 32, 48, 64, 80, 112, 128, 144, 160, 192, 208, 224, 240, 256, 272, 320,
+        ];
         let result = decode_telemetry_packet(edges, edges.len(), 16);
         assert_eq!(result, Some(0xFFF));
     }
@@ -225,7 +220,9 @@ mod tests {
     #[test]
     fn corrupted_timing_returns_none() {
         // Start with valid edges for 0x000, then corrupt one
-        let mut edges: Vec<u32> = std::vec![0, 16, 32, 80, 96, 112, 160, 176, 192, 240, 272, 288, 304, 320];
+        let mut edges: Vec<u32> = std::vec![
+            0, 16, 32, 80, 96, 112, 160, 176, 192, 240, 272, 288, 304, 320
+        ];
         edges[3] = 999; // corrupt a timing
         let result = decode_telemetry_packet(&edges, edges.len(), 16);
         assert_eq!(result, None);

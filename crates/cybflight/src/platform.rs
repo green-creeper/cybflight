@@ -37,30 +37,38 @@ unsafe fn pre_init() {
     crate::reset_cause::capture();
 
     const DFU_MAGIC: u32 = 0xDEAD_D00D;
-    // RTC backup register 0 on STM32H743
-    let bkpr0 = 0x58004050 as *mut u32;
+    // RTC backup register 0: 0x5800_4050 on STM32H743, 0x4000_2850 on STM32F745
+    #[cfg(not(feature = "board_flywoof745"))]
+    let (bkpr0, dfu_base) = (0x5800_4050 as *mut u32, 0x1FF0_9800usize);
+    #[cfg(feature = "board_flywoof745")]
+    let (bkpr0, dfu_base) = (0x4000_2850 as *mut u32, 0x1FF0_0000usize);
     unsafe {
         if bkpr0.read_volatile() == DFU_MAGIC {
             bkpr0.write_volatile(0);
             // Jump to system memory DFU bootloader
-            let sp = (0x1FF0_9800usize as *const u32).read();
-            let entry = (0x1FF0_9800usize as *const u32).add(1).read();
+            let sp = (dfu_base as *const u32).read();
+            let entry = (dfu_base as *const u32).add(1).read();
             cortex_m::asm::bootstrap(sp as *const u32, entry as *const u32);
         }
     }
 }
 
-/// Jump directly to the STM32H743 system-memory USB DFU bootloader.
-///
-/// Disables all maskable interrupts and SysTick, clears the NVIC enable and
-/// pending state, loads the bootloader's initial stack pointer and entry point
-/// from its vector table at `0x1FF09800`, then branches there.  The USB
-/// peripheral re-enumerates on the host as a DFU target without a full reset
-/// cycle.
-///
-/// This function never returns.
+/// Jump directly to the STM32 system-memory USB DFU bootloader.
 pub fn enter_dfu() -> ! {
     const DFU_MAGIC: u32 = 0xDEAD_D00D;
-    unsafe { (0x58004050 as *mut u32).write_volatile(DFU_MAGIC) };
+    #[cfg(not(feature = "board_flywoof745"))]
+    let bkpr0 = 0x5800_4050 as *mut u32;
+    #[cfg(feature = "board_flywoof745")]
+    let bkpr0 = {
+        // Ensure backup domain write access (`PWREN` + `DBP`) is enabled even on
+        // builds without the `postmortem` feature so writing RTC_BKP0R succeeds.
+        use crate::hal::pac;
+        pac::RCC.apb1enr().modify(|w| w.set_pwren(true));
+        cortex_m::asm::dsb();
+        pac::PWR.cr1().modify(|w| w.set_dbp(true));
+        cortex_m::asm::dsb();
+        0x4000_2850 as *mut u32
+    };
+    unsafe { bkpr0.write_volatile(DFU_MAGIC) };
     sys_reboot()
 }

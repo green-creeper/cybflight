@@ -21,7 +21,7 @@ pub use embassy_stm32 as hal;
 
 use hal::exti;
 use hal::gpio::{Level, Output, Pull, Speed};
-use hal::{bind_interrupts, Config, Peripherals};
+use hal::{Config, Peripherals, bind_interrupts};
 
 pub use bsp_types::{
     DmaHint, MotorMeta, PowerCalibration, SensorAlign, SerialPortId, TimerChannel, TimerId,
@@ -55,6 +55,11 @@ pub const HAS_BLACKBOX_STORAGE: bool = HAS_SDCARD;
 /// STM32H743 D3-domain backup SRAM is always present at the MCU level.
 pub const HAS_BACKUP_SRAM: bool = true;
 pub const LED_COUNT: usize = 3;
+
+pub type DshotDmaM1 = hal::peripherals::DMA1_CH0;
+pub type DshotDmaM2 = hal::peripherals::DMA1_CH1;
+pub type DshotDmaM3 = hal::peripherals::DMA1_CH2;
+pub type DshotDmaM4 = hal::peripherals::DMA1_CH3;
 
 /// Primary gyro output data rate (Hz). The INDI control loop runs once per
 /// primary-gyro sample, so this IS the inner-loop rate and must match the

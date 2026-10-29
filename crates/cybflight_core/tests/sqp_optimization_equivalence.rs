@@ -458,7 +458,9 @@ fn quat_xyzw(yaw: f32, pitch: f32, roll: f32) -> [f32; 4] {
 
 fn make_state(p: [f32; 3], yaw: f32, pitch: f32, roll: f32, v: [f32; 3]) -> SVector<f32, NX> {
     let q = quat_xyzw(yaw, pitch, roll);
-    SVector::<f32, NX>::from_row_slice(&[p[0], p[1], p[2], q[0], q[1], q[2], q[3], v[0], v[1], v[2]])
+    SVector::<f32, NX>::from_row_slice(&[
+        p[0], p[1], p[2], q[0], q[1], q[2], q[3], v[0], v[1], v[2],
+    ])
 }
 
 fn hover_xref(target_pos: [f32; 3]) -> [SVector<f32, NX>; NP1] {
@@ -566,7 +568,16 @@ fn equiv_hover_at_origin() {
     let x0 = make_state([0.0, 0.0, 0.0], 0.0, 0.0, 0.0, [0.0, 0.0, 0.0]);
     let x_refs = hover_xref([0.0, 0.0, 0.0]);
     let u_refs = hover_uref(0.58);
-    assert_equiv("hover_at_origin", &x0, &x_refs, &u_refs, &u_refs, 1, ABS_TOL, REL_TOL);
+    assert_equiv(
+        "hover_at_origin",
+        &x0,
+        &x_refs,
+        &u_refs,
+        &u_refs,
+        1,
+        ABS_TOL,
+        REL_TOL,
+    );
 }
 
 #[test]
@@ -574,7 +585,16 @@ fn equiv_offset_position_target() {
     let x0 = make_state([0.0, 0.0, 0.0], 0.0, 0.0, 0.0, [0.0, 0.0, 0.0]);
     let x_refs = hover_xref([1.0, -0.5, 2.0]);
     let u_refs = hover_uref(0.58);
-    assert_equiv("offset_position_target", &x0, &x_refs, &u_refs, &u_refs, 1, ABS_TOL, REL_TOL);
+    assert_equiv(
+        "offset_position_target",
+        &x0,
+        &x_refs,
+        &u_refs,
+        &u_refs,
+        1,
+        ABS_TOL,
+        REL_TOL,
+    );
 }
 
 #[test]
@@ -620,7 +640,9 @@ fn equiv_multi_iter() {
     let u_refs = hover_uref(0.58);
     for iters in [2, 3, 5, 10] {
         let lab = alloc::format!("multi_iter_{iters}");
-        assert_equiv(&lab, &x0, &x_refs, &u_refs, &u_refs, iters, ABS_TOL, REL_TOL);
+        assert_equiv(
+            &lab, &x0, &x_refs, &u_refs, &u_refs, iters, ABS_TOL, REL_TOL,
+        );
     }
 }
 
@@ -669,7 +691,10 @@ fn equiv_warm_start_chain() {
                  |x_opt-x_base|max={:.3e}",
                 a,
                 r,
-                (x_opt - x_base).iter().map(|v| v.abs()).fold(0.0f32, f32::max),
+                (x_opt - x_base)
+                    .iter()
+                    .map(|v| v.abs())
+                    .fold(0.0f32, f32::max),
             );
         }
     }
@@ -723,14 +748,34 @@ fn bench_one(label: &str, n_solves: usize, fresh_each_solve: bool) {
 
     // Warmup — populate caches, page-in workspaces.
     for i in 0..16.min(n_solves) {
-        let _ = opt.solve(&problem, &x0_set[i], &x_refs, &u_refs, &u_init_set[i], 1, 1e-3);
-        base.solve(&problem, &x0_set[i], &x_refs, &u_refs, &u_init_set[i], 1, 1e-3);
+        let _ = opt.solve(
+            &problem,
+            &x0_set[i],
+            &x_refs,
+            &u_refs,
+            &u_init_set[i],
+            1,
+            1e-3,
+        );
+        base.solve(
+            &problem,
+            &x0_set[i],
+            &x_refs,
+            &u_refs,
+            &u_init_set[i],
+            1,
+            1e-3,
+        );
     }
 
     let mut warm_opt = u_refs;
     let t_opt_start = Instant::now();
     for i in 0..n_solves {
-        let warm = if fresh_each_solve { &u_init_set[i] } else { &warm_opt };
+        let warm = if fresh_each_solve {
+            &u_init_set[i]
+        } else {
+            &warm_opt
+        };
         let _ = opt.solve(&problem, &x0_set[i], &x_refs, &u_refs, warm, 1, 1e-3);
         warm_opt = *opt.u_bar();
         black_box(&warm_opt);
@@ -740,7 +785,11 @@ fn bench_one(label: &str, n_solves: usize, fresh_each_solve: bool) {
     let mut warm_base = u_refs;
     let t_base_start = Instant::now();
     for i in 0..n_solves {
-        let warm = if fresh_each_solve { &u_init_set[i] } else { &warm_base };
+        let warm = if fresh_each_solve {
+            &u_init_set[i]
+        } else {
+            &warm_base
+        };
         base.solve(&problem, &x0_set[i], &x_refs, &u_refs, warm, 1, 1e-3);
         warm_base = base.u_bar;
         black_box(&warm_base);
@@ -760,9 +809,9 @@ fn bench_one(label: &str, n_solves: usize, fresh_each_solve: bool) {
 #[test]
 fn bench_runtime_vs_baseline() {
     println!("--- SQP runtime: optimised (this branch) vs baseline (HEAD) ---");
-    bench_one("fresh_warm",  500,  true);
-    bench_one("fresh_warm",  2000, true);
-    bench_one("rolled_warm", 500,  false);
+    bench_one("fresh_warm", 500, true);
+    bench_one("fresh_warm", 2000, true);
+    bench_one("rolled_warm", 500, false);
     bench_one("rolled_warm", 2000, false);
 }
 
@@ -806,9 +855,8 @@ fn equiv_fuzz_random() {
         let (a, r) = ubar_diff(opt.u_bar(), &base.u_bar, &bounds);
         if a > worst_abs {
             worst_abs = a;
-            worst_label = alloc::format!(
-                "case#{case} p={p:?} ypr=({yaw:.2},{pitch:.2},{roll:.2}) v={v:?}"
-            );
+            worst_label =
+                alloc::format!("case#{case} p={p:?} ypr=({yaw:.2},{pitch:.2},{roll:.2}) v={v:?}");
         }
         worst_rel = worst_rel.max(r);
     }

@@ -123,11 +123,7 @@ pub fn is_synced() -> bool {
 /// Uses the refined PTP follow-up offset when available (previous frame's
 /// TX-complete ↔ previous frame's RX instant), falling back to the primary
 /// estimate (send-time − RX + UART delay) for the very first frame.
-pub fn process_time_sync(
-    rx_instant: Instant,
-    esp_send_ntp_us: i64,
-    prev_tx_complete_ntp_us: i64,
-) {
+pub fn process_time_sync(rx_instant: Instant, esp_send_ntp_us: i64, prev_tx_complete_ntp_us: i64) {
     let rx_us = rx_instant.as_micros() as i64;
 
     critical_section::with(|cs| {
@@ -174,8 +170,12 @@ pub fn process_time_sync(
                         state.smoothed_offset_us = raw_offset;
                         state.consecutive_rejects = 0;
                     } else {
-                        defmt::warn!("Time sync: offset jump {} us, rejecting ({}/{})",
-                            delta, state.consecutive_rejects, MAX_CONSECUTIVE_REJECTS);
+                        defmt::warn!(
+                            "Time sync: offset jump {} us, rejecting ({}/{})",
+                            delta,
+                            state.consecutive_rejects,
+                            MAX_CONSECUTIVE_REJECTS
+                        );
                     }
                     state.prev_rx_instant_us = rx_us as u64;
                     return;

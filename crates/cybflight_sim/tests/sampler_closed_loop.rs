@@ -28,7 +28,7 @@
 use cybflight_core::params::FirmwareConfig;
 use cybflight_core::trajectory_planning::bfgs_trust::BfgsWorkspace;
 use cybflight_core::trajectory_planning::piecewise_polynomial::PiecewisePolynomial;
-use cybflight_core::trajectory_planning::planner::{plan_with_workspace, PlannerInput};
+use cybflight_core::trajectory_planning::planner::{PlannerInput, plan_with_workspace};
 use cybflight_core::trajectory_planning::quad_planning_config::QuadPlanningConfig;
 use cybflight_core::trajectory_planning::sampler::{
     PositionSampler, Sampler, SamplerInputs, SamplerNode, TimeSampler,
@@ -335,7 +335,11 @@ fn time_sampler_completes_mission_and_transitions_to_idle() {
 
 #[test]
 fn position_sampler_completes_mission_and_transitions_to_idle() {
-    let params = VEHICLE.build().trajectory.sampler.to_position_sampler_params();
+    let params = VEHICLE
+        .build()
+        .trajectory
+        .sampler
+        .to_position_sampler_params();
     mission_completion_for_sampler(
         "position",
         Sampler::Position(PositionSampler::new(params)),
@@ -376,10 +380,12 @@ fn rc_setpoint_change_for_sampler(name: &str, sampler: Sampler) {
     let phase1 = mission_duration_s + 0.5;
     let (after_mission_pos, idle_at) =
         run_loop(&mut plant, &mut ctl, &mut driver, phase1, |_, _| {});
-    let idle_at = idle_at.unwrap_or_else(|| {
-        panic!("{name}: mission never reached Idle, can't test RC change")
-    });
-    assert!(idle_at < phase1, "{name}: idle should have happened in phase1");
+    let idle_at = idle_at
+        .unwrap_or_else(|| panic!("{name}: mission never reached Idle, can't test RC change"));
+    assert!(
+        idle_at < phase1,
+        "{name}: idle should have happened in phase1"
+    );
     assert!(
         (after_mission_pos - mission_target).norm() < 0.10,
         "{name}: after mission, expected near {mission_target:?}, got {after_mission_pos:?}"
@@ -392,18 +398,12 @@ fn rc_setpoint_change_for_sampler(name: &str, sampler: Sampler) {
     // step.
     let mut applied = false;
     let phase2 = 1.5;
-    let (after_rc_pos, _) = run_loop(
-        &mut plant,
-        &mut ctl,
-        &mut driver,
-        phase2,
-        |_now, drv| {
-            if !applied {
-                drv.rc_set_active(rc_target);
-                applied = true;
-            }
-        },
-    );
+    let (after_rc_pos, _) = run_loop(&mut plant, &mut ctl, &mut driver, phase2, |_now, drv| {
+        if !applied {
+            drv.rc_set_active(rc_target);
+            applied = true;
+        }
+    });
 
     // Plant must now track the RC-set point, not the previous mission target.
     let dist_to_rc = (after_rc_pos - rc_target).norm();
@@ -427,11 +427,12 @@ fn time_sampler_honours_rc_setpoint_change() {
 
 #[test]
 fn position_sampler_honours_rc_setpoint_change() {
-    let params = VEHICLE.build().trajectory.sampler.to_position_sampler_params();
-    rc_setpoint_change_for_sampler(
-        "position",
-        Sampler::Position(PositionSampler::new(params)),
-    );
+    let params = VEHICLE
+        .build()
+        .trajectory
+        .sampler
+        .to_position_sampler_params();
+    rc_setpoint_change_for_sampler("position", Sampler::Position(PositionSampler::new(params)));
 }
 
 /// Sanity: the inline horizon-fill we do in MissionDriver (Idle branch
@@ -447,7 +448,10 @@ fn hover_holds_for_sampler(name: &str, sampler: Sampler) {
     let mut driver = MissionDriver::new(sampler, start);
     // Do NOT start a mission — straight Idle.
     let (final_pos, idle_at) = run_loop(&mut plant, &mut ctl, &mut driver, 2.0, |_, _| {});
-    assert!(idle_at.is_none(), "{name}: idle_at should be None for hover-only run");
+    assert!(
+        idle_at.is_none(),
+        "{name}: idle_at should be None for hover-only run"
+    );
     let drift = (final_pos - start).norm();
     assert!(
         drift < 0.10,
@@ -462,10 +466,10 @@ fn time_sampler_idle_hover_holds() {
 
 #[test]
 fn position_sampler_idle_hover_holds() {
-    let params = VEHICLE.build().trajectory.sampler.to_position_sampler_params();
-    hover_holds_for_sampler(
-        "position",
-        Sampler::Position(PositionSampler::new(params)),
-    );
+    let params = VEHICLE
+        .build()
+        .trajectory
+        .sampler
+        .to_position_sampler_params();
+    hover_holds_for_sampler("position", Sampler::Position(PositionSampler::new(params)));
 }
-

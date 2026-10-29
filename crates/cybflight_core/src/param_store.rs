@@ -108,8 +108,12 @@ pub trait KvFlash {
     /// Read `buf.len()` bytes from byte `offset` within `sector`.
     fn read(&mut self, sector: u8, offset: usize, buf: &mut [u8]);
     /// Program one erased, word-aligned word.
-    fn write_word(&mut self, sector: u8, offset: usize, word: &[u8; WORD])
-    -> Result<(), StoreError>;
+    fn write_word(
+        &mut self,
+        sector: u8,
+        offset: usize,
+        word: &[u8; WORD],
+    ) -> Result<(), StoreError>;
     /// Erase a whole sector (all bytes → 0xFF). May stall the CPU
     /// on-target; implementations must handle watchdog care.
     fn erase_sector(&mut self, sector: u8) -> Result<(), StoreError>;
@@ -724,7 +728,11 @@ mod tests {
             .write_word(0, 2 * WORD, &record_word(name_hash("mass"), f32::NAN))
             .unwrap();
         flash
-            .write_word(0, 3 * WORD, &record_word(name_hash("indi_sync_hz"), f32::INFINITY))
+            .write_word(
+                0,
+                3 * WORD,
+                &record_word(name_hash("indi_sync_hz"), f32::INFINITY),
+            )
             .unwrap();
         flash
             .write_word(0, 4 * WORD, &record_word(name_hash("mass"), 0.71))
@@ -747,7 +755,11 @@ mod tests {
         let mut flash = MockFlash::new();
         flash.write_word(0, 0, &header_word(1)).unwrap();
         flash
-            .write_word(0, WORD, &record_word(name_hash("param_from_the_future"), 1.0))
+            .write_word(
+                0,
+                WORD,
+                &record_word(name_hash("param_from_the_future"), 1.0),
+            )
             .unwrap();
         flash
             .write_word(0, 2 * WORD, &record_word(name_hash("mass"), 0.62))
@@ -864,7 +876,10 @@ mod tests {
     fn prune_with_nothing_to_do_does_not_erase() {
         let mut flash = MockFlash::new();
         let base = baked();
-        assert_eq!(save_pruned(&mut flash, &base, &base).unwrap(), SaveReport::default());
+        assert_eq!(
+            save_pruned(&mut flash, &base, &base).unwrap(),
+            SaveReport::default()
+        );
         assert_eq!(flash.erases, 0);
         assert_eq!(flash.writes, 0);
     }

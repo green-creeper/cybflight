@@ -10,17 +10,17 @@ mod equivalence_test;
 mod benchmark;
 
 pub use eskf::{
-    Eskf, EskfConfig, EskfHealth, UpdateOutcome, DEFAULT_INFLATION_CAP, DEFAULT_MAG_NORM_GATE,
+    DEFAULT_INFLATION_CAP, DEFAULT_MAG_NORM_GATE, Eskf, EskfConfig, EskfHealth, UpdateOutcome,
 };
 pub use failsafe::{
     ConvergenceAxes, DisarmCause, EskfFailsafe, EskfFailsafeConfig, FailsafeAction,
     FailsafeSnapshot,
 };
 pub use gps_guard::{
-    is_pvt_origin_anchor, EskfGpsGuard, FilterReason, GpsFix, GpsGuardConfig, GpsGuardOutcome,
-    GuardSnapshot, ReinitCause, TickOutcome, UsabilityReason,
+    EskfGpsGuard, FilterReason, GpsFix, GpsGuardConfig, GpsGuardOutcome, GuardSnapshot,
+    ReinitCause, TickOutcome, UsabilityReason, is_pvt_origin_anchor,
 };
 pub use mocap_guard::{
-    EskfMocapGuard, MocapGuardConfig, MocapGuardOutcome, MocapGuardSnapshot, MocapPose,
-    DEFAULT_REANCHOR_FRAMES,
+    DEFAULT_REANCHOR_FRAMES, EskfMocapGuard, MocapGuardConfig, MocapGuardOutcome,
+    MocapGuardSnapshot, MocapPose,
 };

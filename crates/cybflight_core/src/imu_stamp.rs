@@ -99,7 +99,10 @@ impl SampleStamper {
         let t = self.period;
         let Some(prev) = self.prev else {
             self.prev = Some(observed);
-            return Stamped { stamp: observed, lost: 0 };
+            return Stamped {
+                stamp: observed,
+                lost: 0,
+            };
         };
         let recon = prev + t;
         // Positive: the observation is later than the grid predicts.
@@ -117,7 +120,10 @@ impl SampleStamper {
             // the observation and count the missing grid points.
             let lost = ((err + self.half_period) / t).max(0) as u32;
             self.behind_streak = 0;
-            Stamped { stamp: observed, lost }
+            Stamped {
+                stamp: observed,
+                lost,
+            }
         } else {
             // Arithmetic shift: floor toward -inf, fine for a gain.
             let adj = (err >> Self::PLL_SHIFT).clamp(-self.max_adj, self.max_adj);
@@ -175,7 +181,10 @@ mod tests {
     #[test]
     fn a_long_gap_counts_all_missing_samples() {
         // 10 samples missing (a ~1.4 ms stall).
-        let obs: Vec<i64> = [1000, 1125].into_iter().chain((0..3).map(|i| 1125 + 11 * T + i * T)).collect();
+        let obs: Vec<i64> = [1000, 1125]
+            .into_iter()
+            .chain((0..3).map(|i| 1125 + 11 * T + i * T))
+            .collect();
         let out = run(&obs);
         let lost: u32 = out.iter().map(|s| s.lost).sum();
         assert_eq!(lost, 10);
@@ -234,7 +243,10 @@ mod tests {
         let out: Vec<Stamped> = obs.iter().map(|&o| s.stamp(to_q16(o))).collect();
         assert_eq!(out.iter().map(|s| s.lost).sum::<u32>(), 1);
         let d = out[5].stamp - out[4].stamp;
-        assert!((d - period_q16).abs() <= 65536, "spacing {d} vs {period_q16}");
+        assert!(
+            (d - period_q16).abs() <= 65536,
+            "spacing {d} vs {period_q16}"
+        );
         assert!(out.iter().zip(obs).all(|(s, o)| s.stamp <= to_q16(o)));
     }
 
@@ -245,6 +257,12 @@ mod tests {
         s.stamp(1000);
         s.reset();
         let st = s.stamp(50_000);
-        assert_eq!(st, Stamped { stamp: 50_000, lost: 0 });
+        assert_eq!(
+            st,
+            Stamped {
+                stamp: 50_000,
+                lost: 0
+            }
+        );
     }
 }

@@ -38,7 +38,11 @@ fn main() {
         println!(
             "| `{}` | {} | {} | {} | {} | {} |",
             name.as_str(),
-            if meta.unit.is_empty() { "—" } else { meta.unit },
+            if meta.unit.is_empty() {
+                "—"
+            } else {
+                meta.unit
+            },
             fmt_bound(meta.min),
             fmt_bound(meta.max),
             if meta.reboot { "reboot" } else { "live" },

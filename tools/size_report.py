@@ -54,6 +54,11 @@ def main():
     ram_origin, ram_len = ram_region(Path(a.memory_x))
     flash = sum(sz for name, (sz, addr) in sections.items() if name in (".vector_table", ".text", ".rodata", ".data"))
     ram_secs = [(n, sz, addr) for n, (sz, addr) in sections.items() if ram_origin <= addr < ram_origin + ram_len and sz > 0]
+    if not ram_secs and a.memory_x == "crates/cybflight/memory.x":
+        f745_mem = Path("crates/cybflight/memory_f745.x")
+        if f745_mem.exists():
+            ram_origin, ram_len = ram_region(f745_mem)
+            ram_secs = [(n, sz, addr) for n, (sz, addr) in sections.items() if ram_origin <= addr < ram_origin + ram_len and sz > 0]
     ram_end = max(addr + sz for _, sz, addr in ram_secs)
     static_ram = ram_end - ram_origin
     headroom = ram_origin + ram_len - ram_end

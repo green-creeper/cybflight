@@ -178,8 +178,12 @@ mod tests {
     #[test]
     fn valid_rpm_returns_correct_omega() {
         let mut tracker = RpmTracker::<4>::new();
-        let inputs = [RpmInput::Erpm(10000), RpmInput::Erpm(10000),
-                      RpmInput::Erpm(10000), RpmInput::Erpm(10000)];
+        let inputs = [
+            RpmInput::Erpm(10000),
+            RpmInput::Erpm(10000),
+            RpmInput::Erpm(10000),
+            RpmInput::Erpm(10000),
+        ];
         let result = tracker.update(&inputs, ERPM_TO_RADS, 50, 50, 5);
 
         assert!(result.g2_valid.iter().all(|&v| v));
@@ -191,8 +195,12 @@ mod tests {
     #[test]
     fn stopped_motor_is_valid() {
         let mut tracker = RpmTracker::<4>::new();
-        let inputs = [RpmInput::Stopped, RpmInput::Erpm(10000),
-                      RpmInput::Erpm(10000), RpmInput::Erpm(10000)];
+        let inputs = [
+            RpmInput::Stopped,
+            RpmInput::Erpm(10000),
+            RpmInput::Erpm(10000),
+            RpmInput::Erpm(10000),
+        ];
         let result = tracker.update(&inputs, ERPM_TO_RADS, 50, 50, 5);
 
         assert!(result.g2_valid[0]);
@@ -210,8 +218,12 @@ mod tests {
         let saved_omega = r1.omega[0];
 
         // Second: one motor invalid
-        let corrupt = [RpmInput::Invalid, RpmInput::Erpm(20000),
-                       RpmInput::Erpm(20000), RpmInput::Erpm(20000)];
+        let corrupt = [
+            RpmInput::Invalid,
+            RpmInput::Erpm(20000),
+            RpmInput::Erpm(20000),
+            RpmInput::Erpm(20000),
+        ];
         let r2 = tracker.update(&corrupt, ERPM_TO_RADS, 50, 50, 5);
 
         assert!(r2.g2_valid[0], "single corrupt should keep G2 active");
@@ -226,12 +238,22 @@ mod tests {
         let invalid_limit = 5u16;
 
         // First: valid
-        tracker.update(&[RpmInput::Erpm(20000); 4], ERPM_TO_RADS, invalid_limit, 50, 5);
+        tracker.update(
+            &[RpmInput::Erpm(20000); 4],
+            ERPM_TO_RADS,
+            invalid_limit,
+            50,
+            5,
+        );
 
         // Then: motor 0 goes invalid for N frames
         for _ in 0..invalid_limit {
-            let inputs = [RpmInput::Invalid, RpmInput::Erpm(20000),
-                          RpmInput::Erpm(20000), RpmInput::Erpm(20000)];
+            let inputs = [
+                RpmInput::Invalid,
+                RpmInput::Erpm(20000),
+                RpmInput::Erpm(20000),
+                RpmInput::Erpm(20000),
+            ];
             let r = tracker.update(&inputs, ERPM_TO_RADS, invalid_limit, 50, 5);
 
             if r.status[0] == RpmStatus::Invalid {
@@ -252,15 +274,28 @@ mod tests {
         let all_invalid_limit = 10u16;
 
         // Valid first
-        tracker.update(&[RpmInput::Erpm(20000); 4], ERPM_TO_RADS, 5, all_invalid_limit, 5);
+        tracker.update(
+            &[RpmInput::Erpm(20000); 4],
+            ERPM_TO_RADS,
+            5,
+            all_invalid_limit,
+            5,
+        );
 
         // All motors invalid for enough frames
         for frame in 0..(5 + all_invalid_limit) {
             let r = tracker.update(
-                &[RpmInput::Invalid; 4], ERPM_TO_RADS, 5, all_invalid_limit, 5,
+                &[RpmInput::Invalid; 4],
+                ERPM_TO_RADS,
+                5,
+                all_invalid_limit,
+                5,
             );
             if r.failsafe {
-                assert!(frame >= 5, "failsafe should not trigger before invalid_limit");
+                assert!(
+                    frame >= 5,
+                    "failsafe should not trigger before invalid_limit"
+                );
                 return;
             }
         }

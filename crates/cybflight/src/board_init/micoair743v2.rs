@@ -29,7 +29,7 @@ use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::Timer;
 #[cfg(feature = "est_pos_gps")]
-use embassy_time::{with_timeout, Duration};
+use embassy_time::{Duration, with_timeout};
 use static_cell::StaticCell;
 
 use crate::bsp;
@@ -37,10 +37,10 @@ use crate::hal;
 use crate::motors::{DshotQuadConfig, MotorTimerConfig};
 use crate::sensors::baro::BaroReader;
 #[cfg(feature = "est_pos_gps")]
-use crate::sensors::gps::{err_kind, GpsHealth, GpsRunner, GPS_HEALTH};
-use crate::sensors::imu::{bmi270_reader_task, ImuReader, SpiBusMtx};
+use crate::sensors::gps::{GPS_HEALTH, GpsHealth, GpsRunner, err_kind};
+use crate::sensors::imu::{ImuReader, SpiBusMtx, bmi270_reader_task};
 use crate::sensors::mag::{I2cBusMtx, MagReader};
-use crate::sensors::power::{power_task, AdcInput, PowerMonitor};
+use crate::sensors::power::{AdcInput, PowerMonitor, power_task};
 use crate::status;
 use crate::usb_serial;
 use hal::gpio::{AfType, Flex, OutputType, Speed};
@@ -119,8 +119,8 @@ pub async fn init(
     let arm_led_strip = crate::arm_led::ws2812::Ws2812::new(
         led_tim_regs,
         board.motors.led_strip,
-        2,  // AF2 = TIM4_CH3
-        2,  // CH3
+        2, // AF2 = TIM4_CH3
+        2, // CH3
         board.motors.dma1_ch7,
         31, // DMAMUX request: TIM4_CH3
     );
@@ -289,8 +289,11 @@ pub async fn init(
                 ) {
                     Ok(uart) => {
                         let mut delay = embassy_time::Delay;
-                        match with_timeout(Duration::from_secs(30), GpsDriver::new(uart, &mut delay))
-                            .await
+                        match with_timeout(
+                            Duration::from_secs(30),
+                            GpsDriver::new(uart, &mut delay),
+                        )
+                        .await
                         {
                             Ok(Ok(gps)) => {
                                 defmt::info!("GPS u-blox init OK");
@@ -391,7 +394,9 @@ pub async fn init(
                             BaroReader::new(baro),
                             &crate::sensors::BARO_1,
                         ))
-                        .unwrap_or_else(|e| defmt::error!("Failed to spawn SPL06 baro task: {}", e));
+                        .unwrap_or_else(|e| {
+                            defmt::error!("Failed to spawn SPL06 baro task: {}", e)
+                        });
                 }
                 Err(e) => defmt::warn!("SPL06 init failed: {}", e),
             }

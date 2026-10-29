@@ -117,7 +117,16 @@ pub fn eval_dynamics_derivatives(coeffs: &[Vector3<f32>], t: f32) -> DynDerivati
     let jer = c3 * 6.0 + c4 * (24.0 * s1) + c5 * (60.0 * s2);
     let sna = c4 * 24.0 + c5 * (120.0 * s1);
 
-    DynDerivatives { vel, acc, jer, sna, s1, s2, s3, s4 }
+    DynDerivatives {
+        vel,
+        acc,
+        jer,
+        sna,
+        s1,
+        s2,
+        s3,
+        s4,
+    }
 }
 
 #[cfg(test)]

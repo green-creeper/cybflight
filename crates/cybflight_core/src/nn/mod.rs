@@ -17,8 +17,8 @@
 pub mod mlp;
 pub mod race_policy;
 
-pub use mlp::{Activation, LayerShape, Mlp, MlpError, MAX_WIDTH};
+pub use mlp::{Activation, LayerShape, MAX_WIDTH, Mlp, MlpError};
 pub use race_policy::{
-    raw_state_in_frame, Gate, GateEvent, PolicyConfig, PolicyError, PolicyFrame, RacePolicy,
-    Track, VehicleState, MAX_GATES, MAX_OBS, NUM_MOTORS, OBS_BASE, OBS_PER_GATE,
+    Gate, GateEvent, MAX_GATES, MAX_OBS, NUM_MOTORS, OBS_BASE, OBS_PER_GATE, PolicyConfig,
+    PolicyError, PolicyFrame, RacePolicy, Track, VehicleState, raw_state_in_frame,
 };

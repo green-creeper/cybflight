@@ -278,7 +278,11 @@ impl BuildYaml {
                 _ => Ok(()),
             }
         };
-        check("board", &self.board, &["sakurah743", "foxeerh743", "micoair743v2"])?;
+        check(
+            "board",
+            &self.board,
+            &["sakurah743", "foxeerh743", "micoair743v2", "flywoof745"],
+        )?;
         check("rc_protocol", &self.rc_protocol, &["crsf", "ghst"])?;
         check(
             "outer_loop",
@@ -419,10 +423,7 @@ pub fn load(label: &str, yaml: &str) -> Result<VehicleConfig, String> {
     if let Some(tm) = &vy.airframe.thrust_model {
         match tm {
             ThrustModelYaml::Table { table } => {
-                if table.is_empty()
-                    || !table
-                        .chars()
-                        .all(|c| c.is_ascii_alphanumeric() || c == '_')
+                if table.is_empty() || !table.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
                 {
                     return Err(format!(
                         "{label}: airframe.thrust_model.table must be a CSV stem \
@@ -467,7 +468,9 @@ pub fn load(label: &str, yaml: &str) -> Result<VehicleConfig, String> {
     }
     for (i, name) in [(0, "Ixx"), (4, "Iyy"), (8, "Izz")] {
         if a.inertia_kg_m2[i] <= 0.0 {
-            return Err(format!("{label}: airframe.inertia_kg_m2 {name} must be > 0"));
+            return Err(format!(
+                "{label}: airframe.inertia_kg_m2 {name} must be > 0"
+            ));
         }
     }
     if !a.max_rate_rad_s.iter().all(|&r| r.is_finite() && r > 0.0) {
@@ -476,7 +479,9 @@ pub fn load(label: &str, yaml: &str) -> Result<VehicleConfig, String> {
         ));
     }
     if a.motors.len() != 4 {
-        return Err(format!("{label}: airframe.motors must list exactly 4 motors"));
+        return Err(format!(
+            "{label}: airframe.motors must list exactly 4 motors"
+        ));
     }
 
     let mut cfg = FirmwareConfig::scaffold();
@@ -485,7 +490,9 @@ pub fn load(label: &str, yaml: &str) -> Result<VehicleConfig, String> {
     cfg.airframe.body.max_rate_rad_s = a.max_rate_rad_s;
     for (i, m) in a.motors.iter().enumerate() {
         if !(m.max_thrust_n.is_finite() && m.max_thrust_n > 0.0) {
-            return Err(format!("{label}: motor {i} max_thrust_n must be finite and > 0"));
+            return Err(format!(
+                "{label}: motor {i} max_thrust_n must be finite and > 0"
+            ));
         }
         if !m.pos_m.iter().all(|v| v.is_finite()) {
             return Err(format!("{label}: motor {i} pos_m must be finite"));
@@ -498,7 +505,9 @@ pub fn load(label: &str, yaml: &str) -> Result<VehicleConfig, String> {
             "cw" => SpinDir::Cw,
             "ccw" => SpinDir::Ccw,
             other => {
-                return Err(format!("{label}: motor {i} spin must be cw|ccw, got {other:?}"));
+                return Err(format!(
+                    "{label}: motor {i} spin must be cw|ccw, got {other:?}"
+                ));
             }
         };
         cfg.airframe.motors[i].max_thrust_n = m.max_thrust_n;
@@ -601,13 +610,9 @@ tuning:
 
     #[test]
     fn origin_out_of_range_is_an_error() {
-        for (lat, lon, want) in [
-            (91.0, 8.0, "lat_deg"),
-            (47.0, 181.0, "lon_deg"),
-        ] {
-            let yaml = format!(
-                "{MINIMAL}origin:\n  lat_deg: {lat}\n  lon_deg: {lon}\n  alt_msl_m: 0.0\n"
-            );
+        for (lat, lon, want) in [(91.0, 8.0, "lat_deg"), (47.0, 181.0, "lon_deg")] {
+            let yaml =
+                format!("{MINIMAL}origin:\n  lat_deg: {lat}\n  lon_deg: {lon}\n  alt_msl_m: 0.0\n");
             let err = load("test", &yaml).unwrap_err();
             assert!(err.contains(want), "expected {want} in {err}");
         }
@@ -714,7 +719,10 @@ tuning:
             "  thrust_model: { type: quadratic, k: 0.518 }\n  motors:",
         );
         let v = load("test", &yaml).unwrap();
-        assert_eq!(v.thrust_model, Some(ThrustModelYaml::Quadratic { k: 0.518 }));
+        assert_eq!(
+            v.thrust_model,
+            Some(ThrustModelYaml::Quadratic { k: 0.518 })
+        );
 
         let bad = MINIMAL.replace(
             "  motors:",
@@ -796,5 +804,18 @@ tuning:
             load("test", &yaml).unwrap().default_mission.as_deref(),
             Some("outdoor_splits_slow")
         );
+    }
+
+    #[test]
+    fn goku_f745_vehicle_yaml_loads_and_validates() {
+        let yaml = include_str!("../../../vehicles/goku_f745.yaml");
+        let v = load("goku_f745", yaml).expect("goku_f745.yaml must load and validate");
+        let b = v.build.expect("goku_f745.yaml must have a build section");
+        assert_eq!(b.board.as_deref(), Some("flywoof745"));
+        assert_eq!(b.rc_protocol.as_deref(), Some("crsf"));
+        assert_eq!(b.outer_loop.as_deref(), Some("rate"));
+        assert_eq!(b.pos_source.as_deref(), Some("gps"));
+        assert_eq!(v.params.rc.arm_channel, 4);
+        assert_eq!(v.params.rc.mission_channel, 6);
     }
 }

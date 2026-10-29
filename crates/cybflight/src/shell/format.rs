@@ -87,8 +87,13 @@ impl fmt::Display for ShellMsg<'_, msgs::ViconPose> {
             s.timestamp.as_millis(),
             s.capture_time_utc_us,
             s.gs_send_time_utc_us,
-            s.position.x, s.position.y, s.position.z,
-            s.orientation.i, s.orientation.j, s.orientation.k, s.orientation.w,
+            s.position.x,
+            s.position.y,
+            s.position.z,
+            s.orientation.i,
+            s.orientation.j,
+            s.orientation.k,
+            s.orientation.w,
         )
     }
 }

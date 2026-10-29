@@ -217,7 +217,8 @@ impl<SPI: SpiDevice, DRDY: Wait, D: DelayNs> Bmi270<SPI, DRDY, D> {
         drv.write_reg(REG_ACC_CONF, VAL_ACC_CONF).await?;
         drv.write_reg(REG_ACC_RANGE, VAL_ACC_RANGE_16G).await?;
         drv.write_reg(REG_GYRO_CONF, VAL_GYRO_CONF).await?;
-        drv.write_reg(REG_GYRO_RANGE, VAL_GYRO_RANGE_2000DPS).await?;
+        drv.write_reg(REG_GYRO_RANGE, VAL_GYRO_RANGE_2000DPS)
+            .await?;
 
         // 6. Data-ready interrupt on INT1 (active-high push-pull).
         drv.write_reg(REG_INT_MAP_DATA, VAL_INT_MAP_DATA_DRDY_INT1)
@@ -394,7 +395,8 @@ where
         self.write_reg(REG_ACC_CONF, VAL_ACC_CONF).await?;
         self.write_reg(REG_ACC_RANGE, VAL_ACC_RANGE_16G).await?;
         self.write_reg(REG_GYRO_CONF, VAL_GYRO_CONF).await?;
-        self.write_reg(REG_GYRO_RANGE, VAL_GYRO_RANGE_2000DPS).await?;
+        self.write_reg(REG_GYRO_RANGE, VAL_GYRO_RANGE_2000DPS)
+            .await?;
         self.write_reg(REG_INT_MAP_DATA, VAL_INT_MAP_DATA_DRDY_INT1)
             .await?;
         self.write_reg(REG_INT1_IO_CTRL, VAL_INT1_IO_CTRL).await?;

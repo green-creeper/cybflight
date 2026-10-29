@@ -191,7 +191,13 @@ pub struct RigidBodyParams {
     /// Stored as a flat array for `const`-compatible initialization.
     #[param(keys = "ixx,ixy,ixz,iyx,iyy,iyz,izx,izy,izz", unit = "kg·m²", min = -1.0, max = 1.0, reboot)]
     pub inertia_kg_m2: [f32; 9],
-    #[param(keys = "max_rate_r,max_rate_p,max_rate_y", unit = "rad/s", min = 0.1, max = 50.0, reboot)]
+    #[param(
+        keys = "max_rate_r,max_rate_p,max_rate_y",
+        unit = "rad/s",
+        min = 0.1,
+        max = 50.0,
+        reboot
+    )]
     pub max_rate_rad_s: [f32; 3],
 }
 

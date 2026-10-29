@@ -4,7 +4,7 @@ pub use embassy_stm32 as hal;
 
 use hal::exti;
 use hal::gpio::{Level, Output, Pull, Speed};
-use hal::{bind_interrupts, Config, Peripherals};
+use hal::{Config, Peripherals, bind_interrupts};
 
 pub use bsp_types::{
     DmaHint, MotorMeta, PowerCalibration, SensorAlign, SerialPortId, TimerChannel, TimerId,
@@ -41,6 +41,11 @@ pub const LED_COUNT: usize = 1;
 /// `imu_1khz` build knob may program the chip down to 1 kHz low-noise mode,
 /// and control logic must consume that const, not this one.
 pub const PRIMARY_GYRO_ODR_HZ: f32 = 8000.0;
+
+pub type DshotDmaM1 = hal::peripherals::DMA1_CH0;
+pub type DshotDmaM2 = hal::peripherals::DMA1_CH1;
+pub type DshotDmaM3 = hal::peripherals::DMA1_CH2;
+pub type DshotDmaM4 = hal::peripherals::DMA1_CH3;
 
 // =====================================================================
 // PORT MAPPING TABLE — single source of truth for UART role assignments.
@@ -95,49 +100,73 @@ pub const MOTOR_META: [MotorMeta; 8] = [
         timer: TimerId::Tim3,
         channel: TimerChannel::Ch1,
         af: 2,
-        dma: Some(DmaHint { stream: 0, request: 23 }),
+        dma: Some(DmaHint {
+            stream: 0,
+            request: 23,
+        }),
     },
     MotorMeta {
         timer: TimerId::Tim3,
         channel: TimerChannel::Ch2,
         af: 2,
-        dma: Some(DmaHint { stream: 1, request: 24 }),
+        dma: Some(DmaHint {
+            stream: 1,
+            request: 24,
+        }),
     },
     MotorMeta {
         timer: TimerId::Tim3,
         channel: TimerChannel::Ch3,
         af: 2,
-        dma: Some(DmaHint { stream: 2, request: 25 }),
+        dma: Some(DmaHint {
+            stream: 2,
+            request: 25,
+        }),
     },
     MotorMeta {
         timer: TimerId::Tim3,
         channel: TimerChannel::Ch4,
         af: 2,
-        dma: Some(DmaHint { stream: 3, request: 26 }),
+        dma: Some(DmaHint {
+            stream: 3,
+            request: 26,
+        }),
     },
     MotorMeta {
         timer: TimerId::Tim4,
         channel: TimerChannel::Ch1,
         af: 2,
-        dma: Some(DmaHint { stream: 4, request: 29 }),
+        dma: Some(DmaHint {
+            stream: 4,
+            request: 29,
+        }),
     },
     MotorMeta {
         timer: TimerId::Tim4,
         channel: TimerChannel::Ch2,
         af: 2,
-        dma: Some(DmaHint { stream: 5, request: 30 }),
+        dma: Some(DmaHint {
+            stream: 5,
+            request: 30,
+        }),
     },
     MotorMeta {
         timer: TimerId::Tim8,
         channel: TimerChannel::Ch3,
         af: 3,
-        dma: Some(DmaHint { stream: 6, request: 49 }),
+        dma: Some(DmaHint {
+            stream: 6,
+            request: 49,
+        }),
     },
     MotorMeta {
         timer: TimerId::Tim8,
         channel: TimerChannel::Ch4,
         af: 3,
-        dma: Some(DmaHint { stream: 7, request: 50 }),
+        dma: Some(DmaHint {
+            stream: 7,
+            request: 50,
+        }),
     },
 ];
 
@@ -148,8 +177,22 @@ pub const SERVO_META: &[(/*pin*/ &str, TimerId, TimerChannel, /*af*/ u8)] = &[
 ];
 
 /// LED strip pin mapping metadata.
-pub const LED_STRIP_META: (/*pin*/ &str, TimerId, TimerChannel, /*af*/ u8, DmaHint) =
-    ("PA8", TimerId::Tim1, TimerChannel::Ch1, 1, DmaHint { stream: 0, request: 11 });
+pub const LED_STRIP_META: (
+    /*pin*/ &str,
+    TimerId,
+    TimerChannel,
+    /*af*/ u8,
+    DmaHint,
+) = (
+    "PA8",
+    TimerId::Tim1,
+    TimerChannel::Ch1,
+    1,
+    DmaHint {
+        stream: 0,
+        request: 11,
+    },
+);
 
 // EXTI interrupt required by gyro DRDY pin:
 // - PD0 (EXTI0) for GYRO_1
@@ -345,20 +388,22 @@ fn board_config() -> Config {
         use hal::rcc::*;
         config.rcc.pll1 = Some(Pll {
             source: PllSource::HSI,
-            prediv: PllPreDiv::DIV4,   // 64 / 4 = 16 MHz ref
-            mul:    PllMul::MUL60,     // 16 * 60 = 960 MHz VCO
-            fracn:  None,
-            divp:   Some(PllDiv::DIV2), // 480 MHz SYSCLK
-            divq:   Some(PllDiv::DIV4), // 240 MHz for SPI123
-            divr:   None,
+            prediv: PllPreDiv::DIV4, // 64 / 4 = 16 MHz ref
+            mul: PllMul::MUL60,      // 16 * 60 = 960 MHz VCO
+            fracn: None,
+            divp: Some(PllDiv::DIV2), // 480 MHz SYSCLK
+            divq: Some(PllDiv::DIV4), // 240 MHz for SPI123
+            divr: None,
         });
-        config.rcc.sys      = Sysclk::PLL1_P;
-        config.rcc.ahb_pre  = AHBPrescaler::DIV2;  // 240 MHz AHB
-        config.rcc.apb1_pre = APBPrescaler::DIV2;  // 120 MHz
+        config.rcc.sys = Sysclk::PLL1_P;
+        config.rcc.ahb_pre = AHBPrescaler::DIV2; // 240 MHz AHB
+        config.rcc.apb1_pre = APBPrescaler::DIV2; // 120 MHz
         config.rcc.apb2_pre = APBPrescaler::DIV2;
         config.rcc.apb3_pre = APBPrescaler::DIV2;
         config.rcc.apb4_pre = APBPrescaler::DIV2;
-        config.rcc.hsi48 = Some(Hsi48Config { sync_from_usb: true }); // 48 MHz for USB
+        config.rcc.hsi48 = Some(Hsi48Config {
+            sync_from_usb: true,
+        }); // 48 MHz for USB
         config.rcc.mux.usbsel = mux::Usbsel::HSI48;
         config.rcc.mux.spi123sel = mux::Saisel::PLL1_Q;
         config.rcc.mux.adcsel = mux::Adcsel::PER; // PER_CK = HSI 64 MHz (ADC3)
@@ -378,7 +423,11 @@ pub fn init() -> (Board, hal::usart::UartTx<'static, hal::mode::Blocking>) {
     // Beeper (PD2), inverted => OFF should be High.
     let beeper_pin = Output::new(
         p.PD2,
-        if BEEPER_INVERTED { Level::High } else { Level::Low },
+        if BEEPER_INVERTED {
+            Level::High
+        } else {
+            Level::Low
+        },
         Speed::Low,
     );
     let beeper = Beeper::new(beeper_pin, BEEPER_INVERTED);

@@ -1,14 +1,14 @@
+use crate::bsp::{DshotDmaM1, DshotDmaM2, DshotDmaM3, DshotDmaM4};
+use crate::hal::Peri;
 use crate::hal::dma::{Transfer, TransferOptions};
 use crate::hal::pac::gpio::vals as gpio_vals;
 use crate::hal::pac::timer::regs::{CcerGp16, CcmrInput2ch, CcmrOutputGp16};
 use crate::hal::pac::timer::vals;
-use crate::hal::peripherals::{DMA1_CH0, DMA1_CH1, DMA1_CH2, DMA1_CH3};
-use crate::hal::Peri;
 use crate::motors::{ACTUATOR_MOTORS, ARM_STATE};
 use crate::sensors::DSHOT_TELEMETRY;
 use cybflight_drivers::dshot::{
-    gcr, telemetry, DSHOT600_GCR_TICKS_PER_BIT, DSHOT_CMD_MOTOR_STOP, DSHOT_DMA_BUFFER_SIZE,
-    DSHOT_MAX_THROTTLE, DSHOT_MIN_THROTTLE, MAX_GCR_EDGES, MIN_GCR_EDGES,
+    DSHOT_CMD_MOTOR_STOP, DSHOT_DMA_BUFFER_SIZE, DSHOT_MAX_THROTTLE, DSHOT_MIN_THROTTLE,
+    DSHOT600_GCR_TICKS_PER_BIT, MAX_GCR_EDGES, MIN_GCR_EDGES, gcr, telemetry,
 };
 
 /// If no motor command arrives for this long while armed, the controller
@@ -56,10 +56,10 @@ const DSHOT_IDLE_THROTTLE: u16 = DSHOT_MIN_THROTTLE + (DSHOT_THROTTLE_RANGE / 20
 
 use cybflight_msgs::{ActuatorMotors, DshotMotorTelemetry, DshotTelemetry};
 use embassy_futures::join::join4;
-use embassy_futures::select::{select, Either};
+use embassy_futures::select::{Either, select};
 use embassy_time::{Instant, Timer};
 
-use super::{DshotQuadConfig, DSHOT600_ARR, DSHOT600_BIT_0, DSHOT600_BIT_1, DSHOT600_PSC};
+use super::{DSHOT600_ARR, DSHOT600_BIT_0, DSHOT600_BIT_1, DSHOT600_PSC, DshotQuadConfig};
 
 /// GCR IC capture: ARR set to max for free-running timestamp counter.
 const IC_ARR: u16 = 0xFFFF;
@@ -74,10 +74,10 @@ const CCER_IC: u32 = 0xBBBB;
 #[embassy_executor::task]
 pub async fn dshot_task(
     config: DshotQuadConfig,
-    mut m1_dma: Peri<'static, DMA1_CH0>,
-    mut m2_dma: Peri<'static, DMA1_CH1>,
-    mut m3_dma: Peri<'static, DMA1_CH2>,
-    mut m4_dma: Peri<'static, DMA1_CH3>,
+    mut m1_dma: Peri<'static, DshotDmaM1>,
+    mut m2_dma: Peri<'static, DshotDmaM2>,
+    mut m3_dma: Peri<'static, DshotDmaM3>,
+    mut m4_dma: Peri<'static, DshotDmaM4>,
 ) {
     let telem_pub = DSHOT_TELEMETRY.immediate_publisher();
 

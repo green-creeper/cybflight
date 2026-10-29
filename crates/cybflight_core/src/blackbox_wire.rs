@@ -97,7 +97,12 @@ pub const IMU_MAX_ENCODED: usize = 1 + 9 + 6 * 5;
 /// old map form. `temp_c` is deliberately absent: it changes at ~1 Hz
 /// and cost 12 bytes per sample in the map form (~96 KB/s at 8 kHz);
 /// the recorder now reports it in the 20 Hz `/health` record instead.
-pub fn encode_imu(scratch: &mut [u8], t_ns: u64, accel: &[f32; 3], gyro: &[f32; 3]) -> Result<usize> {
+pub fn encode_imu(
+    scratch: &mut [u8],
+    t_ns: u64,
+    accel: &[f32; 3],
+    gyro: &[f32; 3],
+) -> Result<usize> {
     let mut w = CborWriter::new(scratch);
     w.array(7)?;
     w.u64(t_ns)?;
@@ -280,7 +285,11 @@ mod tests {
             last_att_update_ns: 119_990_000_000,
             indi_step_max_us: 40,
             indi_period_max_us: 2_100,
-            rc_link: Some(RcLinkSample { quality: 100, rssi_dbm: -60, age_ms: 80 }),
+            rc_link: Some(RcLinkSample {
+                quality: 100,
+                rssi_dbm: -60,
+                age_ms: 80,
+            }),
         }
     }
 
@@ -294,7 +303,10 @@ mod tests {
     fn rate_div_emits_every_nth() {
         let mut d = RateDiv::new(4);
         let pattern: Vec<bool> = (0..8).map(|_| d.tick()).collect();
-        assert_eq!(pattern, [false, false, false, true, false, false, false, true]);
+        assert_eq!(
+            pattern,
+            [false, false, false, true, false, false, false, true]
+        );
         let mut one = RateDiv::new(1);
         assert!(one.tick() && one.tick());
         let mut zero = RateDiv::new(0);
@@ -414,7 +426,11 @@ mod tests {
             last_att_update_ns: u64::MAX,
             indi_step_max_us: u32::MAX,
             indi_period_max_us: u32::MAX,
-            rc_link: Some(RcLinkSample { quality: u8::MAX, rssi_dbm: i16::MIN, age_ms: u32::MAX }),
+            rc_link: Some(RcLinkSample {
+                quality: u8::MAX,
+                rssi_dbm: i16::MIN,
+                age_ms: u32::MAX,
+            }),
             ..steady_health()
         };
         let n = encode_health(&mut buf, &r).unwrap();
@@ -449,7 +465,11 @@ mod tests {
             last_att_update_ns: 7,
             indi_step_max_us: 40,
             indi_period_max_us: 300,
-            rc_link: Some(RcLinkSample { quality: 99, rssi_dbm: -60, age_ms: 12 }),
+            rc_link: Some(RcLinkSample {
+                quality: 99,
+                rssi_dbm: -60,
+                age_ms: 12,
+            }),
         };
         let mut buf = [0u8; 128];
         let n = encode_health(&mut buf, &r).unwrap();

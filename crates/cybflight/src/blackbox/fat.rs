@@ -36,7 +36,7 @@ use crate::hal::sdmmc;
 use block_device_adapters::BufStreamError;
 
 use super::lazy_stream::LazyBufStream;
-use super::sdmmc_block::{SdSession, LAST_IO_STATS};
+use super::sdmmc_block::{LAST_IO_STATS, SdSession};
 use embedded_fatfs::{
     DefaultTimeProvider, Error as FatError, FileSystem, FsOptions, LossyOemCpConverter,
 };
@@ -341,7 +341,10 @@ where
 /// minimum the unmount's dirty-flag write is still in the combiner)
 /// and publish the session's I/O counters. The op's own error wins;
 /// a flush failure means the last blocks may not have hit the card.
-async fn finish_session<T>(mut session: SdSession<'_>, result: Result<T, OpError>) -> Result<T, OpError> {
+async fn finish_session<T>(
+    mut session: SdSession<'_>,
+    result: Result<T, OpError>,
+) -> Result<T, OpError> {
     let flushed = session.flush().await.map_err(|_| {
         defmt::warn!("blackbox/fat: tail flush failed");
         OpError::Unmount

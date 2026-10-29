@@ -311,10 +311,13 @@ pub fn flatness_to_state_tilt_yaw(
     let dzb2_sqr = dzb2 * dzb2;
 
     let omega_dot = Vec3::new(
-        ddzb0 * s_psi - ddzb1 * c_psi - ddzb2 * tmp_omg_1 * inv_omg_den
+        ddzb0 * s_psi
+            - ddzb1 * c_psi
+            - ddzb2 * tmp_omg_1 * inv_omg_den
             - dzb2 * dz_psi_a * inv_omg_den
             + dzb2_sqr * tmp_omg_1 * inv_omg_den_2,
-        ddzb0 * c_psi + ddzb1 * s_psi - ddzb2 * tmp_omg_2 * inv_omg_den
+        ddzb0 * c_psi + ddzb1 * s_psi
+            - ddzb2 * tmp_omg_2 * inv_omg_den
             - dzb2 * dz_psi_b * inv_omg_den
             + dzb2_sqr * tmp_omg_2 * inv_omg_den_2,
         tmp_omg_6 * inv_omg_den - tmp_omg_3 * dzb2 * inv_omg_den_2 + ddpsi,
@@ -436,8 +439,7 @@ pub fn flatness_to_state_true_yaw(
     let c_dot = z_b.dot(&jer);
     let omega_dot_x = -(y_b.dot(&sna) + 2.0 * c_dot * omega_x - c * omega_y * omega_z) * inv_c;
     let omega_dot_y = (x_b.dot(&sna) - 2.0 * c_dot * omega_y - c * omega_x * omega_z) * inv_c;
-    let omega_dot_z = (ddpsi * x_c.dot(&x_b)
-        + 2.0 * dpsi * omega_z * x_c.dot(&y_b)
+    let omega_dot_z = (ddpsi * x_c.dot(&x_b) + 2.0 * dpsi * omega_z * x_c.dot(&y_b)
         - 2.0 * dpsi * omega_y * x_c.dot(&z_b)
         - omega_x * omega_y * y_c.dot(&y_b)
         - omega_x * omega_z * y_c.dot(&z_b)
@@ -814,8 +816,8 @@ pub fn body_rate_grad_backprop(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::types::ZERO3;
+    use super::*;
 
     /// Hover flatness: zero a/j/s + zero yaw → identity attitude,
     /// zero body rate, thrust = g.
@@ -884,8 +886,8 @@ mod tests {
         // Some nonzero jerk in xy so dz_b ≠ 0 and the perpendicular
         // angular-velocity component is non-trivial.
         let jer = Vec3::new(3.0, 1.5, 0.0);
-        let (tpm, _q, omega) = flatness_to_thrust_omega(acc, jer, 0.3, 0.0, 9.81)
-            .expect("pole-safe ok at z_b = -ẑ");
+        let (tpm, _q, omega) =
+            flatness_to_thrust_omega(acc, jer, 0.3, 0.0, 9.81).expect("pole-safe ok at z_b = -ẑ");
         // Thrust per mass = ‖α‖ = g (positive, finite).
         assert!((tpm - 9.81).abs() < 1e-3, "tpm wrong at pole: {tpm}");
         // Body rate must be finite and bounded — `‖dz_b‖` here is on
@@ -1011,8 +1013,7 @@ mod tests {
     /// coincide at zero tilt).
     #[test]
     fn test_true_yaw_hover_parity() {
-        let st = flatness_to_state_true_yaw(ZERO3, ZERO3, ZERO3, [0.0; 3], 9.81)
-            .expect("hover ok");
+        let st = flatness_to_state_true_yaw(ZERO3, ZERO3, ZERO3, [0.0; 3], 9.81).expect("hover ok");
         assert!((st.thrust_per_mass - 9.81).abs() < 1e-4);
         assert!((st.attitude.w - 1.0).abs() < 1e-4);
         assert!(st.omega.norm() < 1e-4);
@@ -1027,8 +1028,8 @@ mod tests {
     /// ‖y_C × z_B‖ = 1 upright).
     #[test]
     fn test_true_yaw_rate_at_hover() {
-        let st = flatness_to_state_true_yaw(ZERO3, ZERO3, ZERO3, [0.4, 0.7, 0.0], 9.81)
-            .expect("ok");
+        let st =
+            flatness_to_state_true_yaw(ZERO3, ZERO3, ZERO3, [0.4, 0.7, 0.0], 9.81).expect("ok");
         assert!(st.omega.x.abs() < 1e-4);
         assert!(st.omega.y.abs() < 1e-4);
         assert!((st.omega.z - 0.7).abs() < 1e-4);
@@ -1042,8 +1043,7 @@ mod tests {
     fn test_true_yaw_heading_is_compass() {
         let acc = Vec3::new(6.0, -4.0, 2.0); // strong lateral acceleration
         let psi = 0.8;
-        let st = flatness_to_state_true_yaw(acc, ZERO3, ZERO3, [psi, 0.0, 0.0], 9.81)
-            .expect("ok");
+        let st = flatness_to_state_true_yaw(acc, ZERO3, ZERO3, [psi, 0.0, 0.0], 9.81).expect("ok");
         let x_b = st.attitude * Vec3::new(1.0, 0.0, 0.0);
         let heading = libm::atan2f(x_b.y, x_b.x);
         assert!(
@@ -1088,7 +1088,11 @@ mod tests {
         // ψ(t) = 0.4 sin t. Chosen well clear of both singularities.
         let eval = |t: f32| {
             let (a, b, c3) = (2.0f32, 1.5f32, 1.0f32);
-            let acc = Vec3::new(a * libm::sinf(t), b * libm::cosf(t), c3 * libm::sinf(2.0 * t));
+            let acc = Vec3::new(
+                a * libm::sinf(t),
+                b * libm::cosf(t),
+                c3 * libm::sinf(2.0 * t),
+            );
             let jer = Vec3::new(
                 a * libm::cosf(t),
                 -b * libm::sinf(t),
@@ -1146,8 +1150,18 @@ mod tests {
     fn true_yaw_snap_free_matches_full_map_exactly() {
         let cases: &[(Vec3, Vec3, f32, f32)] = &[
             (ZERO3, ZERO3, 0.0, 0.0),
-            (Vec3::new(1.0, -2.0, 3.0), Vec3::new(0.5, 0.25, -1.0), 0.7, 0.3),
-            (Vec3::new(-4.0, 6.0, -2.0), Vec3::new(-3.0, 1.5, 2.0), -2.1, -0.8),
+            (
+                Vec3::new(1.0, -2.0, 3.0),
+                Vec3::new(0.5, 0.25, -1.0),
+                0.7,
+                0.3,
+            ),
+            (
+                Vec3::new(-4.0, 6.0, -2.0),
+                Vec3::new(-3.0, 1.5, 2.0),
+                -2.1,
+                -0.8,
+            ),
             (Vec3::new(0.0, 0.0, 5.0), Vec3::new(0.0, 0.0, 0.0), 3.0, 0.0),
         ];
         // Deliberately non-zero and varied: the whole point is that the
@@ -1163,8 +1177,7 @@ mod tests {
         // `ALPHA_NORM_SQR_FLOOR_POLE_SAFE`); that divergence gets its own
         // test below rather than weakening this one.
         for &(acc, jer, psi, dpsi) in cases {
-            let alpha_sq =
-                (acc + Vector3::new(0.0, 0.0, 9.81)).norm_squared();
+            let alpha_sq = (acc + Vector3::new(0.0, 0.0, 9.81)).norm_squared();
             assert!(alpha_sq >= 1.0, "case {acc:?} is below the strict floor");
             let short = flatness_to_thrust_omega_true_yaw(acc, jer, psi, dpsi, 9.81);
             for &sna in snaps {
@@ -1229,7 +1242,10 @@ mod tests {
                 (tpm - alpha_z).abs() < 1e-4,
                 "‖α‖={alpha_z}: thrust {tpm} should equal ‖α‖",
             );
-            assert!(omega.iter().all(|v| v.is_finite()), "‖α‖={alpha_z}: ω not finite");
+            assert!(
+                omega.iter().all(|v| v.is_finite()),
+                "‖α‖={alpha_z}: ω not finite"
+            );
 
             let (tpm_t, _q_t, omega_t) =
                 flatness_to_thrust_omega_true_yaw(acc, jer, 0.0, 0.0, 9.81)

@@ -33,12 +33,17 @@ use cybflight_core::params::FirmwareConfig;
 
 use crate::hal;
 
-/// Byte offsets (from flash base) of the two KV sectors: bank-2 sectors
-/// 6 and 7 (0x081C_0000 / 0x081E_0000) — the region `memory.x` excludes
-/// from the app FLASH length. Must be in the opposite bank from code so
-/// programs/erases never stall instruction fetches.
+/// Byte offsets (from flash base) of the two KV sectors:
+/// - On STM32H743 (2 MB): bank-2 sectors 6 and 7 (`0x1C_0000` / `0x1E_0000`, 128 KB each).
+/// - On STM32F745 (1 MB): sectors 6 and 7 (`0x08_0000` / `0x0C_0000`, 256 KB each).
+#[cfg(not(feature = "board_flywoof745"))]
 const KV_SECTOR_OFFSET: [u32; 2] = [0x1C_0000, 0x1E_0000];
+#[cfg(not(feature = "board_flywoof745"))]
 const KV_SECTOR_SIZE: usize = 128 * 1024;
+#[cfg(feature = "board_flywoof745")]
+const KV_SECTOR_OFFSET: [u32; 2] = [0x08_0000, 0x0C_0000];
+#[cfg(feature = "board_flywoof745")]
+const KV_SECTOR_SIZE: usize = 256 * 1024;
 const FLASH_BASE: u32 = 0x0800_0000;
 
 static VEHICLE_PARAMS: Mutex<RefCell<Option<FirmwareConfig>>> = Mutex::new(RefCell::new(None));
@@ -72,7 +77,12 @@ impl KvFlash for H7KvFlash<'_> {
         buf.copy_from_slice(src);
     }
 
-    fn write_word(&mut self, sector: u8, offset: usize, word: &[u8; WORD]) -> Result<(), StoreError> {
+    fn write_word(
+        &mut self,
+        sector: u8,
+        offset: usize,
+        word: &[u8; WORD],
+    ) -> Result<(), StoreError> {
         let off = KV_SECTOR_OFFSET[sector as usize] + offset as u32;
         self.flash
             .blocking_write(off, word)
@@ -82,10 +92,11 @@ impl KvFlash for H7KvFlash<'_> {
     fn erase_sector(&mut self, sector: u8) -> Result<(), StoreError> {
         // Re-check the armed state at the last possible moment: the shell's
         // armed guard is sampled at dispatch, but arming can race the
-        // save. The cross-bank erase leaves DShot (interrupt executor)
-        // running, but blocks the thread executor — ESKF, MPC, the IWDG
-        // feeder — for ~1–2 s, guaranteeing a controller-silence failsafe
-        // mid-flight. Never acceptable while armed.
+        // save. On dual-bank STM32H743 the cross-bank erase blocks the thread
+        // executor for ~1–2 s; on single-bank STM32F745VG (RM0385 §3.3) erasing
+        // a 256 KB sector stalls all flash instruction fetches for ~1–2 s.
+        // Either way, erasing while armed is never acceptable, and `extend_timeout`
+        // is mandatory so IWDG does not trip during the erase.
         if crate::motors::IS_ARMED.load(core::sync::atomic::Ordering::Acquire) {
             return Err(StoreError::Armed);
         }

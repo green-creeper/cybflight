@@ -65,7 +65,7 @@ use embassy_time::Instant;
 use super::TopicDef;
 use crate::blackbox::cbor::{self, CborWriter};
 use crate::sensors::gps::{
-    GpsErrKind, GpsHealth, GPS_HEALTH, LATEST_NAV_PVT, NAV_PVT_MAX_INTERVAL_RECENT_US,
+    GPS_HEALTH, GpsErrKind, GpsHealth, LATEST_NAV_PVT, NAV_PVT_MAX_INTERVAL_RECENT_US,
     NAV_PVT_MEAN_INTERVAL_RECENT_US,
 };
 

@@ -33,14 +33,14 @@ use core::sync::atomic::Ordering;
 
 use super::TopicDef;
 use crate::blackbox::cbor;
-use crate::control::indi_task::step_stats;
-use crate::sensors::rc::LATEST_RC_LINK_STATUS;
-use cybflight_core::blackbox_wire::{self, HealthRecord, RcLinkSample};
 use crate::control::failsafe::FAILSAFE_ACTIVE;
+use crate::control::indi_task::step_stats;
 use crate::estimation::{
     ATTITUDE_HEALTH, ESKF_DEGRADED, ESKF_FAULTS, ESKF_HEALTH, ESKF_LAST_ATT_UPDATE,
     ESKF_LAST_POS_UPDATE, ESKF_LAST_VEL_UPDATE, ESKF_SEVERE_FAULT, ESTIMATOR_READY,
 };
+use crate::sensors::rc::LATEST_RC_LINK_STATUS;
+use cybflight_core::blackbox_wire::{self, HealthRecord, RcLinkSample};
 use embassy_time::Instant;
 
 pub const CHANNEL_ID: u16 = 10;
@@ -115,8 +115,7 @@ pub fn encode(scratch: &mut [u8], now: Instant, imu1_temp_c: f32) -> cbor::Resul
     // mirrors — the shell's `indistat` keeps its own, so neither reader
     // blinds the other.
     let (step_max_cyc, period_max_cyc) = step_stats::take_log_max();
-    let cyc_to_us =
-        |c: u32| (c as u64 * 1_000_000 / step_stats::SYSCLK_HZ as u64) as u32;
+    let cyc_to_us = |c: u32| (c as u64 * 1_000_000 / step_stats::SYSCLK_HZ as u64) as u32;
 
     let rc_link = LATEST_RC_LINK_STATUS
         .lock(|c| c.borrow().clone())

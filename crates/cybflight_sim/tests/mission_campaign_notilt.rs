@@ -23,18 +23,18 @@
 
 use std::path::PathBuf;
 
+use cybflight_core::params::FirmwareConfig;
 use cybflight_core::trajectory_planning::minco_snap::MincoSnap;
 use cybflight_core::trajectory_planning::types::{Vec3, ZERO3};
 use cybflight_sim::{
     controller::{Controller, MpcFullIndiController, MpcIndiController},
     plant::QuadPlant,
     runner::{MissionRunner, RunnerConfig},
-    scenario::{default_sim_params, tweaked_vehicle, PassCriteria, Scenario},
+    scenario::{PassCriteria, Scenario, default_sim_params, tweaked_vehicle},
     trajectory::MissionSetpoints,
 };
-use cybflight_core::params::FirmwareConfig;
 use nalgebra::{UnitQuaternion, Vector3};
-use vehicle_yaml::mission::{load_mission, Mission};
+use vehicle_yaml::mission::{Mission, load_mission};
 
 fn out_dir() -> PathBuf {
     let sub = if tilt_fence_on() {
@@ -51,8 +51,8 @@ fn load(name: &str) -> Mission {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../missions")
         .join(format!("{name}.yaml"));
-    let yaml = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    let yaml =
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
     load_mission(name, &yaml).expect("mission loads")
 }
 
@@ -149,7 +149,12 @@ fn campaign_vehicle(full_model: bool) -> FirmwareConfig {
     })
 }
 
-fn run_case(mission_name: &str, case: &str, mut scenario: Scenario, controller: &mut dyn Controller) {
+fn run_case(
+    mission_name: &str,
+    case: &str,
+    mut scenario: Scenario,
+    controller: &mut dyn Controller,
+) {
     let mut plant = QuadPlant::new(
         scenario.vehicle_params.clone(),
         &scenario.sim_params,
@@ -207,7 +212,12 @@ fn run_mission(name: &str) {
 
     let vp_b = campaign_vehicle(true);
     let mut c = MpcFullIndiController::with_options_at_rate(&vp_b, 100.0, true, 8000.0);
-    run_case(name, "mpc_full_8k", scenario_for(name, &m, vp_b.clone()), &mut c);
+    run_case(
+        name,
+        "mpc_full_8k",
+        scenario_for(name, &m, vp_b.clone()),
+        &mut c,
+    );
 
     let mut c = MpcFullIndiController::with_options_at_rate(&vp_b, 100.0, true, 1000.0);
     run_case(name, "mpc_full_1k", scenario_for(name, &m, vp_b), &mut c);

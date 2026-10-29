@@ -8,11 +8,13 @@ members = [
   "crates/cybflight_core",
   "crates/cybflight_sim",
   "crates/cybflight_rl",
+  "crates/cybflight_gs",
   "crates/params_derive",
   "crates/vehicle_yaml",
   "crates/bsp/sakurah743",
   "crates/bsp/foxeerh743",
   "crates/bsp/micoair743v2",
+  "crates/bsp/flywoof745",
   "crates/bsp/types",
   "crates/drivers",
 ]
@@ -23,7 +25,6 @@ members = [
 default-members = [
   "crates/cybflight",
   "crates/cybflight_core",
-  "crates/bsp/sakurah743",
   "crates/bsp/types",
   "crates/drivers",
 ]
@@ -34,6 +35,19 @@ lto = true
 codegen-units = 1
 panic = "abort"
 overflow-checks = false
+
+# Compile the top-level firmware binary/shell crate with `opt-level = "s"` while
+# keeping `cybflight-core`, `nalgebra`, and `air-filters` at `opt-level = 3` so
+# all control/estimation/RL math runs at maximum speed and the image fits within
+# 512 KiB on 1 MB STM32F745 targets (leaving Sectors 6+7 for the KV param store).
+[profile.release.package.cybflight]
+opt-level = "z"
+[profile.release.package.cybflight-drivers]
+opt-level = "s"
+[profile.release.package.embassy-stm32]
+opt-level = "s"
+[profile.release.package.embedded-fatfs]
+opt-level = "s"
 
 # Host-side profile for cybflight-sim. Inherits optimization from `release`
 # but disables LTO and loosens codegen-units so incremental rebuilds don't

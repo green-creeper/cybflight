@@ -14,7 +14,7 @@ use cybflight_sim::{
     plant::QuadPlant,
     report,
     runner::{MissionRunner, RunOutput},
-    scenario::{tweaked_vehicle, Scenario, Verdict},
+    scenario::{Scenario, Verdict, tweaked_vehicle},
 };
 use nalgebra::Vector3;
 
@@ -25,7 +25,11 @@ fn out_dir(name: &str) -> PathBuf {
 }
 
 fn run_with<C: Controller>(mut scenario: Scenario, mut controller: C) -> RunOutput {
-    let mut plant = QuadPlant::new(scenario.vehicle_params.clone(), &scenario.sim_params, 1.0 / 8000.0);
+    let mut plant = QuadPlant::new(
+        scenario.vehicle_params.clone(),
+        &scenario.sim_params,
+        1.0 / 8000.0,
+    );
     let runner = MissionRunner::new(Default::default());
     let out = runner.run(&mut scenario, &mut plant, &mut controller);
 

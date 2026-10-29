@@ -6,7 +6,7 @@
 use core::cell::{Cell, RefCell};
 use core::sync::atomic::Ordering;
 
-use embassy_sync::blocking_mutex::{raw::CriticalSectionRawMutex, Mutex as BlockingMutex};
+use embassy_sync::blocking_mutex::{Mutex as BlockingMutex, raw::CriticalSectionRawMutex};
 use embassy_time::Instant;
 
 use crate::hal;
@@ -18,23 +18,24 @@ use cybflight_msgs as msgs;
 /// instant it was latched. Cleared on disarm and on successful arm. Read by
 /// the `health` shell command so users can ask "why didn't it arm?" after
 /// the fact, even after the per-attempt summary line has scrolled away.
-pub static LATEST_BLOCK_REASON:
-    BlockingMutex<CriticalSectionRawMutex, Cell<Option<(BlockReason, Instant)>>> =
-    BlockingMutex::new(Cell::new(None));
+pub static LATEST_BLOCK_REASON: BlockingMutex<
+    CriticalSectionRawMutex,
+    Cell<Option<(BlockReason, Instant)>>,
+> = BlockingMutex::new(Cell::new(None));
 
 /// Most recent RC channel frame, mirrored into a shared cell as it is
 /// published to `RC_INPUT`. The `health` shell command reads this synchronously
 /// — a fresh `RC_INPUT.subscriber()` cannot recover history, so peeking the
 /// PubSub directly returns no data even when frames are arriving normally.
-pub static LATEST_RC_INPUT:
-    BlockingMutex<CriticalSectionRawMutex, RefCell<Option<msgs::RcInput>>> =
+pub static LATEST_RC_INPUT: BlockingMutex<CriticalSectionRawMutex, RefCell<Option<msgs::RcInput>>> =
     BlockingMutex::new(RefCell::new(None));
 
 /// Most recent CRSF/GHST link statistics, same caching rationale as
 /// `LATEST_RC_INPUT`.
-pub static LATEST_RC_LINK_STATUS:
-    BlockingMutex<CriticalSectionRawMutex, RefCell<Option<msgs::RcLinkStatus>>> =
-    BlockingMutex::new(RefCell::new(None));
+pub static LATEST_RC_LINK_STATUS: BlockingMutex<
+    CriticalSectionRawMutex,
+    RefCell<Option<msgs::RcLinkStatus>>,
+> = BlockingMutex::new(RefCell::new(None));
 
 pub type RcUart = hal::usart::BufferedUart<'static>;
 
@@ -157,14 +158,30 @@ struct ArmStateMachine {
 #[derive(Clone, Copy, defmt::Format)]
 pub enum BlockReason {
     Failsafe,
-    ThrottleNotMin { value: u16, max: u16 },
+    ThrottleNotMin {
+        value: u16,
+        max: u16,
+    },
     LinkInactive,
-    LinkStale { age_ms: u64 },
-    LinkLowQuality { quality: u8, min: u8 },
+    LinkStale {
+        age_ms: u64,
+    },
+    LinkLowQuality {
+        quality: u8,
+        min: u8,
+    },
     EstimatorNotReady,
-    TiltOutOfEnvelope { roll_deg: f32, pitch_deg: f32 },
-    SensorHealthDegraded { bits: u8, required: u8 },
-    EskfDegraded { faults: u32 },
+    TiltOutOfEnvelope {
+        roll_deg: f32,
+        pitch_deg: f32,
+    },
+    SensorHealthDegraded {
+        bits: u8,
+        required: u8,
+    },
+    EskfDegraded {
+        faults: u32,
+    },
     MahonyNotReady,
     EskfMahonyTiltDisagreement {
         eskf_roll_deg: f32,
@@ -241,9 +258,7 @@ impl ArmStateMachine {
                     timestamp: now,
                     armed: false,
                 });
-                status::STATUS
-                    .sender()
-                    .send(status::SystemStatus::Disarmed);
+                status::STATUS.sender().send(status::SystemStatus::Disarmed);
             }
             return;
         }
@@ -282,7 +297,12 @@ impl ArmStateMachine {
         }
         let link_age_ms = now.duration_since(self.link_stats_time).as_millis() as u64;
         if link_age_ms > cfg.link_stats_max_age_ms {
-            self.note_block(now, BlockReason::LinkStale { age_ms: link_age_ms });
+            self.note_block(
+                now,
+                BlockReason::LinkStale {
+                    age_ms: link_age_ms,
+                },
+            );
             return;
         }
         if self.link_quality < cfg.min_link_quality {
@@ -326,9 +346,7 @@ impl ArmStateMachine {
             timestamp: now,
             armed: true,
         });
-        status::STATUS
-            .sender()
-            .send(status::SystemStatus::Armed);
+        status::STATUS.sender().send(status::SystemStatus::Armed);
     }
 }
 
@@ -342,8 +360,7 @@ pub mod crsf_runner {
     use cybflight_drivers::rc::crsf::{Crsf, CrsfEvent};
     use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, pubsub::Subscriber};
 
-    type AttitudeSub =
-        Subscriber<'static, CriticalSectionRawMutex, msgs::VehicleAttitude, 4, 6, 1>;
+    type AttitudeSub = Subscriber<'static, CriticalSectionRawMutex, msgs::VehicleAttitude, 4, 6, 1>;
 
     /// CRSF runner: reads frames, publishes channels/link stats, sends telemetry.
     pub struct CrsfRunner {
@@ -372,8 +389,7 @@ pub mod crsf_runner {
                     Ok(event) => {
                         let now = Instant::now();
                         match event {
-                            CrsfEvent::RcChannelsPacked(rc)
-                            | CrsfEvent::SubsetRcChannels(rc) => {
+                            CrsfEvent::RcChannelsPacked(rc) | CrsfEvent::SubsetRcChannels(rc) => {
                                 let frame = msgs::RcInput {
                                     timestamp: now,
                                     channels: rc.channels,
@@ -406,8 +422,7 @@ pub mod crsf_runner {
                                     baud
                                 );
                                 // Accept the speed proposal
-                                if let Err(e) =
-                                    self.crsf.accept_speed_proposal(port_id, baud).await
+                                if let Err(e) = self.crsf.accept_speed_proposal(port_id, baud).await
                                 {
                                     defmt::warn!("Failed to send speed response: {}", e);
                                 }
@@ -445,9 +460,7 @@ pub mod crsf_runner {
                         if let Some(att) = sub.try_next_message_pure() {
                             let q = att.orientation;
                             let (roll, pitch, yaw) = q.euler_angles();
-                            if let Err(e) =
-                                self.crsf.write_attitude(pitch, roll, yaw).await
-                            {
+                            if let Err(e) = self.crsf.write_attitude(pitch, roll, yaw).await {
                                 defmt::warn!("CRSF telemetry attitude error: {}", e);
                             }
                         }
@@ -478,7 +491,7 @@ pub mod crsf_runner {
 pub mod ghst_runner {
     use super::*;
     use cybflight_drivers::rc::ghst::{Ghst, GhstEvent};
-    use embassy_time::{with_timeout, Duration, Timer};
+    use embassy_time::{Duration, Timer, with_timeout};
 
     /// GHST runner: reads frames, publishes channels/link stats, sends telemetry.
     pub struct GhstRunner {
@@ -509,8 +522,10 @@ pub mod ghst_runner {
             let mut timeout_count: u32 = 0;
             let mut got_first_frame = false;
 
-            defmt::info!("GHST: waiting for first frame (timeout {}s)...",
-                FIRST_FRAME_TIMEOUT.as_secs());
+            defmt::info!(
+                "GHST: waiting for first frame (timeout {}s)...",
+                FIRST_FRAME_TIMEOUT.as_secs()
+            );
 
             loop {
                 let timeout = if got_first_frame {

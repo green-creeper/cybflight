@@ -7,9 +7,11 @@
 //! last waypoint (hover-at-end) so the runner can still assess terminal
 //! stability without a special-case code path.
 
-use cybflight_core::trajectory_planning::piecewise_polynomial::PiecewisePolynomial;
-use cybflight_core::trajectory_planning::planner::{plan_with_workspace, PlannerInput, SolverStatus};
 use cybflight_core::trajectory_planning::bfgs_trust::BfgsWorkspace;
+use cybflight_core::trajectory_planning::piecewise_polynomial::PiecewisePolynomial;
+use cybflight_core::trajectory_planning::planner::{
+    PlannerInput, SolverStatus, plan_with_workspace,
+};
 use cybflight_core::trajectory_planning::quad_planning_config::QuadPlanningConfig;
 use cybflight_core::trajectory_planning::types::ZERO3;
 use nalgebra::Vector3;

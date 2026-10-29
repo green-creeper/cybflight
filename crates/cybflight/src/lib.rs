@@ -1,31 +1,33 @@
 #![no_std]
 
-#[cfg(feature = "board_sakurah743")]
-pub use bsp_sakurah743 as bsp;
+#[cfg(feature = "board_flywoof745")]
+pub use bsp_flywoof745 as bsp;
 #[cfg(feature = "board_foxeerh743")]
 pub use bsp_foxeerh743 as bsp;
 #[cfg(feature = "board_micoair743v2")]
 pub use bsp_micoair743v2 as bsp;
+#[cfg(feature = "board_sakurah743")]
+pub use bsp_sakurah743 as bsp;
 
 pub use bsp::hal;
 
-pub mod clocks;
 pub mod arm_led;
 pub mod blackbox;
 pub mod board_init;
+pub mod clocks;
 pub mod comm;
-pub mod serial_logger;
 pub mod control;
 pub mod estimation;
 pub mod health;
 pub mod motors;
+pub mod serial_logger;
 pub use cybflight_msgs as msgs;
 pub mod params;
 pub mod platform;
-pub mod rates;
-pub mod reset_cause;
 #[cfg(feature = "postmortem")]
 pub mod postmortem;
+pub mod rates;
+pub mod reset_cause;
 pub mod sensors;
 pub mod shell;
 pub mod status;
@@ -33,8 +35,6 @@ pub mod thrust_tables;
 pub mod usb_serial;
 pub mod vehicle;
 pub mod watchdog;
-
-
 
 /// Firmware version from `Cargo.toml`.
 pub const BUILD_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -102,10 +102,7 @@ macro_rules! subscribe_or_park {
         match ($channel).subscriber() {
             Ok(s) => s,
             Err(_) => {
-                ::defmt::error!(
-                    "{}: subscriber slot exhausted — task parked",
-                    $name
-                );
+                ::defmt::error!("{}: subscriber slot exhausted — task parked", $name);
                 $crate::shell::shell_err(concat!(
                     $name,
                     ": subscriber slot exhausted — task parked"

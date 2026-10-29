@@ -1,17 +1,17 @@
+use super::IMU_PUBSUB_SUBS;
 use crate::apply_alignment;
 use crate::hal;
 use crate::rates::IMU_PUBSUB_CAP;
-use super::IMU_PUBSUB_SUBS;
-use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use air_filters::Filter;
 use air_filters::iir::biquad::DirectForm2;
 use air_filters::iir::biquad::{BiquadFilter, BiquadFilterConfigBuilder, BiquadFilterType};
-use air_filters::Filter;
 use bsp_types::SensorAlign;
+use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use cybflight_core::imu_stamp::SampleStamper;
+use cybflight_drivers::imu::ReadImu;
 use cybflight_drivers::imu::bmi270::Bmi270;
 use cybflight_drivers::imu::icm426xx::Icm426xx;
 use cybflight_drivers::imu::mpu6x00::Mpu6x00;
-use cybflight_drivers::imu::ReadImu;
-use cybflight_core::imu_stamp::SampleStamper;
 
 /// Fixed-point shift for the sample stamper's tick grid (see
 /// `ImuReader::new`). 2^16 sub-ticks keep the 8 kHz period's rounding
@@ -133,12 +133,7 @@ pub static IMU1_EFFECTIVE_GYRO_LPF_HZ_BITS: AtomicU32 = AtomicU32::new(0);
 static IMU1_LPF_STORED: AtomicBool = AtomicBool::new(false);
 
 impl<D: ReadImu> ImuReader<D> {
-    pub fn new(
-        imu: D,
-        align: SensorAlign,
-        accel_cutoff_hz: f32,
-        gyro_cutoff_hz: f32,
-    ) -> Self {
+    pub fn new(imu: D, align: SensorAlign, accel_cutoff_hz: f32, gyro_cutoff_hz: f32) -> Self {
         let sample_hz = imu.sample_rate_hz();
         // Clamp before building: the cutoffs are runtime params while the
         // sample rate is a compile-time build knob, and the two are
@@ -211,9 +206,21 @@ impl<D: ReadImu> ImuReader<D> {
 
     pub async fn run(
         &mut self,
-        channel: &'static PubSubChannel<CriticalSectionRawMutex, msgs::Imu, IMU_PUBSUB_CAP, IMU_PUBSUB_SUBS, 1>,
+        channel: &'static PubSubChannel<
+            CriticalSectionRawMutex,
+            msgs::Imu,
+            IMU_PUBSUB_CAP,
+            IMU_PUBSUB_SUBS,
+            1,
+        >,
         raw_channel: Option<
-            &'static PubSubChannel<CriticalSectionRawMutex, msgs::Imu, IMU_PUBSUB_CAP, IMU_PUBSUB_SUBS, 1>,
+            &'static PubSubChannel<
+                CriticalSectionRawMutex,
+                msgs::Imu,
+                IMU_PUBSUB_CAP,
+                IMU_PUBSUB_SUBS,
+                1,
+            >,
         >,
     ) -> ! {
         let publisher = channel.immediate_publisher();
@@ -233,8 +240,11 @@ impl<D: ReadImu> ImuReader<D> {
         // See `blackbox::record_set::rate_div` for the measurements.
         let mut raw_ctr: u32 = 0;
         let is_imu1 = core::ptr::eq(channel, &super::IMU_1);
-        let lost_counter: &'static AtomicU32 =
-            if is_imu1 { &IMU1_LOST_SAMPLES } else { &IMU2_LOST_SAMPLES };
+        let lost_counter: &'static AtomicU32 = if is_imu1 {
+            &IMU1_LOST_SAMPLES
+        } else {
+            &IMU2_LOST_SAMPLES
+        };
         // ~1 kHz mirror of the filtered primary stream (see
         // `sensors::IMU_1_DECIM`); one counter increment per sample.
         let decim_publisher = is_imu1.then(|| super::IMU_1_DECIM.immediate_publisher());
@@ -316,9 +326,21 @@ impl<D: ReadImu> ImuReader<D> {
 #[embassy_executor::task(pool_size = 2)]
 pub async fn icm_reader_task(
     mut reader: ImuReader<IcmDev>,
-    channel: &'static PubSubChannel<CriticalSectionRawMutex, msgs::Imu, IMU_PUBSUB_CAP, IMU_PUBSUB_SUBS, 1>,
+    channel: &'static PubSubChannel<
+        CriticalSectionRawMutex,
+        msgs::Imu,
+        IMU_PUBSUB_CAP,
+        IMU_PUBSUB_SUBS,
+        1,
+    >,
     raw_channel: Option<
-        &'static PubSubChannel<CriticalSectionRawMutex, msgs::Imu, IMU_PUBSUB_CAP, IMU_PUBSUB_SUBS, 1>,
+        &'static PubSubChannel<
+            CriticalSectionRawMutex,
+            msgs::Imu,
+            IMU_PUBSUB_CAP,
+            IMU_PUBSUB_SUBS,
+            1,
+        >,
     >,
 ) {
     reader.run(channel, raw_channel).await;
@@ -327,9 +349,21 @@ pub async fn icm_reader_task(
 #[embassy_executor::task(pool_size = 2)]
 pub async fn mpu_reader_task(
     mut reader: ImuReader<MpuDev>,
-    channel: &'static PubSubChannel<CriticalSectionRawMutex, msgs::Imu, IMU_PUBSUB_CAP, IMU_PUBSUB_SUBS, 1>,
+    channel: &'static PubSubChannel<
+        CriticalSectionRawMutex,
+        msgs::Imu,
+        IMU_PUBSUB_CAP,
+        IMU_PUBSUB_SUBS,
+        1,
+    >,
     raw_channel: Option<
-        &'static PubSubChannel<CriticalSectionRawMutex, msgs::Imu, IMU_PUBSUB_CAP, IMU_PUBSUB_SUBS, 1>,
+        &'static PubSubChannel<
+            CriticalSectionRawMutex,
+            msgs::Imu,
+            IMU_PUBSUB_CAP,
+            IMU_PUBSUB_SUBS,
+            1,
+        >,
     >,
 ) {
     reader.run(channel, raw_channel).await;
@@ -338,9 +372,21 @@ pub async fn mpu_reader_task(
 #[embassy_executor::task(pool_size = 2)]
 pub async fn bmi270_reader_task(
     mut reader: ImuReader<Bmi270Dev>,
-    channel: &'static PubSubChannel<CriticalSectionRawMutex, msgs::Imu, IMU_PUBSUB_CAP, IMU_PUBSUB_SUBS, 1>,
+    channel: &'static PubSubChannel<
+        CriticalSectionRawMutex,
+        msgs::Imu,
+        IMU_PUBSUB_CAP,
+        IMU_PUBSUB_SUBS,
+        1,
+    >,
     raw_channel: Option<
-        &'static PubSubChannel<CriticalSectionRawMutex, msgs::Imu, IMU_PUBSUB_CAP, IMU_PUBSUB_SUBS, 1>,
+        &'static PubSubChannel<
+            CriticalSectionRawMutex,
+            msgs::Imu,
+            IMU_PUBSUB_CAP,
+            IMU_PUBSUB_SUBS,
+            1,
+        >,
     >,
 ) {
     reader.run(channel, raw_channel).await;

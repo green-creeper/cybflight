@@ -1,0 +1,297 @@
+# Vehicle definition: Flywoo GOKU GN 745 45A AIO 32bit V3 (MPU6000) quadrotor.
+#
+# Selected at build time via `VEHICLE=goku_f745` (see `.env` / Justfile).
+#
+# Body frame FLU (x fwd, y left, z up); Betaflight QuadX motor order:
+#   m0 REAR_RIGHT (CW)  -> PB0 (TIM3_CH3)
+#   m1 FRONT_RIGHT (CCW)-> PB1 (TIM3_CH4)
+#   m2 REAR_LEFT (CCW)  -> PE9 (TIM1_CH1)
+#   m3 FRONT_LEFT (CW)  -> PE11 (TIM1_CH2)
+
+build:
+  board: flywoof745
+  rc_protocol: crsf
+  outer_loop: rate         # rate | cascade | mpc | mpc_full
+  pos_source: gps          # gps | mocap
+  gps_model: ublox
+  gps_dual_antenna: no
+  imu_rate: 8khz
+  indi: yes
+
+default_mission: outdoor_splits_slow
+
+airframe:
+  name: goku_f745_01
+  thrust_model: { type: quadratic, k: 0.518 }
+  mass_kg: 0.0618
+  inertia_kg_m2: [0.00035, 0.0, 0.0, 0.0, 0.00035, 0.0, 0.0, 0.0, 0.00045]
+  max_rate_rad_s: [10.0, 10.0, 6.0]
+  motors:
+    - { pos_m: [-0.031466, -0.031466], spin: cw,  max_thrust_n: 0.6063, torque_coeff_m: 0.0047 }
+    - { pos_m: [ 0.031466, -0.031466], spin: ccw, max_thrust_n: 0.6063, torque_coeff_m: 0.0047 }
+    - { pos_m: [-0.031466,  0.031466], spin: ccw, max_thrust_n: 0.6063, torque_coeff_m: 0.0047 }
+    - { pos_m: [ 0.031466,  0.031466], spin: cw,  max_thrust_n: 0.6063, torque_coeff_m: 0.0047 }
+
+tuning:
+  # ── airframe.install — GPS antenna extrinsics (80 mm standing GPS mast) ──
+  gps_ant_x: 0.0
+  gps_ant_y: 0.0
+  gps_ant_z: 0.078
+  gps_base_x: 0.0
+  gps_base_y: -1.0
+  gps_base_z: 0.0
+
+  # ── cascade — position + attitude gains ──
+  pos_kp_x: 4.0
+  pos_kp_y: 4.0
+  pos_kp_z: 8.0
+  pos_kd_x: 4.0
+  pos_kd_y: 4.0
+  pos_kd_z: 6.0
+  att_k_r: 3.0
+  att_k_p: 3.0
+  att_k_y: 1.0
+
+  # ── airframe.motors + battery + sensors (FLYWOO RB1003 14800KV + Gemfan 2015-2 + 2S 450mAh HV) ──
+  m0_tau: 0.012
+  m1_tau: 0.012
+  m2_tau: 0.012
+  m3_tau: 0.012
+  m0_omega_max: 9600.0
+  m1_omega_max: 9600.0
+  m2_omega_max: 9600.0
+  m3_omega_max: 9600.0
+  m0_g2_ry: 0.00004
+  m1_g2_ry: -0.00004
+  m2_g2_ry: -0.00004
+  m3_g2_ry: 0.00004
+  # Battery (2S HV LiPo 450mAh, nominal 7.6V, plausible window 6.0V..10.0V):
+  batt_nominal_v: 7.6
+  batt_min_v: 6.0
+  batt_max_v: 10.0
+  imu_accel_lpf_hz: 80.0
+  imu_gyro_lpf_hz: 200.0
+
+  # ── eskf.filter — process/measurement noise + jump gates ──
+  eskf_acc_noise: 0.01
+  eskf_gyro_noise: 0.0001
+  eskf_acc_bias_rw: 0.001
+  eskf_gyro_bias_rw: 0.00001
+  eskf_baro_std: 0.5
+  eskf_mag_std: 0.05
+  eskf_gate_sigma: 10.0
+  eskf_max_pos_jump_m: 3.0
+  eskf_max_att_jump_rad: 0.7
+
+  # ── eskf.gps_guard — GNSS acceptance + sigma schedule ──
+  eskf_gps_max_jumps: 5
+  eskf_gps_max_rejects: 15
+  eskf_gps_stale_s: 2.0
+  eskf_gps_rtk_fix_debounce_s: 2.0
+  eskf_gps_rtk_loss_debounce_s: 1.0
+  eskf_gps_bias_cov_thresh: 0.002
+  eskf_gps_init_yaw_cov: 10.0
+  eskf_gps_min_sv: 6
+  eskf_gps_h_acc_max_m: 50.0
+  eskf_gps_pos_sigma_fix_m: 0.05
+  eskf_gps_pos_sigma_float_m: 0.30
+  eskf_gps_pos_sigma_none_m: 2.0
+  eskf_gps_vel_sigma_m_s: 0.10
+  eskf_gps_reinit_min_carr_soln: 0
+  eskf_gps_heading_sigma_floor_rad: 0.025
+
+  # ── eskf.mocap_guard — mocap acceptance (for POS_SOURCE=mocap overrides) ──
+  eskf_mocap_max_jumps: 3
+  eskf_mocap_max_rejects: 8
+  eskf_mocap_stale_s: 0.1
+  eskf_mocap_bias_cov_thresh: 0.003
+  eskf_mocap_pos_std: 0.01
+  eskf_mocap_att_std: 0.03
+  eskf_mocap_reanchor_m: 0.10
+
+  # ── airframe.install + sensors — install calibration + fusion policy ──
+  mag_hi_x: 0
+  mag_hi_y: 0
+  mag_hi_z: 0
+  gps_fuse_vel: 1
+
+  # ── eskf.filter — initial covariance P0 ──
+  eskf_init_pos_var: 1
+  eskf_init_vel_var: 1
+  eskf_init_acc_bias_var: 0.01
+  eskf_init_gyro_bias_var: 0.01
+  eskf_init_att_var_rp: 0.1
+
+  # ── eskf.faults — fault annunciation windows ──
+  eskf_fault_pos_timeout_s: 2
+  eskf_fault_cov_blowup_m2: 25
+  eskf_fault_nan_hold_s: 3
+  eskf_fault_cascade_hold_s: 3
+
+  # ── battery — cell detection ──
+  batt_cell_detect_v: 4.3
+  batt_max_cells: 6
+  batt_no_battery_v: 3
+  batt_lpf_hz: 5
+
+  # ── rc — transmitter / stick configuration (from goku_ardu_params.params) ──
+  rc_min_us: 988
+  rc_mid_us: 1500
+  rc_max_us: 2011
+  rc_arm_channel: 4            # RC5 (0-indexed ch4) = Arm/Disarm
+  rc_arm_threshold_us: 1500
+  rc_throttle_mincheck_us: 1050
+  rc_mission_channel: 6        # RC7 (0-indexed ch6) = Offboard / RL / Mission switch
+  rc_mission_high_us: 1700
+  rc_mission_low_us: 1300
+  rc_throttle_land_us: 1100
+  rc_launch_us: 1600
+  rc_launch_confirm_frames: 5
+  rc_xy_deadband: 0.05
+  rc_throttle_deadband: 0.12
+  rc_rate_deadband: 0.05
+  rc_xy_rate_m_s: 1
+  rc_z_rate_m_s: 0.5
+  rc_land_rate_m_s: 0.4
+  rc_max_rate_rp: 8
+  rc_max_rate_yaw: 4
+
+  # ── site — gravity and stick-integrator envelope ──
+  gravity_m_s2: 9.81
+  fence_enable: 0
+  fence_x_m: 2.5
+  fence_y_m: 3.5
+  fence_z_max_m: 2
+  fence_z_min_m: 0
+
+  # ── safety — arming gates ──
+  arm_max_tilt_deg: 30
+  arm_min_link_quality: 50
+  arm_eskf_mahony_tol_deg: 10
+  arm_accel_tol_m_s2: 1.5
+  arm_gyro_limit_rad_s: 0.5
+  arm_switch_hold_s: 0.1
+  arm_link_stats_max_age_s: 0.5
+  arm_led: 1
+
+  # ── safety — RC-loss failsafe timing ──
+  fs_rxloss_trigger_s: 0.15
+  fs_guard_period_s: 1.5
+  fs_recovery_period_s: 0.5
+  fs_ctrl_timeout_s: 0.5
+
+  # ── airframe.motors — G2 roll/pitch effectiveness ──
+  m0_g2_rr: 0
+  m0_g2_rp: 0
+  m1_g2_rr: 0
+  m1_g2_rp: 0
+  m2_g2_rr: 0
+  m2_g2_rp: 0
+  m3_g2_rr: 0
+  m3_g2_rp: 0
+
+  # ── indi.controller — rate gains, sync filter, WLS weights ──
+  indi_rate_r: 80
+  indi_rate_p: 80
+  indi_rate_y: 80
+  indi_sync_hz: 12
+  indi_ctrl_div: 4
+  wls_wv_fx: 1
+  wls_wv_fy: 1
+  wls_wv_fz: 50
+  wls_wv_rr: 50
+  wls_wv_rp: 50
+  wls_wv_ry: 5
+  wls_wu_m0: 1
+  wls_wu_m1: 1
+  wls_wu_m2: 1
+  wls_wu_m3: 1
+
+  # ── indi.controller — idle throttle + ground detection ──
+  indi_idle_norm: 0.055
+  indi_ground_gyro_dps: 100
+  indi_ground_accel_g: 0.8
+  indi_ground_thrust_sp: 3
+  indi_omega_kf: 0
+  indi_rpm_stale_gaps: 10
+
+  # ── indi.rpm_estimator — per-motor FOPDT Kalman filter ──
+  rpm_est_omega_var: 400
+  rpm_est_thr_psd: 1.25e-6
+  rpm_est_cm_psd: 100
+  rpm_est_nis_gate: 9
+  rpm_est_tau_d: 0
+
+  # ── rpm_notch — gyro/accel notch bank ──
+  rpm_notch_en: 0
+  rpm_notch_q: 5
+  rpm_notch_min_hz: 100
+  rpm_notch_fade_hz: 50
+  rpm_notch_lpf_hz: 150
+
+  # ── cascade — geometric cascade ──
+  att_kt_r: 0
+  att_kt_p: 0
+  att_kt_y: 0
+  cascade_rate_hz: 100
+
+  # ── mpc — cost weights and solve cadence ──
+  mpc_w_pos_x: 500
+  mpc_w_pos_y: 500
+  mpc_w_pos_z: 100
+  mpc_w_vel_x: 10
+  mpc_w_vel_y: 10
+  mpc_w_vel_z: 10
+  mpc_w_att_r: 5
+  mpc_w_att_p: 5
+  mpc_w_att_y: 200
+  mpc_w_rate_r: 20
+  mpc_w_rate_p: 20
+  mpc_w_rate_y: 20
+  mpc_w_thrust: 1
+  mpc_dt: 0.05
+  mpc_rho: 10000
+  mpc_thrust_frac: 0.75
+  mpc_pos_cost_mode: 1
+  mpc_rate_hz: 50
+  mpc_max_iters: 1
+  mpc_horizon_n: 20
+  mpc_kkt_tol: 0.001
+  mpc_rate_barrier_tau: 0.5
+  mpc_rate_barrier_delta: 0.5
+  mpc_tilt_max_deg: 60.0
+  mpc_tilt_barrier_tau: 0.5
+  mpc_tilt_barrier_delta: 0.05
+
+  # ── trajectory.planner — online BFGS planner ──
+  plan_max_vel: 100
+  plan_max_tilt: 1.0471976
+  plan_w_time: 1
+  plan_w_energy: 0.01
+  plan_w_vel: 0
+  plan_w_tilt: 0
+  plan_w_body_rate: 10
+  plan_w_thrust: 10
+  plan_smooth_eps: 0.01
+  plan_num_check: 8
+  plan_bfgs_delta_init: 1
+  plan_bfgs_delta_max: 100
+  plan_bfgs_eta: 0.1
+  plan_bfgs_g_eps: 1e-07
+  plan_bfgs_max_iter: 500
+  plan_bfgs_past: 3
+  plan_bfgs_delta_conv: 1e-08
+
+  # ── trajectory.sampler — reference sampler ──
+  sampler_kind: 1
+  sampler_max_lag_s: 0.1
+  sampler_axis_weights_sqrt_x: 1
+  sampler_axis_weights_sqrt_y: 1
+  sampler_axis_weights_sqrt_z: 1
+  sampler_search_dt: 0.01
+  sampler_max_search_steps: 100
+  sampler_radius_of_acceptance: 0.15
+  sampler_max_lead_s: 0.1
+
+  # ── system — device/UX toggles ──
+  blackbox_tier: 3

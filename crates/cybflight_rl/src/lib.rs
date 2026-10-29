@@ -16,7 +16,12 @@ struct VecEnv {
     envs: Vec<RecoveryEnv>,
 }
 
-fn load_vehicle(path: &str) -> PyResult<(cybflight_core::params::FirmwareConfig, vehicle_yaml::SimYaml)> {
+fn load_vehicle(
+    path: &str,
+) -> PyResult<(
+    cybflight_core::params::FirmwareConfig,
+    vehicle_yaml::SimYaml,
+)> {
     let yaml = std::fs::read_to_string(path)
         .map_err(|e| pyo3::exceptions::PyIOError::new_err(format!("{path}: {e}")))?;
     let name = std::path::Path::new(path)
@@ -65,7 +70,14 @@ impl VecEnv {
         cfg.disturb = disturb;
         cfg.mass_jitter = mass_jitter;
         cfg.max_episode_s = max_episode_s;
-        cfg.reward = RewardWeights { geom: w_geom, time: w_time, rate: w_rate, dz: w_dz, crash: w_crash, du_rate: w_du_rate };
+        cfg.reward = RewardWeights {
+            geom: w_geom,
+            time: w_time,
+            rate: w_rate,
+            dz: w_dz,
+            crash: w_crash,
+            du_rate: w_du_rate,
+        };
         cfg.gyro_sigma = gyro_sigma;
         cfg.rate_weight_nominal = rate_weight_nominal;
         cfg.sampler_max_lag_s = sampler_max_lag;
@@ -93,7 +105,8 @@ impl VecEnv {
 
     /// Reset every environment; returns `(n, OBS_DIM)`.
     fn reset<'py>(&mut self, py: Python<'py>) -> Bound<'py, PyArray2<f32>> {
-        let obs: Vec<[f32; OBS_DIM]> = py.detach(|| self.envs.par_iter_mut().map(|e| e.reset()).collect());
+        let obs: Vec<[f32; OBS_DIM]> =
+            py.detach(|| self.envs.par_iter_mut().map(|e| e.reset()).collect());
         flat2(py, &obs)
     }
 
@@ -144,7 +157,11 @@ impl VecEnv {
                 .map(|(e, z)| {
                     let (obs, r, done, info) = e.step(z);
                     let ep = e.episode;
-                    let (obs, terminal_obs) = if done { (e.reset(), obs) } else { (obs, [0.0; OBS_DIM]) };
+                    let (obs, terminal_obs) = if done {
+                        (e.reset(), obs)
+                    } else {
+                        (obs, [0.0; OBS_DIM])
+                    };
                     Out {
                         obs,
                         terminal_obs,
@@ -168,20 +185,86 @@ impl VecEnv {
         let tobs: Vec<[f32; OBS_DIM]> = outs.iter().map(|o| o.terminal_obs).collect();
         let infos = PyDict::new(py);
         infos.set_item("terminal_obs", flat2(py, &tobs))?;
-        infos.set_item("e_geom", outs.iter().map(|o| o.e_geom).collect::<Vec<_>>().into_pyarray(py))?;
-        infos.set_item("e_time", outs.iter().map(|o| o.e_time).collect::<Vec<_>>().into_pyarray(py))?;
-        infos.set_item("du_rate2", outs.iter().map(|o| o.du_rate2).collect::<Vec<_>>().into_pyarray(py))?;
-        infos.set_item("crashed", outs.iter().map(|o| o.crashed).collect::<Vec<_>>().into_pyarray(py))?;
-        infos.set_item("truncated", outs.iter().map(|o| o.truncated).collect::<Vec<_>>().into_pyarray(py))?;
-        infos.set_item("diverged", outs.iter().map(|o| o.diverged).collect::<Vec<_>>().into_pyarray(py))?;
-        infos.set_item("kind", outs.iter().map(|o| o.kind).collect::<Vec<_>>().into_pyarray(py))?;
-        infos.set_item("speed", outs.iter().map(|o| o.speed).collect::<Vec<_>>().into_pyarray(py))?;
-        infos.set_item("peak_thrust", outs.iter().map(|o| o.peak_thrust).collect::<Vec<_>>().into_pyarray(py))?;
-        infos.set_item("peak_rate", outs.iter().map(|o| o.peak_rate).collect::<Vec<_>>().into_pyarray(py))?;
+        infos.set_item(
+            "e_geom",
+            outs.iter()
+                .map(|o| o.e_geom)
+                .collect::<Vec<_>>()
+                .into_pyarray(py),
+        )?;
+        infos.set_item(
+            "e_time",
+            outs.iter()
+                .map(|o| o.e_time)
+                .collect::<Vec<_>>()
+                .into_pyarray(py),
+        )?;
+        infos.set_item(
+            "du_rate2",
+            outs.iter()
+                .map(|o| o.du_rate2)
+                .collect::<Vec<_>>()
+                .into_pyarray(py),
+        )?;
+        infos.set_item(
+            "crashed",
+            outs.iter()
+                .map(|o| o.crashed)
+                .collect::<Vec<_>>()
+                .into_pyarray(py),
+        )?;
+        infos.set_item(
+            "truncated",
+            outs.iter()
+                .map(|o| o.truncated)
+                .collect::<Vec<_>>()
+                .into_pyarray(py),
+        )?;
+        infos.set_item(
+            "diverged",
+            outs.iter()
+                .map(|o| o.diverged)
+                .collect::<Vec<_>>()
+                .into_pyarray(py),
+        )?;
+        infos.set_item(
+            "kind",
+            outs.iter()
+                .map(|o| o.kind)
+                .collect::<Vec<_>>()
+                .into_pyarray(py),
+        )?;
+        infos.set_item(
+            "speed",
+            outs.iter()
+                .map(|o| o.speed)
+                .collect::<Vec<_>>()
+                .into_pyarray(py),
+        )?;
+        infos.set_item(
+            "peak_thrust",
+            outs.iter()
+                .map(|o| o.peak_thrust)
+                .collect::<Vec<_>>()
+                .into_pyarray(py),
+        )?;
+        infos.set_item(
+            "peak_rate",
+            outs.iter()
+                .map(|o| o.peak_rate)
+                .collect::<Vec<_>>()
+                .into_pyarray(py),
+        )?;
         Ok((
             flat2(py, &obs),
-            outs.iter().map(|o| o.r).collect::<Vec<_>>().into_pyarray(py),
-            outs.iter().map(|o| o.done).collect::<Vec<_>>().into_pyarray(py),
+            outs.iter()
+                .map(|o| o.r)
+                .collect::<Vec<_>>()
+                .into_pyarray(py),
+            outs.iter()
+                .map(|o| o.done)
+                .collect::<Vec<_>>()
+                .into_pyarray(py),
             infos,
         ))
     }

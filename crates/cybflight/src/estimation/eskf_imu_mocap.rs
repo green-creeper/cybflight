@@ -26,18 +26,15 @@ use embassy_sync::pubsub::WaitResult;
 use embassy_time::Instant;
 use nalgebra::Vector3;
 
-use cybflight_core::eskf::{
-    Eskf, EskfMocapGuard, MocapGuardOutcome, MocapPose,
-    ReinitCause,
-};
+use cybflight_core::eskf::{Eskf, EskfMocapGuard, MocapGuardOutcome, MocapPose, ReinitCause};
 
 use core::sync::atomic::Ordering;
 
 use crate::estimation::{
-    attitude_health_bits, evaluate_faults, AttitudeHealthParams, ATTITUDE_HEALTH, ESKF_DEGRADED, ESKF_FAULTS,
-    ESKF_HEALTH, ESKF_LAST_ATT_UPDATE, ESKF_LAST_JUMP_CASCADE, ESKF_LAST_NAN_RESET,
-    ESKF_LAST_POS_UPDATE, ESKF_LAST_REJECT_CASCADE, ESKF_LAST_VEL_UPDATE, ESKF_SEVERE_FAULT,
-    ESTIMATOR_READY, ESTIMATOR_STATUS, EstimatorPhase, FaultEvalInputs,
+    ATTITUDE_HEALTH, AttitudeHealthParams, ESKF_DEGRADED, ESKF_FAULTS, ESKF_HEALTH,
+    ESKF_LAST_ATT_UPDATE, ESKF_LAST_JUMP_CASCADE, ESKF_LAST_NAN_RESET, ESKF_LAST_POS_UPDATE,
+    ESKF_LAST_REJECT_CASCADE, ESKF_LAST_VEL_UPDATE, ESKF_SEVERE_FAULT, ESTIMATOR_READY,
+    ESTIMATOR_STATUS, EstimatorPhase, FaultEvalInputs, attitude_health_bits, evaluate_faults,
 };
 use crate::motors::IS_ARMED;
 use crate::sensors;
@@ -97,7 +94,10 @@ pub async fn estimation_task() {
     // flagged): the pose measurement σ, staleness window, convergence
     // threshold and the failsafe cascade limits all come from the
     // vehicle YAML / flash overrides rather than code defaults.
-    let cfg = crate::params::get().eskf.mocap_guard.to_mocap_guard_config();
+    let cfg = crate::params::get()
+        .eskf
+        .mocap_guard
+        .to_mocap_guard_config();
 
     // Hot-path param snapshots. Both source groups are reboot-flagged,
     // and both of these feed code that runs at the IMU / predict rate —
@@ -259,8 +259,8 @@ pub async fn estimation_task() {
                 // a stale sample yields dt = 0 and the `dt <= 0.0` guard
                 // below skips it; the clock still advances to `now`, so
                 // the first fresh sample computes a sane dt.
-                let dt = now.saturating_duration_since(last_predict_ts).as_micros() as f32
-                    / 1_000_000.0;
+                let dt =
+                    now.saturating_duration_since(last_predict_ts).as_micros() as f32 / 1_000_000.0;
                 last_predict_ts = now;
 
                 if dt <= 0.0 || dt > max_predict_dt_s {
@@ -367,9 +367,7 @@ pub async fn estimation_task() {
                 // action rather than a silent thrust cut.
                 if tick.is_stale != prev_stale {
                     if tick.is_stale {
-                        defmt::warn!(
-                            "ESKF: mocap stale — arming blocked, dead-reckoning on IMU"
-                        );
+                        defmt::warn!("ESKF: mocap stale — arming blocked, dead-reckoning on IMU");
                     } else {
                         defmt::info!("ESKF: mocap stream recovered");
                     }
@@ -433,11 +431,8 @@ pub async fn estimation_task() {
                 let mocap_pose = pose_to_mocap(&pose);
                 // `armed` gates the guard's re-anchor escape hatch —
                 // in flight the ride-out-IMU policy stays absolute.
-                let outcome = guard.on_pose(
-                    &mut eskf,
-                    &mocap_pose,
-                    IS_ARMED.load(Ordering::Relaxed),
-                );
+                let outcome =
+                    guard.on_pose(&mut eskf, &mocap_pose, IS_ARMED.load(Ordering::Relaxed));
 
                 match outcome {
                     MocapGuardOutcome::Accepted { inflated } => {

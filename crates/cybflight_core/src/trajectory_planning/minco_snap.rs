@@ -33,11 +33,11 @@
 
 use nalgebra::Vector3;
 
-use super::banded_system::{snap_storage, BandedSystem};
+use super::MAX_PIECES;
+use super::banded_system::{BandedSystem, snap_storage};
 use super::piecewise_polynomial::PiecewisePolynomial;
 use super::polynomial::Polynomial;
-use super::types::{Vec3, ZERO3, PVAJ3D};
-use super::MAX_PIECES;
+use super::types::{PVAJ3D, Vec3, ZERO3};
 
 /// MINCO min-snap solver (polynomial degree 7, smoothness s=4), sized
 /// for at most `P` pieces.
@@ -598,8 +598,8 @@ impl<const P: usize, const C: usize, const S: usize> MincoSnapN<P, C, S> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::types::ZERO3;
+    use super::*;
 
     /// Single-piece hover sanity: head = tail at the same point with
     /// zero PVAJ, the solution must be the zero polynomial.
@@ -644,7 +644,6 @@ mod tests {
         assert!(j0.norm() < 1e-2, "j0 not zero: {j0:?}");
         assert!(j1.norm() < 1e-2, "j1 not zero: {j1:?}");
     }
-
 
     /// Sanity check on the closed-form energy gradient by finite
     /// difference: ∂E/∂c_4 should match the analytical value.

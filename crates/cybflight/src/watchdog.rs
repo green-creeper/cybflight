@@ -17,14 +17,20 @@ static STARTED: AtomicBool = AtomicBool::new(false);
 ///
 /// Configuration: LSI ≈ 32 kHz, prescaler /32 → 1 kHz tick, reload = 500
 /// → **~500 ms timeout**.
+#[cfg(not(feature = "board_flywoof745"))]
+const IWDG_REGS: pac::iwdg::Iwdg = pac::IWDG1;
+#[cfg(feature = "board_flywoof745")]
+const IWDG_REGS: pac::iwdg::Iwdg = pac::IWDG;
+
 pub fn init() {
-    let iwdg = pac::IWDG1;
+    let iwdg = IWDG_REGS;
 
     // Unlock PR/RLR registers
     iwdg.kr().write(|w| w.set_key(pac::iwdg::vals::Key::ENABLE));
 
     // Prescaler /32  → 32 kHz / 32 = 1 kHz
-    iwdg.pr().write(|w| w.set_pr(pac::iwdg::vals::Pr::DIVIDE_BY32));
+    iwdg.pr()
+        .write(|w| w.set_pr(pac::iwdg::vals::Pr::DIVIDE_BY32));
 
     // Reload 500 → 500 ms timeout
     iwdg.rlr().write(|w| w.set_rl(500));
@@ -47,7 +53,7 @@ pub fn init() {
 /// expires or the MCU will reset.
 #[inline]
 pub fn feed() {
-    pac::IWDG1
+    IWDG_REGS
         .kr()
         .write(|w| w.set_key(pac::iwdg::vals::Key::RESET));
 }
@@ -64,11 +70,12 @@ pub fn extend_timeout() {
     if !STARTED.load(Ordering::Acquire) {
         return;
     }
-    let iwdg = pac::IWDG1;
+    let iwdg = IWDG_REGS;
     // Unlock PR/RLR
     iwdg.kr().write(|w| w.set_key(pac::iwdg::vals::Key::ENABLE));
     // Prescaler /256 → 32 kHz / 256 = 125 Hz tick, reload 500 → 4 s
-    iwdg.pr().write(|w| w.set_pr(pac::iwdg::vals::Pr::DIVIDE_BY256));
+    iwdg.pr()
+        .write(|w| w.set_pr(pac::iwdg::vals::Pr::DIVIDE_BY256));
     // Wait for prescaler update to take effect
     while iwdg.sr().read().pvu() {}
     feed();
@@ -79,11 +86,12 @@ pub fn restore_timeout() {
     if !STARTED.load(Ordering::Acquire) {
         return;
     }
-    let iwdg = pac::IWDG1;
+    let iwdg = IWDG_REGS;
     // Unlock PR/RLR
     iwdg.kr().write(|w| w.set_key(pac::iwdg::vals::Key::ENABLE));
     // Prescaler /32 → 1 kHz tick, reload 500 → 500 ms
-    iwdg.pr().write(|w| w.set_pr(pac::iwdg::vals::Pr::DIVIDE_BY32));
+    iwdg.pr()
+        .write(|w| w.set_pr(pac::iwdg::vals::Pr::DIVIDE_BY32));
     while iwdg.sr().read().pvu() {}
     feed();
 }

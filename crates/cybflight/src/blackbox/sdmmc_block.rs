@@ -10,15 +10,15 @@
 
 use core::cell::Cell;
 
-use aligned::{Aligned, A4};
+use aligned::{A4, Aligned};
 use block_device_driver::BlockDevice;
-use cybflight_drivers::blackbox_storage::{BlockStore, BlockStoreError, BLOCK_SIZE};
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use cybflight_drivers::blackbox_storage::{BLOCK_SIZE, BlockStore, BlockStoreError};
 use embassy_sync::blocking_mutex::Mutex;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use static_cell::ConstStaticCell;
 
-use crate::hal::sdmmc::sd::{Card, CmdBlock, DataBlock, StorageDevice};
 use crate::hal::sdmmc::Sdmmc;
+use crate::hal::sdmmc::sd::{Card, CmdBlock, DataBlock, StorageDevice};
 use crate::hal::time::Hertz;
 
 /// SDMMC kernel-clock target. 25 MHz keeps margins on cheap microSDs;
@@ -211,7 +211,9 @@ impl<'b, D: BlockDevice<BLOCK_SIZE, Align = A4>> WriteCombiner<'b, D> {
 
     #[inline]
     fn overlaps(&self, addr: u32, n: usize) -> bool {
-        self.len != 0 && addr < self.start.wrapping_add(self.len as u32) && addr.wrapping_add(n as u32) > self.start
+        self.len != 0
+            && addr < self.start.wrapping_add(self.len as u32)
+            && addr.wrapping_add(n as u32) > self.start
     }
 
     /// Drain the pending batch to the card. Idempotent.
@@ -240,7 +242,9 @@ impl<'b, D: BlockDevice<BLOCK_SIZE, Align = A4>> WriteCombiner<'b, D> {
                     n
                 );
                 for i in 0..n {
-                    self.dev.write(start + i as u32, &self.buf[i..i + 1]).await?;
+                    self.dev
+                        .write(start + i as u32, &self.buf[i..i + 1])
+                        .await?;
                 }
                 Ok(())
             }

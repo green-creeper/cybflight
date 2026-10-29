@@ -19,11 +19,11 @@
 //! `cybflight::rates::RATE_DOT_SG_WINDOW` — which is what actually keeps
 //! the SG span sensible across IMU rates.
 
+use air_filters::Filter;
 use air_filters::fir::savitzky_golay::{SavitzkyGolayFilter, SgConfigBuilder};
 use air_filters::iir::biquad::{
     BiquadFilter, BiquadFilterConfigBuilder, BiquadFilterType, DirectForm2,
 };
-use air_filters::Filter;
 use nalgebra::Vector3;
 
 type Biquad = BiquadFilter<f32, DirectForm2<f32>>;

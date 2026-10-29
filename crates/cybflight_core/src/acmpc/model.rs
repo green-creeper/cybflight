@@ -199,9 +199,8 @@ mod tests {
     #[test]
     fn jacobian_matches_central_differences() {
         let dx = DroneDx::new(0.02);
-        let x = State::from_column_slice(&[
-            0.3, -1.0, -1.7, 0.966, 0.13, -0.18, 0.1, 1.5, -0.4, 0.2,
-        ]);
+        let x =
+            State::from_column_slice(&[0.3, -1.0, -1.7, 0.966, 0.13, -0.18, 0.1, 1.5, -0.4, 0.2]);
         let u = Control::new(14.0, 0.8, -0.5, 0.3);
         let j = dx.jacobian(&x, &u);
 

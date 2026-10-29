@@ -306,10 +306,26 @@ fn check_continuity(traj: &PiecewisePolynomial, fix: &Fixture) {
         let dv = (right.get_vel(0.0) - left.get_vel(t_left)).norm();
         let da = (right.get_acc(0.0) - left.get_acc(t_left)).norm();
         let dj = (right.get_jerk(0.0) - left.get_jerk(t_left)).norm();
-        assert!(dp < CONTINUITY_TOL_POS, "{}: pos jump i={i}: {dp}", fix.name);
-        assert!(dv < CONTINUITY_TOL_VEL, "{}: vel jump i={i}: {dv}", fix.name);
-        assert!(da < CONTINUITY_TOL_ACC, "{}: acc jump i={i}: {da}", fix.name);
-        assert!(dj < CONTINUITY_TOL_JERK, "{}: jerk jump i={i}: {dj}", fix.name);
+        assert!(
+            dp < CONTINUITY_TOL_POS,
+            "{}: pos jump i={i}: {dp}",
+            fix.name
+        );
+        assert!(
+            dv < CONTINUITY_TOL_VEL,
+            "{}: vel jump i={i}: {dv}",
+            fix.name
+        );
+        assert!(
+            da < CONTINUITY_TOL_ACC,
+            "{}: acc jump i={i}: {da}",
+            fix.name
+        );
+        assert!(
+            dj < CONTINUITY_TOL_JERK,
+            "{}: jerk jump i={i}: {dj}",
+            fix.name
+        );
     }
 
     for i in 0..n_pieces {
@@ -457,7 +473,11 @@ fn dump_extremum_stats(traj: &PiecewisePolynomial, fix: &Fixture) {
         // τ = I·ω̇ + ω × (I·ω) (Euler's equations, full form).
         let omg = st.omega;
         let omd = st.omega_dot;
-        let i_omg = Vec3::new(INERTIA[0] * omg[0], INERTIA[1] * omg[1], INERTIA[2] * omg[2]);
+        let i_omg = Vec3::new(
+            INERTIA[0] * omg[0],
+            INERTIA[1] * omg[1],
+            INERTIA[2] * omg[2],
+        );
         let gyro = omg.cross(&i_omg);
         let tau = Vec3::new(
             INERTIA[0] * omd[0] + gyro[0],
@@ -490,17 +510,35 @@ fn dump_extremum_stats(traj: &PiecewisePolynomial, fix: &Fixture) {
            Length:     (n/a — not computed)\n\
            Duration:   {:.4} [s]\n",
         fix.name,
-        min_pos[0], min_pos[1], min_pos[2],
-        max_pos[0], max_pos[1], max_pos[2],
+        min_pos[0],
+        min_pos[1],
+        min_pos[2],
+        max_pos[0],
+        max_pos[1],
+        max_pos[2],
         max_vel,
         max_acc,
         max_tilt_rad.to_degrees(),
-        min_omg[0], min_omg[1], min_omg[2],
-        max_omg[0], max_omg[1], max_omg[2],
-        min_rpy_deg[0], min_rpy_deg[1], min_rpy_deg[2],
-        max_rpy_deg[0], max_rpy_deg[1], max_rpy_deg[2],
-        min_thrusts[0], min_thrusts[1], min_thrusts[2], min_thrusts[3],
-        max_thrusts[0], max_thrusts[1], max_thrusts[2], max_thrusts[3],
+        min_omg[0],
+        min_omg[1],
+        min_omg[2],
+        max_omg[0],
+        max_omg[1],
+        max_omg[2],
+        min_rpy_deg[0],
+        min_rpy_deg[1],
+        min_rpy_deg[2],
+        max_rpy_deg[0],
+        max_rpy_deg[1],
+        max_rpy_deg[2],
+        min_thrusts[0],
+        min_thrusts[1],
+        min_thrusts[2],
+        min_thrusts[3],
+        max_thrusts[0],
+        max_thrusts[1],
+        max_thrusts[2],
+        max_thrusts[3],
         min_coll_per_mass,
         max_coll_per_mass,
         dur,
@@ -531,8 +569,7 @@ fn check_envelope(traj: &PiecewisePolynomial, fix: &Fixture) {
             peak_thrust_n = f;
             peak_thrust_t = t;
         }
-        let omg_xy =
-            (st.omega[0] * st.omega[0] + st.omega[1] * st.omega[1]).sqrt();
+        let omg_xy = (st.omega[0] * st.omega[0] + st.omega[1] * st.omega[1]).sqrt();
         let omg_z = st.omega[2].abs();
         if omg_xy > peak_omega_xy {
             peak_omega_xy = omg_xy;

@@ -2,8 +2,8 @@
 
 use core::marker::Copy;
 use nalgebra::{
-    Matrix, Matrix3, Matrix4, Quaternion, RealField, Rotation3, Storage, UnitQuaternion, Vector3,
-    U1, U3,
+    Matrix, Matrix3, Matrix4, Quaternion, RealField, Rotation3, Storage, U1, U3, UnitQuaternion,
+    Vector3,
 };
 use num_traits::NumCast;
 
