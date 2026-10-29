@@ -462,7 +462,15 @@ pub async fn init(
         i2c_config.frequency = Hertz(400_000);
         i2c_config.sda_pullup = true;
         i2c_config.scl_pullup = true;
-        i2c_config.timeout = Duration::from_millis(20);
+        // `50 ms` balances both constraints:
+        // - 200x a 0.25 ms 8-byte 400 kHz transfer (avoids false Thread-Executor
+        //   scheduling timeouts that `20 ms` hit under P6/P8/P10 preemption), and
+        // - `2 * 50 ms = 100 ms < 141 ms` worst-case 47 kHz LSI `IWDG` margin even
+        //   if an external GPS-mast `I2C1` wire shorts `SCL`/`SDA` low in flight
+        //   (where `embassy-stm32`'s `master_write`/`wait_tc` busy-spin up to
+        //   `timeout`). Any aborted `write_read` (`TC=1, AUTOEND=0, BUSY=1`) is
+        //   immediately cleared by `reset_i2c1_if_wedged()`.
+        i2c_config.timeout = Duration::from_millis(50);
         let i2c1 = hal::i2c::I2c::new(
             board.i2c.i2c1,
             i2c1_scl,
@@ -475,27 +483,24 @@ pub async fn init(
         Timer::after_millis(5).await;
         let i2c1_bus: &'static I2cBusMtx = I2C1_BUS.init(Mutex::<NoopRawMutex, _>::new(i2c1));
 
-        // 1. Probe & init QMC5883L external compass (0x0D) with bounded timeout
+        // 1. Probe & init QMC5883L external compass (0x0D) — bounded per-op by `i2c_config.timeout`
+        // (never wrap `embassy-stm32` `I2c` calls in an outer `with_timeout` that could cancel
+        // `write_read` between `write_dma_internal(send_stop=false)` and `read_dma_internal`).
         let mut probe_dev = I2cDevice::new(i2c1_bus);
-        let qmc_found = matches!(
-            with_timeout(Duration::from_millis(100), Qmc5883l::probe(&mut probe_dev)).await,
-            Ok(true)
-        );
+        let qmc_found = Qmc5883l::probe(&mut probe_dev).await;
+        reset_i2c1_if_wedged();
         let mag_opt = if qmc_found {
             defmt::info!("I2C1: QMC5883L found, initializing...");
             let dev = I2cDevice::new(i2c1_bus);
             let mut delay = embassy_time::Delay;
-            match with_timeout(Duration::from_millis(400), Qmc5883l::new(dev, &mut delay)).await {
-                Ok(Ok(mag)) => {
+            match Qmc5883l::new(dev, &mut delay).await {
+                Ok(mag) => {
                     defmt::info!("QMC5883L init OK");
                     Some(mag)
                 }
-                Ok(Err(e)) => {
+                Err(e) => {
+                    reset_i2c1_if_wedged();
                     defmt::warn!("QMC5883L init failed: {}", e);
-                    None
-                }
-                Err(_) => {
-                    defmt::warn!("QMC5883L init timed out");
                     None
                 }
             }
@@ -504,16 +509,10 @@ pub async fn init(
             None
         };
 
-        // 2. Probe & init SPL06 barometer (0x76) with bounded timeout
+        // 2. Probe & init SPL06 barometer (0x76)
         let mut probe_dev = I2cDevice::new(i2c1_bus);
-        let spl_found = matches!(
-            with_timeout(
-                Duration::from_millis(100),
-                Spl06::probe_i2c(&mut probe_dev, bsp::sensors::BARO_1_I2C_ADDR),
-            )
-            .await,
-            Ok(true)
-        );
+        let spl_found = Spl06::probe_i2c(&mut probe_dev, bsp::sensors::BARO_1_I2C_ADDR).await;
+        reset_i2c1_if_wedged();
         let baro_opt = if spl_found {
             defmt::info!(
                 "I2C1: SPL06 found at {:#x}, initializing...",
@@ -521,22 +520,14 @@ pub async fn init(
             );
             let dev = I2cDevice::new(i2c1_bus);
             let mut delay = embassy_time::Delay;
-            match with_timeout(
-                Duration::from_millis(500),
-                Spl06::new_i2c(dev, bsp::sensors::BARO_1_I2C_ADDR, &mut delay),
-            )
-            .await
-            {
-                Ok(Ok(baro)) => {
+            match Spl06::new_i2c(dev, bsp::sensors::BARO_1_I2C_ADDR, &mut delay).await {
+                Ok(baro) => {
                     defmt::info!("SPL06 init OK");
                     Some(baro)
                 }
-                Ok(Err(e)) => {
+                Err(e) => {
+                    reset_i2c1_if_wedged();
                     defmt::warn!("SPL06 init failed: {}", e);
-                    None
-                }
-                Err(_) => {
-                    defmt::warn!("SPL06 init timed out");
                     None
                 }
             }
@@ -794,5 +785,38 @@ async fn init_gps_uart(uart: hal::usart::BufferedUart<'static>, spawner: &Spawne
         Err(_) => {
             GPS_HEALTH.lock(|c| c.set(GpsHealth::InitTimedOut));
         }
+    }
+}
+
+/// Clear a wedged STM32F7 `I2C1` peripheral state machine (`RM0385 §30.4.6`)
+/// when called synchronously between `I2cDevice` transactions on the Thread
+/// Executor (zero active `I2C1_BUS` lock holders).
+///
+/// If `embassy-stm32` `i2c/v2.rs::write_read` ever aborts on timeout or bus
+/// error after `write_dma_internal(..., send_stop = false)`, the peripheral
+/// remains stuck in `TC=1, AUTOEND=0, ISR.BUSY=1` stretching `SCL` low. Toggling
+/// `CR1.PE` `0 -> 1` (held low for >= 3 APB1 clocks; `216` CPU cycles = `1 us`
+/// = `54` APB1 clocks at `54 MHz`) resets all internal `I2C1` state machines and
+/// `ISR` flags while preserving `TIMINGR`.
+pub fn reset_i2c1_if_wedged() {
+    let regs = hal::pac::I2C1;
+    let isr = regs.isr().read();
+    if isr.busy() || isr.tc() || isr.tcr() || regs.cr2().read().start() {
+        critical_section::with(|_| {
+            regs.cr1().modify(|w| {
+                w.set_txdmaen(false);
+                w.set_rxdmaen(false);
+                w.set_tcie(false);
+                w.set_nackie(false);
+                w.set_errie(false);
+                w.set_pe(false);
+            });
+            let _ = regs.cr1().read();
+        });
+        cortex_m::asm::delay(216);
+        critical_section::with(|_| {
+            regs.cr1().modify(|w| w.set_pe(true));
+            let _ = regs.cr1().read();
+        });
     }
 }

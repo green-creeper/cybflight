@@ -58,8 +58,15 @@ impl<D: ReadMag> MagReader<D> {
                     });
                 }
                 Err(e) => {
+                    #[cfg(feature = "board_flywoof745")]
+                    crate::board_init::reset_i2c1_if_wedged();
                     defmt::warn!("Mag read error: {}", e);
+                    // Yield before `recover()` so `iwdg_feed_task` always runs
+                    // between `read()` and `recover()` if an external I2C wire shorts.
+                    Timer::after_millis(10).await;
                     if let Err(re) = self.mag.recover().await {
+                        #[cfg(feature = "board_flywoof745")]
+                        crate::board_init::reset_i2c1_if_wedged();
                         defmt::error!("Mag recovery failed: {}", re);
                         Timer::after_millis(100).await;
                     }

@@ -126,8 +126,10 @@ where
     type Error = Error<I2C::Error>;
 
     async fn read(&mut self) -> Result<MagReading, Self::Error> {
-        // Poll for DRDY (the I2C transaction itself provides ~100us delay)
-        for _ in 0..100 {
+        // Poll briefly for DRDY (in continuous 200 Hz mode, 0x00..0x05 double-buffer
+        // the latest measurement; cap status polls at 5 so an oscillator rate skew
+        // never hammers a shared I2C bus 100 times back-to-back).
+        for _ in 0..5 {
             let mut status = [0u8; 1];
             self.i2c
                 .write_read(QMC5883L_ADDR, &[REG_STATUS], &mut status)

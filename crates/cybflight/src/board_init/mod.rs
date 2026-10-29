@@ -16,4 +16,4 @@ pub use micoair743v2::init;
 #[cfg(feature = "board_flywoof745")]
 mod flywoof745;
 #[cfg(feature = "board_flywoof745")]
-pub use flywoof745::init;
+pub use flywoof745::{init, reset_i2c1_if_wedged};
