@@ -1,0 +1,10 @@
+Milestone #3 pre-flight hardening & Betaflight/ArduPilot cross-verification:
+1. Added FIRMWARE_COMPARISON.md comparing Cybflight (flywoof745 + goku_f745.yaml) against Betaflight (FLYWOOF745/FLYWOOF745NANO) and ArduPilot (FlywooF745 + goku_ardu_params.params).
+2. Isolated 8 kHz IMU reader onto dedicated CAN2_RX1 InterruptExecutor (Priority::P8, strictly between P6 DShot and P10 INDI/CRSF/Failsafe) in board_init/flywoof745.rs so indi_task (126-210 us) cannot cause 2.6% IMU sample loss; bumped CRSF UART buffers to 256 B.
+3. Fixed reversed RC yaw polarity in outer_rate (rc_interpreter.rs: centered_inverted_with(3, endpoints)) so right yaw stick commands CW nose-right (-omega_z in FLU), matching RcMapper::aetr and Position mode.
+4. Added BlockReason::GyroCalibrating (!IMU1_GYRO_CALIBRATED) arming gate across all modes and gated EstimatorNotReady / SensorHealthDegraded / EskfDegraded on not(feature = "outer_rate") in sensors/rc.rs and health.rs so manual outer_rate can arm without RTK-Fixed GPS.
+5. Rejected CRSFv3 SpeedProposal (ACK = false) in drivers/rc/crsf.rs and sensors/rc.rs so ExpressLRS/CRSF stays locked at 420 kbaud instead of switching baudrate without FC UART reconfiguration.
+6. Extended u-blox UBX-CFG-VALSET (drivers/gps/ublox.rs) with CFG_RATE_MEAS = 100 ms (10 Hz), CFG_RATE_NAV = 1, CFG_NAVSPG_DYNMODEL = 8 (Airborne <4g), and CFG_UART1OUTPROT_NMEA = 0.
+7. Split SPL06 18-byte REG_COEF read into two 9-byte reads in both init() and recover() (drivers/baro/spl06.rs) per SPL06/DPS310 >9-byte I2C burst erratum.
+8. Wrapped Mpu6x00::read() in a 10 ms timeout (sensors/imu.rs) and implemented Mpu6x00::recover() (REG_INT_STATUS read in drivers/imu/mpu6x00.rs) to clear wedged DRDY latches.
+9. Passed adversarial subagent review (0 blocking issues, 0 .f64 VFP opcodes).
