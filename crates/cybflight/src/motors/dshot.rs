@@ -516,6 +516,14 @@ pub async fn dshot_task(
         telem_motor = (telem_motor + 1) % 4;
 
         // ======================== F: Wait for next frame ========================
+        // Note: on 32.768 kHz `embassy-time` (30.52 µs/tick), `after_micros(30)`
+        // rounds to 1 tick (`0..30.5 µs` until next tick edge). On 216 MHz F745
+        // (`indi_ctrl_div = 4` -> 2 kHz INDI), pace bidirectional DShot600 to
+        // ~3.7 kHz (~160 µs inter-frame idle) so P6 does not starve the thread
+        // executor / USB / IWDG feed task.
+        #[cfg(feature = "board_flywoof745")]
+        embassy_time::Timer::after_micros(160).await;
+        #[cfg(not(feature = "board_flywoof745"))]
         embassy_time::Timer::after_micros(30).await;
     }
 }

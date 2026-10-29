@@ -217,6 +217,10 @@ impl FlasherWorker {
 }
 
 fn run_streaming_command(mut cmd: Command, tx: &mpsc::Sender<FlashEvent>) -> bool {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::{Duration, Instant};
+
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = match cmd.spawn() {
         Ok(c) => c,
@@ -229,27 +233,76 @@ fn run_streaming_command(mut cmd: Command, tx: &mpsc::Sender<FlashEvent>) -> boo
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
 
+    let downloaded_ok = Arc::new(AtomicBool::new(false));
+    let manifest_seen = Arc::new(AtomicBool::new(false));
+
     let tx_out = tx.clone();
+    let dl_out = Arc::clone(&downloaded_ok);
+    let mf_out = Arc::clone(&manifest_seen);
     let out_handle = stdout.map(|out| {
         thread::spawn(move || {
             let reader = BufReader::new(out);
             for line in reader.lines().map_while(Result::ok) {
+                if line.contains("File downloaded successfully") {
+                    dl_out.store(true, Ordering::Relaxed);
+                }
+                if line.contains("Transitioning to dfuMANIFEST state")
+                    || line.contains("Submitting leave request")
+                {
+                    mf_out.store(true, Ordering::Relaxed);
+                }
                 let _ = tx_out.send(FlashEvent::Log(line));
             }
         })
     });
 
     let tx_err = tx.clone();
+    let dl_err = Arc::clone(&downloaded_ok);
+    let mf_err = Arc::clone(&manifest_seen);
     let err_handle = stderr.map(|err| {
         thread::spawn(move || {
             let reader = BufReader::new(err);
             for line in reader.lines().map_while(Result::ok) {
+                if line.contains("File downloaded successfully") {
+                    dl_err.store(true, Ordering::Relaxed);
+                }
+                if line.contains("Transitioning to dfuMANIFEST state")
+                    || line.contains("Submitting leave request")
+                {
+                    mf_err.store(true, Ordering::Relaxed);
+                }
                 let _ = tx_err.send(FlashEvent::Log(line));
             }
         })
     });
 
-    let status = child.wait();
+    // Poll child exit so we can auto-reap macOS `dfu-util` if it hangs inside
+    // `Transitioning to dfuMANIFEST state` after successfully downloading &
+    // jumping the STM32 into application mode.
+    let mut manifest_since: Option<Instant> = None;
+    let mut reaped_after_manifest = false;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(s)) => break Ok(s),
+            Ok(None) => {
+                if downloaded_ok.load(Ordering::Relaxed) && manifest_seen.load(Ordering::Relaxed) {
+                    let t0 = *manifest_since.get_or_insert_with(Instant::now);
+                    if t0.elapsed() >= Duration::from_millis(1500) {
+                        let _ = child.kill();
+                        let s = child.wait();
+                        reaped_after_manifest = true;
+                        let _ = tx.send(FlashEvent::Log(
+                            "macOS DFU leave completed (board rebooted out of DFU).".to_string(),
+                        ));
+                        break s;
+                    }
+                }
+                thread::sleep(Duration::from_millis(50));
+            }
+            Err(e) => break Err(e),
+        }
+    };
+
     if let Some(h) = out_handle {
         let _ = h.join();
     }
@@ -257,7 +310,9 @@ fn run_streaming_command(mut cmd: Command, tx: &mpsc::Sender<FlashEvent>) -> boo
         let _ = h.join();
     }
 
-    matches!(status, Ok(s) if s.success())
+    reaped_after_manifest
+        || downloaded_ok.load(Ordering::Relaxed)
+        || matches!(status, Ok(s) if s.success())
 }
 
 fn parse_dfu_progress_percent(line: &str) -> Option<f32> {

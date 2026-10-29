@@ -277,8 +277,51 @@ flash $VEHICLE=DEFAULT_VEHICLE: (build VEHICLE)
         echo "No DFU device found. Boot the board into DFU mode first."
         exit 1
     fi
+    run_dfu_leave() {
+        # On macOS libusb, `dfu-util -s 0x08000000:leave` often hangs forever at
+        # `Transitioning to dfuMANIFEST state` after jumping the STM32 into the
+        # application. Stream output and auto-reap 1.5s after download+leave.
+        local log
+        log=$(mktemp /tmp/cybflight_dfu_XXXXXX.log)
+        dfu-util -d "0483:df11" -a 0 -s 0x08000000:leave -D {{BIN}} >"$log" 2>&1 &
+        local pid=$!
+        local leave_seen=0
+        local last_lines=0
+        while kill -0 "$pid" 2>/dev/null; do
+            local cur_lines
+            cur_lines=$(wc -l < "$log" | tr -d ' ')
+            if [ "$cur_lines" -gt "$last_lines" ]; then
+                tail -n +"$((last_lines + 1))" "$log"
+                last_lines=$cur_lines
+            fi
+            if grep -q "File downloaded successfully" "$log" && \
+               grep -Eq "Transitioning to dfuMANIFEST state|Submitting leave request" "$log"; then
+                leave_seen=$((leave_seen + 1))
+                if [ "$leave_seen" -ge 6 ]; then
+                    kill "$pid" 2>/dev/null || true
+                    wait "$pid" 2>/dev/null || true
+                    rm -f "$log"
+                    return 0
+                fi
+            fi
+            sleep 0.25
+        done
+        local rc=0
+        wait "$pid" || rc=$?
+        local cur_lines
+        cur_lines=$(wc -l < "$log" | tr -d ' ')
+        if [ "$cur_lines" -gt "$last_lines" ]; then
+            tail -n +"$((last_lines + 1))" "$log"
+        fi
+        if grep -q "File downloaded successfully" "$log"; then
+            rm -f "$log"
+            return 0
+        fi
+        rm -f "$log"
+        return "$rc"
+    }
     for attempt in 1 2 3; do
-        if dfu-util -d "0483:df11" -a 0 -s 0x08000000:leave -D {{BIN}}; then
+        if run_dfu_leave; then
             break
         fi
         echo "--- DFU download failed (attempt ${attempt}/3) ---"
@@ -306,6 +349,10 @@ flash $VEHICLE=DEFAULT_VEHICLE: (build VEHICLE)
             echo "flashed and booted: $(ls /dev/serial/by-id/ | grep cybflight)"
             exit 0
         fi
+        if compgen -G "/dev/tty.usbmodem*" > /dev/null; then
+            echo "flashed and booted: $(ls /dev/tty.usbmodem*)"
+            exit 0
+        fi
     done
     echo "NOTE: download completed but no cybflight shell appeared within 10 s."
     echo "      Power-cycle and check; 'just flash-verify' compares the image"
@@ -323,7 +370,7 @@ flash-verify $VEHICLE=DEFAULT_VEHICLE: (build VEHICLE)
         echo "No DFU device found. Boot the board into DFU mode first."
         exit 1
     fi
-    size=$(stat -c %s {{BIN}})
+    size=$(wc -c < {{BIN}} | tr -d ' ')
     dfu-util -d "0483:df11" -a 0 -s 0x08000000 -D {{BIN}}
     # mktemp -u: dfu-util refuses to upload onto an existing file.
     readback=$(mktemp -u /tmp/cybflight_readback_XXXXXX.bin)

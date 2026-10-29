@@ -238,6 +238,18 @@ pub fn init_from_flash(flash_peri: hal::Peri<'static, hal::peripherals::FLASH>) 
     }
 }
 
+/// Populate `VEHICLE_PARAMS` in RAM with compile-time baked defaults only,
+/// without touching internal flash. Used by Early-Crash USB Safe Mode so
+/// shell commands (`status`, `param list`, etc.) work cleanly while flash
+/// and sensor peripherals remain untouched.
+pub fn init_baked_defaults() {
+    let params = crate::vehicle::default_params();
+    critical_section::with(|cs| {
+        VEHICLE_PARAMS.borrow_ref_mut(cs).replace(params);
+    });
+    PARAM_VERSION.fetch_add(1, core::sync::atomic::Ordering::Release);
+}
+
 /// Get a copy of the current firmware configuration.
 pub fn get() -> FirmwareConfig {
     critical_section::with(|cs| {

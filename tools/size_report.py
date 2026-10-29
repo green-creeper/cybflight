@@ -22,12 +22,14 @@ def run(cmd):
 
 
 def ram_region(memory_x: Path):
-    """(origin, length) of the RAM region from memory.x."""
+    """(origin, length, dtcm_len_or_none) from memory.x."""
     text = memory_x.read_text()
     m = re.search(r"RAM\s*:\s*ORIGIN\s*=\s*(0x[0-9A-Fa-f]+)\s*,\s*LENGTH\s*=\s*(\d+)K", text)
     if not m:
         sys.exit(f"cannot find RAM region in {memory_x}")
-    return int(m.group(1), 16), int(m.group(2)) * 1024
+    dtcm = re.search(r"DTCM\s*:\s*ORIGIN\s*=\s*(0x[0-9A-Fa-f]+)\s*,\s*LENGTH\s*=\s*(\d+)K", text)
+    dtcm_len = int(dtcm.group(2)) * 1024 if dtcm else None
+    return int(m.group(1), 16), int(m.group(2)) * 1024, dtcm_len
 
 
 def main():
@@ -51,13 +53,13 @@ def main():
             except ValueError:
                 pass
 
-    ram_origin, ram_len = ram_region(Path(a.memory_x))
+    ram_origin, ram_len, dtcm_len = ram_region(Path(a.memory_x))
     flash = sum(sz for name, (sz, addr) in sections.items() if name in (".vector_table", ".text", ".rodata", ".data"))
     ram_secs = [(n, sz, addr) for n, (sz, addr) in sections.items() if ram_origin <= addr < ram_origin + ram_len and sz > 0]
     if not ram_secs and a.memory_x == "crates/cybflight/memory.x":
         f745_mem = Path("crates/cybflight/memory_f745.x")
         if f745_mem.exists():
-            ram_origin, ram_len = ram_region(f745_mem)
+            ram_origin, ram_len, dtcm_len = ram_region(f745_mem)
             ram_secs = [(n, sz, addr) for n, (sz, addr) in sections.items() if ram_origin <= addr < ram_origin + ram_len and sz > 0]
     ram_end = max(addr + sz for _, sz, addr in ram_secs)
     static_ram = ram_end - ram_origin
@@ -68,7 +70,11 @@ def main():
     for n, sz, _ in sorted(ram_secs, key=lambda t: t[2]):
         print(f"  {n:<16} {sz:>9,} B   ({sz / 1024:7.1f} KiB)")
     print(f"  static RAM       {static_ram:>9,} B   ({static_ram / 1024:7.1f} KiB)  = {100 * static_ram / ram_len:.1f} % of {ram_len // 1024} KiB")
-    print(f"  headroom         {headroom:>9,} B   ({headroom / 1024:7.1f} KiB)  end of statics 0x{ram_end:08X} -> stack top 0x{ram_origin + ram_len:08X}")
+    if dtcm_len is not None:
+        print(f"  RAM headroom     {headroom:>9,} B   ({headroom / 1024:7.1f} KiB)  end of statics 0x{ram_end:08X} -> RAM end 0x{ram_origin + ram_len:08X}")
+        print(f"  dedicated stack  {dtcm_len:>9,} B   ({dtcm_len / 1024:7.1f} KiB)  DTCM 0x20000000..0x{0x20000000 + dtcm_len:08X} (isolated from .bss)")
+    else:
+        print(f"  headroom         {headroom:>9,} B   ({headroom / 1024:7.1f} KiB)  end of statics 0x{ram_end:08X} -> stack top 0x{ram_origin + ram_len:08X}")
 
     # ---- symbols ----
     rows = []

@@ -17,6 +17,27 @@ pub fn sys_reboot() -> ! {
     cortex_m::peripheral::SCB::sys_reset()
 }
 
+/// Unlock RTC backup register write protection (`PWREN` + `DBP`) so writes to
+/// `RTC_BKP0R` succeed both in `pre_init()` (where `DBP` resets to `0`) and in
+/// `enter_dfu()`.
+#[inline]
+fn unlock_backup_domain() {
+    use crate::hal::pac;
+    #[cfg(feature = "board_flywoof745")]
+    {
+        pac::RCC.apb1enr().modify(|w| w.set_pwren(true));
+        let _ = pac::RCC.apb1enr().read();
+        cortex_m::asm::dsb();
+    }
+    pac::PWR.cr1().modify(|w| w.set_dbp(true));
+    for _ in 0..1024 {
+        if pac::PWR.cr1().read().dbp() {
+            break;
+        }
+    }
+    cortex_m::asm::dsb();
+}
+
 #[cortex_m_rt::pre_init]
 unsafe fn pre_init() {
     // ── Reset-cause capture ────────────────────────────────────────────
@@ -44,7 +65,12 @@ unsafe fn pre_init() {
     let (bkpr0, dfu_base) = (0x4000_2850 as *mut u32, 0x1FF0_0000usize);
     unsafe {
         if bkpr0.read_volatile() == DFU_MAGIC {
+            // System reset clears `PWREN` (F745) and `PWR.CR1.DBP` (F745 & H743),
+            // so unlock the backup domain before clearing `RTC_BKP0R` — otherwise
+            // `write_volatile(0)` is ignored and the MCU loops back into DFU.
+            unlock_backup_domain();
             bkpr0.write_volatile(0);
+            cortex_m::asm::dsb();
             // Jump to system memory DFU bootloader
             let sp = (dfu_base as *const u32).read();
             let entry = (dfu_base as *const u32).add(1).read();
@@ -59,16 +85,9 @@ pub fn enter_dfu() -> ! {
     #[cfg(not(feature = "board_flywoof745"))]
     let bkpr0 = 0x5800_4050 as *mut u32;
     #[cfg(feature = "board_flywoof745")]
-    let bkpr0 = {
-        // Ensure backup domain write access (`PWREN` + `DBP`) is enabled even on
-        // builds without the `postmortem` feature so writing RTC_BKP0R succeeds.
-        use crate::hal::pac;
-        pac::RCC.apb1enr().modify(|w| w.set_pwren(true));
-        cortex_m::asm::dsb();
-        pac::PWR.cr1().modify(|w| w.set_dbp(true));
-        cortex_m::asm::dsb();
-        0x4000_2850 as *mut u32
-    };
+    let bkpr0 = 0x4000_2850 as *mut u32;
+    unlock_backup_domain();
     unsafe { bkpr0.write_volatile(DFU_MAGIC) };
+    cortex_m::asm::dsb();
     sys_reboot()
 }

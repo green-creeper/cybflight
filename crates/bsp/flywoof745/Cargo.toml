@@ -11,6 +11,7 @@ embassy-stm32 = { version = "0.5.0", features = [
   "stm32f745vg",
   "defmt",
   "memory-x",
+  "time",
   "time-driver-any",
   "exti",
   "unstable-pac",

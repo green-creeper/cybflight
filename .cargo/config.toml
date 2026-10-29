@@ -1,5 +1,10 @@
 [target.thumbv7em-none-eabihf]
-rustflags = ["-C", "target-cpu=cortex-m7"]
+# Cortex-M7 pipeline scheduling, with `-fp64` so codegen targets FPv5-SP-D16
+# (single-precision FPU). STM32F745VG only implements single-precision VFP
+# (`FPv5-SP-D16`) and faults (`UsageFault: UNDEFINSTR`) on any double-precision
+# instruction (`vcvt.f64.f32`, `vmul.f64`, etc.), while all 8 kHz / MPC / ESKF
+# control loops are `f32` and still use full hardware FPv5 single-precision.
+rustflags = ["-C", "target-cpu=cortex-m7", "-C", "target-feature=-fp64"]
 runner = "bash tools/build.sh"
 
 # Host-side rustflags. The sim regression snapshot

@@ -400,12 +400,14 @@ pub fn init() -> (Board, hal::usart::UartTx<'static, hal::mode::Blocking>) {
     let sensors = SensorPins {
         gyro1_cs,
         gyro1_drdy,
-        // Base alignment Cw0Deg; arbitrary 3D mounting rotation (e.g. 45° / 225°
-        // diamond AIO yaw) is applied via runtime params `imu_rpy_r/p/y` in
-        // `vehicles/goku_f745.yaml` or `param set`.
-        gyro1_align: SensorAlign::Cw0Deg,
+        // MPU-6000 on Flywoo GOKU GN 745 V3 PCB sits at CW270° relative to the
+        // PCB silkscreen arrow (`ROTATION_YAW_180` in ArduPilot's X/Y-swapped
+        // Invensense frame); arbitrary diamond AIO frame mounting (e.g. 135°
+        // FLU / 225° CW yaw) is applied via `imu_rpy_r/p/y` in `goku_f745.yaml`.
+        gyro1_align: SensorAlign::Cw270Deg,
         mag_i2c_addr: sensors::MAG_I2C_ADDR,
-        mag_align: SensorAlign::Cw0DegFlip,
+        // External GPS-mast QMC5883L (ROTATION_YAW_90 in ArduPilot FRD -> Cw270Deg in FLU)
+        mag_align: SensorAlign::Cw270Deg,
     };
 
     let flash = FlashPins { flash_cs };

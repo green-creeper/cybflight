@@ -434,6 +434,7 @@ pub mod crsf_runner {
                     }
                     Err(e) => {
                         defmt::warn!("CRSF read error: {}", e);
+                        embassy_time::Timer::after_millis(2).await;
                     }
                 }
             }
@@ -559,6 +560,7 @@ pub mod ghst_runner {
                     Ok(Err(e)) => {
                         err_count = err_count.wrapping_add(1);
                         defmt::warn!("GHST read error: {} (total errs={})", e, err_count);
+                        Timer::after_millis(2).await;
                         continue;
                     }
                     Ok(Ok(event)) => {

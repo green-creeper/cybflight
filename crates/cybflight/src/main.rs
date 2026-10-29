@@ -104,6 +104,42 @@ async fn main(spawner: embassy_executor::Spawner) {
             raw,
         );
     }
+
+    // --- Post-mortem: BKPSRAM enable + boot recovery (run FIRST!) ---
+    //
+    // Must run before `board_init::init` so any fault or panic during early
+    // sensor/DMA/flash bring-up is captured in BKPSRAM with valid magic + CRC.
+    // If the previous boot died of a fatal crash within the first 10 s, drop
+    // into minimal USB Safe Mode so `/dev/cu.usbmodem*` stays alive for
+    // `postmortem show` / `dfu` instead of reboot-looping.
+    #[cfg(feature = "postmortem")]
+    let enter_safe_mode = {
+        cybflight::postmortem::bkpsram::enable();
+        cybflight::postmortem::recovery::boot_recovery()
+    };
+    #[cfg(not(feature = "postmortem"))]
+    let enter_safe_mode = false;
+
+    if enter_safe_mode {
+        defmt::error!(
+            "SAFE MODE: prior boot crashed during startup — starting minimal USB CDC + LED only"
+        );
+        cybflight::params::init_baked_defaults();
+        cybflight::status::STATUS
+            .sender()
+            .send(cybflight::status::SystemStatus::Failsafe);
+        let led0 = cybflight_drivers::led::Led::new(board.leds.led0, false);
+        let _ = spawner.spawn(cybflight::status::task(led0));
+        let _ = spawner.spawn(cybflight::usb_serial::task(
+            board.usb.usb_otg_fs,
+            board.usb.dp,
+            board.usb.dm,
+        ));
+        cybflight::watchdog::init();
+        let _ = spawner.spawn(cybflight::watchdog::iwdg_feed_task());
+        return;
+    }
+
     cybflight::status::STATUS
         .sender()
         .send(cybflight::status::SystemStatus::Booting);
@@ -141,22 +177,9 @@ async fn main(spawner: embassy_executor::Spawner) {
     //     on `spawner` (thread).
     cybflight::board_init::init(&spawner, &ctrl_spawner, &high_spawner, board).await;
 
-    // --- Post-mortem: BKPSRAM enable + boot recovery ---
-    //
-    // Order matters: `bkpsram::enable` must run before any reader (so
-    // the AHB4 clock is up before we touch 0x3880_0000), and
-    // `boot_recovery` reads the prior boot's record + initializes
-    // this boot's record. After this, the post-mortem task and the
-    // fault handlers (panic / HardFault / PVD) all share a coherent
-    // BKPSRAM state.
-    //
-    // `enable_pvd_brownout` arms the PVD interrupt — must be after
-    // bsp::init configures clocks (PWR clock comes from APB1).
+    // --- Post-mortem steady-state task ---
     #[cfg(feature = "postmortem")]
     {
-        cybflight::postmortem::bkpsram::enable();
-        cybflight::postmortem::recovery::boot_recovery();
-        cybflight::postmortem::fault::enable_pvd_brownout();
         spawner
             .spawn(cybflight::postmortem::task::postmortem_task())
             .unwrap_or_else(|_| defmt::panic!("failed to spawn postmortem task"));
@@ -171,6 +194,10 @@ async fn main(spawner: embassy_executor::Spawner) {
 
     // --- IWDG: system-level safety net ---
     cybflight::watchdog::init();
+    // Arm PVD after IWDG so a brownout handler parking in `wfi()` can never
+    // wedge the MCU indefinitely if VDD recovers before BOR.
+    #[cfg(feature = "postmortem")]
+    cybflight::postmortem::fault::enable_pvd_brownout();
     spawner
         .spawn(cybflight::watchdog::iwdg_feed_task())
         .unwrap_or_else(|_| defmt::panic!("failed to spawn IWDG feed task"));

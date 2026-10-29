@@ -36,16 +36,16 @@ codegen-units = 1
 panic = "abort"
 overflow-checks = false
 
-# Compile the top-level firmware binary/shell crate with `opt-level = "s"` while
-# keeping `cybflight-core`, `nalgebra`, and `air-filters` at `opt-level = 3` so
-# all control/estimation/RL math runs at maximum speed and the image fits within
-# 512 KiB on 1 MB STM32F745 targets (leaving Sectors 6+7 for the KV param store).
+# Compile the top-level firmware shell crate with `opt-level = "s"` (preserving
+# loop unrolling unlike `"z"`) while keeping `cybflight-drivers` and `embassy-stm32`
+# at `opt-level = 2` and `cybflight-core`/`nalgebra`/`air-filters` at `opt-level = 3`,
+# so real-time loops on 216 MHz STM32F745 run fast and fit inside 512 KiB Flash.
 [profile.release.package.cybflight]
-opt-level = "z"
+opt-level = "s"
 [profile.release.package.cybflight-drivers]
-opt-level = "s"
+opt-level = 2
 [profile.release.package.embassy-stm32]
-opt-level = "s"
+opt-level = 2
 [profile.release.package.embedded-fatfs]
 opt-level = "s"
 

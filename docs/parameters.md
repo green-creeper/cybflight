@@ -1,7 +1,7 @@
 # Parameter reference
 
 Auto-generated from the `#[derive(Params)]` registry by
-`just params-doc` — do not edit by hand. 316 parameters.
+`just params-doc` — do not edit by hand. 318 parameters.
 
 Values shown by `param list`/`get`; set with `param set <name> <value>`
 (disarmed), persist with `param save`, inspect overrides with
@@ -71,6 +71,9 @@ only records the current baked value (the log has no tombstone).
 | `m3_g2_rp` | — | -10000 | 10000 | live | G2 rate-dependent effectiveness [roll, pitch, yaw]: the angular |
 | `m3_g2_ry` | — | -10000 | 10000 | live | G2 rate-dependent effectiveness [roll, pitch, yaw]: the angular |
 | `m3_nonlin` | — | 0.025 | 1 | live | Thrust-curve nonlinearity `k` for this motor+prop. **0 selects the |
+| `imu_rpy_r` | deg | -180 | 360 | reboot | Additional 3D board-to-body mounting Euler angles `[roll, pitch, yaw]` |
+| `imu_rpy_p` | deg | -180 | 360 | reboot | Additional 3D board-to-body mounting Euler angles `[roll, pitch, yaw]` |
+| `imu_rpy_y` | deg | -180 | 360 | reboot | Additional 3D board-to-body mounting Euler angles `[roll, pitch, yaw]` |
 | `mag_hi_x` | — | — | — | reboot | Magnetometer hard-iron offset, sensor frame (raw units). The |
 | `mag_hi_y` | — | — | — | reboot | Magnetometer hard-iron offset, sensor frame (raw units). The |
 | `mag_hi_z` | — | — | — | reboot | Magnetometer hard-iron offset, sensor frame (raw units). The |

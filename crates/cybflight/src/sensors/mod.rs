@@ -76,7 +76,7 @@ pub static VEHICLE_ATTITUDE: PubSubChannel<
 // the full-rate publish (one counter increment per sample). For
 // consumers that want ~1 kHz and must not be woken at the ODR
 // (Mahony). CAP=32 = 32 ms of stall tolerance at 1 kHz (> the 24 ms
-// IMU_1 rings). SUBS=4 (mahony + 3 spare), PUBS=1.
+// IMU_1 rings). SUBS=4 (mahony + imu1_stream + 2 spare), PUBS=1.
 pub static IMU_1_DECIM: PubSubChannel<CriticalSectionRawMutex, msgs::Imu, 32, 4, 1> =
     PubSubChannel::new();
 

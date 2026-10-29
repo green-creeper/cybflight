@@ -78,7 +78,7 @@ const MAGIC: u32 = 0x4359_4250; // "CYBP"
 /// (fields added/removed/reordered — i.e. whenever `PARAM_COUNT` or index
 /// order moves). The KV store is name-keyed and insensitive to reshapes;
 /// this stamps the fixed-layout blob header used by tests and host export.
-const VERSION: u32 = 56;
+const VERSION: u32 = 57;
 const HEADER_SIZE: usize = 16; // magic + version + length + crc
 
 /// The `fs_ctrl_timeout_s` schema minimum, mirrored as a `const` so the
@@ -1258,6 +1258,18 @@ impl Default for SensorParams {
 /// unflyable vehicle.
 #[derive(Clone, Debug, Params)]
 pub struct InstallParams {
+    /// Additional 3D board-to-body mounting Euler angles `[roll, pitch, yaw]`
+    /// in degrees (`R = R_z(yaw) * R_y(pitch) * R_x(roll)` in FLU), applied in
+    /// `ImuReader` after `bsp::SensorAlign`. Used for 45°/135°/225° diamond
+    /// whoop/toothpick AIO board mounting. All-zero = identity.
+    #[param(
+        keys = "imu_rpy_r,imu_rpy_p,imu_rpy_y",
+        unit = "deg",
+        min = -180.0,
+        max = 360.0,
+        reboot
+    )]
+    pub imu_rpy_deg: [f32; 3],
     /// Magnetometer hard-iron offset, sensor frame (raw units). The
     /// magnetic signature of this frame's metal and current paths, so it
     /// is re-flown from scratch after any rewiring.
@@ -1276,6 +1288,7 @@ pub struct InstallParams {
 impl Default for InstallParams {
     fn default() -> Self {
         Self {
+            imu_rpy_deg: [0.0, 0.0, 0.0],
             mag_hard_iron: [0.0, 0.0, 0.0],
             gps_ant1_offset_m: [0.0, 0.0, 0.0],
             gps_baseline_body: [0.0, -1.0, 0.0],
@@ -2378,7 +2391,10 @@ pub(crate) mod tests_support {
                         ..MotorParams::STOCK_DYNAMICS
                     },
                 ],
-                install: InstallParams::default(),
+                install: InstallParams {
+                    imu_rpy_deg: [1.5, -2.5, 135.0],
+                    ..InstallParams::default()
+                },
                 motor_pole_count: 14,
             },
             sensors: SensorParams::default(),

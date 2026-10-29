@@ -50,8 +50,7 @@ impl<D: ReadMag> MagReader<D> {
             Timer::after_millis(period_ms).await;
             match self.mag.read().await {
                 Ok(reading) => {
-                    let raw = apply_alignment(self.align, reading.field_ut);
-                    let field = raw - self.hard_iron;
+                    let field = apply_alignment(self.align, reading.field_ut - self.hard_iron);
                     publisher.publish_immediate(msgs::MagSample {
                         timestamp: Instant::now(),
                         field_ut: field,

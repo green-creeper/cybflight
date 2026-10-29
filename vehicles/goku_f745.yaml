@@ -33,7 +33,10 @@ airframe:
     - { pos_m: [ 0.031466,  0.031466], spin: cw,  max_thrust_n: 0.6063, torque_coeff_m: 0.0047 }
 
 tuning:
-  # ── airframe.install — GPS antenna extrinsics (80 mm standing GPS mast) ──
+  # ── airframe.install — diamond AIO mounting (AHRS_ORIENTATION=5 / YAW_225 -> +135° FLU yaw) + GPS mast ──
+  imu_rpy_r: 0.0
+  imu_rpy_p: 0.0
+  imu_rpy_y: 135.0
   gps_ant_x: 0.0
   gps_ant_y: 0.0
   gps_ant_z: 0.078

@@ -21,10 +21,11 @@
 //!   depth counter; depth > 1 immediately `udf`s — no recursion,
 //!   no infinite reset loop.
 
+use core::fmt::Write as _;
 use core::panic::PanicInfo;
 use core::sync::atomic::{AtomicU8, Ordering};
 
-use cortex_m::peripheral::SCB;
+use cortex_m::peripheral::{DCB, SCB};
 
 use super::bkpsram;
 use super::record::{self, FatalKind, FatalSummary, PANIC_MSG_IDX_NONE};
@@ -34,54 +35,110 @@ use crate::hal::interrupt;
 /// `>1` = recursive call (immediately abort).
 static FAULT_DEPTH: AtomicU8 = AtomicU8::new(0);
 
+#[inline(always)]
+fn abort_recursive_fault() -> ! {
+    if DCB::is_debugger_attached() {
+        cortex_m::asm::udf();
+    } else {
+        SCB::sys_reset();
+    }
+}
+
+struct PanicBuf<'a> {
+    buf: &'a mut [u8],
+    len: usize,
+}
+
+impl core::fmt::Write for PanicBuf<'_> {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        let avail = self.buf.len().saturating_sub(self.len);
+        let n = s.len().min(avail);
+        self.buf[self.len..self.len + n].copy_from_slice(&s.as_bytes()[..n]);
+        self.len += n;
+        Ok(())
+    }
+}
+
 /// `#[panic_handler]` registration. Replaces `panic_probe`'s default
 /// when the `postmortem` feature is on.
 ///
 /// Behavior:
 /// 1. Disable interrupts so concurrent tasks can't observe a partly-
 ///    written record.
-/// 2. Bump the re-entrancy counter; bail with `udf` if we're already
-///    inside a handler.
-/// 3. Emit a short defmt warning so probe-rs sees the panic before
-///    the reset (no rzcobs framing changes — this is just one
-///    `error!` call).
-/// 4. Commit the fatal slot to BKPSRAM via raw-pointer writes only.
-/// 5. Hardware reset.
+/// 2. Bump the re-entrancy counter; bail if we're already inside a handler.
+/// 3. Format `file:line: message` into BKPSRAM via aligned `u32` writes
+///    BEFORE defmt (so even a defmt failure cannot lose the panic message).
+/// 4. Emit a short defmt warning so probe-rs / UART sees the panic before
+///    the reset.
+/// 5. Commit the fatal slot to BKPSRAM and hardware reset.
 #[cfg(feature = "postmortem")]
 #[panic_handler]
 fn panic_handler(info: &PanicInfo) -> ! {
     cortex_m::interrupt::disable();
     let depth = FAULT_DEPTH.fetch_add(1, Ordering::AcqRel);
     if depth >= 1 {
-        // Recursive panic — the previous handler invocation is still
-        // running, or a HardFault interrupted it. Bail without
-        // touching anything else.
-        cortex_m::asm::udf();
+        abort_recursive_fault();
     }
 
-    // Best-effort defmt log. If this panics (it shouldn't — defmt's
-    // own panic handling is conservative), the depth counter catches
-    // it on re-entry.
-    defmt::error!("postmortem: panic (info={})", defmt::Display2Format(info));
+    let lr_reg: u32;
+    #[cfg(target_arch = "arm")]
+    unsafe {
+        core::arch::asm!("mov {}, lr", out(reg) lr_reg, options(nomem, nostack, preserves_flags));
+    }
+    #[cfg(not(target_arch = "arm"))]
+    {
+        lr_reg = 0;
+    }
 
-    // Commit. PC/LR/PSR aren't directly available in a panic handler
-    // (we'd need to inspect the call stack), so we record only what
-    // we know — the FatalKind and panic_msg_idx (currently always
-    // `NONE` until a static message-table is wired up — Stage B).
+    let (line, col) = match info.location() {
+        Some(loc) => (loc.line(), loc.column()),
+        None => (0, 0),
+    };
+
+    // Format compact `file:line:col: message` onto stack and commit to
+    // `.bkpsram` via aligned u32 writes before touching defmt.
+    {
+        let mut raw = [0u8; bkpsram::PANIC_TEXT_MAX_BYTES];
+        let mut w = PanicBuf {
+            buf: &mut raw,
+            len: 0,
+        };
+        if let Some(loc) = info.location() {
+            let f = loc.file();
+            let short = if f.len() > 64 {
+                // Step forward to a UTF-8 char boundary in the last 64 bytes.
+                let mut start = f.len() - 64;
+                while start < f.len() && !f.is_char_boundary(start) {
+                    start += 1;
+                }
+                &f[start..]
+            } else {
+                f
+            };
+            let _ = write!(w, "{}:{}:{}: ", short, loc.line(), loc.column());
+        }
+        let _ = write!(w, "{}", info.message());
+        let written = w.len;
+        bkpsram::store_panic_text(&raw[..written]);
+    }
+
     let summary = FatalSummary {
         kind: FatalKind::Panic as u8,
         _pad0: [0; 3],
         pc: 0,
-        lr: 0,
+        lr: lr_reg,
         psr: 0,
         cfsr: 0,
         hfsr: 0,
-        mmfar: 0,
-        bfar: 0,
+        mmfar: line,
+        bfar: col,
         panic_msg_idx: PANIC_MSG_IDX_NONE,
         _pad1: [0; 31],
     };
     commit_fatal(summary);
+
+    // Best-effort defmt log after BKPSRAM is safely committed.
+    defmt::error!("postmortem: panic (info={})", defmt::Display2Format(info));
 
     SCB::sys_reset();
 }
@@ -105,7 +162,7 @@ const _: () = ();
 unsafe fn HardFault(frame: &cortex_m_rt::ExceptionFrame) -> ! {
     let depth = FAULT_DEPTH.fetch_add(1, Ordering::AcqRel);
     if depth >= 1 {
-        cortex_m::asm::udf();
+        abort_recursive_fault();
     }
 
     // SAFETY: we own the SCB pointer for the duration of this
@@ -130,6 +187,45 @@ unsafe fn HardFault(frame: &cortex_m_rt::ExceptionFrame) -> ! {
         hfsr,
         mmfar,
         bfar,
+        panic_msg_idx: PANIC_MSG_IDX_NONE,
+        _pad1: [0; 31],
+    };
+    commit_fatal(summary);
+
+    SCB::sys_reset();
+}
+
+/// Unhandled interrupt / exception handler. Without this, `cortex-m-rt`'s
+/// default handler loops forever in handler mode, starving the thread-mode
+/// watchdog feeder and showing up 500 ms later as an opaque `IWDG` reset.
+#[cfg(feature = "postmortem")]
+#[cortex_m_rt::exception]
+unsafe fn DefaultHandler(irqn: i16) -> ! {
+    cortex_m::interrupt::disable();
+    let depth = FAULT_DEPTH.fetch_add(1, Ordering::AcqRel);
+    if depth >= 1 {
+        abort_recursive_fault();
+    }
+
+    let mut raw = [0u8; bkpsram::PANIC_TEXT_MAX_BYTES];
+    let mut w = PanicBuf {
+        buf: &mut raw,
+        len: 0,
+    };
+    let _ = write!(w, "DefaultHandler: unhandled exception/IRQ irqn={}", irqn);
+    let written = w.len;
+    bkpsram::store_panic_text(&raw[..written]);
+
+    let summary = FatalSummary {
+        kind: FatalKind::Panic as u8,
+        _pad0: [0; 3],
+        pc: 0,
+        lr: irqn as i32 as u32,
+        psr: 0,
+        cfsr: 0,
+        hfsr: 0,
+        mmfar: irqn as i32 as u32,
+        bfar: 0,
         panic_msg_idx: PANIC_MSG_IDX_NONE,
         _pad1: [0; 31],
     };
@@ -175,7 +271,7 @@ fn PVD() {
 fn pvd_irq_body() {
     let depth = FAULT_DEPTH.fetch_add(1, Ordering::AcqRel);
     if depth >= 1 {
-        cortex_m::asm::udf();
+        abort_recursive_fault();
     }
 
     // Clear the EXTI pending bit — without this the IRQ would
@@ -231,38 +327,49 @@ pub fn enable_pvd_brownout() {
     use crate::hal::pac;
     let pwr = pac::PWR;
     let exti = pac::EXTI;
-    // Threshold = level 7 (~2.85 V on STM32H7). Bit values are
-    // chip-specific; PLS=0b111 selects the highest threshold,
-    // giving us the longest commit window.
-    pwr.cr1().modify(|w| {
-        // PLS bits [7:5] select the PVD threshold. 0b110 = 2.85 V,
-        // the highest *internal* threshold (RM0433 §6.8.1),
-        // maximizing the PVD-to-BOR commit window.
-        //
-        // NOT 0b111: on the H7 that value does not mean "higher
-        // still" — it switches the comparator to the **external
-        // PVD_IN pin (PB7) vs VREFINT (~1.2 V)**. PB7 is I2C1 SDA on
-        // SAKURAH743, so 0b111 armed a brownout interrupt on a data
-        // line: every SDA low period past arming looked like a
-        // brownout, the handler parked in `wfi` and the IWDG reset
-        // the board ~500 ms later, forever (the 2026-08-07 mocap
-        // boot-loop). The H743 PAC takes the raw u8.
-        w.set_pls(0b110);
-        w.set_pvde(true);
-    });
-    // EXTI16 = PVD line. Enable interrupt mask + rising-edge trigger
-    // (PVDO transitions 0 → 1 when VDD falls below the threshold).
-    // EXTI lines 0..31 live in bank index 0 on STM32H7.
-    exti.imr(0).modify(|w| w.set_line(16, true));
-    exti.rtsr(0).modify(|w| w.set_line(16, true));
-    // NVIC unmask handled by the embassy bind_interrupts pattern;
-    // PVD_AVD is not bound by any HAL driver so cortex-m-rt's
-    // exception entry routes the IRQ to our handler directly.
-    unsafe {
-        #[cfg(not(feature = "board_flywoof745"))]
-        cortex_m::peripheral::NVIC::unmask(pac::Interrupt::PVD_AVD);
-        #[cfg(feature = "board_flywoof745")]
-        cortex_m::peripheral::NVIC::unmask(pac::Interrupt::PVD);
+
+    #[cfg(not(feature = "board_flywoof745"))]
+    {
+        // Threshold = level 6 (~2.85 V on STM32H7).
+        // NOT 0b111: on H7 that selects external PVD_IN (PB7 = I2C1 SDA).
+        pwr.cr1().modify(|w| {
+            w.set_pls(0b110);
+            w.set_pvde(true);
+        });
+        exti.imr(0).modify(|w| w.set_line(16, true));
+        exti.rtsr(0).modify(|w| w.set_line(16, true));
+        unsafe {
+            cortex_m::peripheral::NVIC::unmask(pac::Interrupt::PVD_AVD);
+        }
+    }
+
+    #[cfg(feature = "board_flywoof745")]
+    {
+        // Ensure PWR APB1 clock is gated on before touching PWR_CR1/CSR1.
+        pac::RCC.apb1enr().modify(|w| w.set_pwren(true));
+        let _ = pac::RCC.apb1enr().read();
+        cortex_m::asm::dsb();
+        // On STM32F745 (RM0385 §4.4.1), PLS=0b100 selects 2.6 V — comfortably
+        // below normal 3.3 V USB LDO rail sag while leaving plenty of margin
+        // above the ~2.1 V BOR reset threshold.
+        pwr.cr1().modify(|w| {
+            w.set_pls(0b100);
+            w.set_pvde(true);
+        });
+        // Wait ~100 µs (> 50 µs max t_PVD comparator startup time) before
+        // clearing any startup glitch on EXTI16 and checking PVDO.
+        cortex_m::asm::delay(crate::bsp::SYSCLK_HZ / 10_000);
+        exti.rtsr(0).modify(|w| w.set_line(16, true));
+        exti.ftsr(0).modify(|w| w.set_line(16, false));
+        exti.pr(0).write(|w| w.set_line(16, true));
+        if !pwr.csr1().read().pvdo() {
+            exti.imr(0).modify(|w| w.set_line(16, true));
+            unsafe {
+                cortex_m::peripheral::NVIC::unmask(pac::Interrupt::PVD);
+            }
+        } else {
+            defmt::warn!("PVD: VDD already below 2.6V threshold at boot; skipping PVD IRQ arm");
+        }
     }
 }
 
@@ -273,7 +380,13 @@ pub fn enable_pvd_brownout() {
 /// three handler paths all use the same memory ordering and
 /// validation rules.
 fn commit_fatal(summary: FatalSummary) {
+    bkpsram::enable();
     bkpsram::with_record_mut(|r| {
+        if !record::is_valid(r) {
+            *r = record::PostmortemRecord::ZERO;
+            r.header.boot_count = 1;
+            r.header.reset_cause = crate::reset_cause::read();
+        }
         r.fatal = summary;
         // Refresh uptime if monotonic time is available. We use
         // raw `embassy_time` access via a public fn; if anything

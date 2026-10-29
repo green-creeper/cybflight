@@ -106,6 +106,7 @@ pub async fn postmortem_task() {
     #[cfg(feature = "outer_mpc")]
     let mut prev_mission = MISSION_STATE.load(Ordering::Acquire);
     let mut event_seq: u32 = 0;
+    let mut last_flush_ms: u32 = 0;
 
     let boot_instant = Instant::now();
     let mut ticker = Ticker::every(embassy_time::Duration::from_millis(TICK_PERIOD_MS));
@@ -176,12 +177,18 @@ pub async fn postmortem_task() {
         // ── Commit the entire batch under one BKPSRAM write window.
         // We hold no embassy lock; `bkpsram::with_record_mut` is a
         // raw-pointer access that can't deadlock.
+        // Refresh `uptime_ms` at least once per second even when telemetry
+        // and event channels are silent (e.g. bench indoors without GPS/RC)
+        // so late IWDG resets report accurate uptime and never falsely
+        // trigger Early-Crash USB Safe Mode.
+        let timestamp_ms = boot_instant.elapsed().as_millis() as u32;
         if !events_to_push.is_empty()
             || latest_att.is_some()
             || latest_odom.is_some()
             || latest_rc.is_some()
+            || timestamp_ms.wrapping_sub(last_flush_ms) >= 1_000
         {
-            let timestamp_ms = boot_instant.elapsed().as_millis() as u32;
+            last_flush_ms = timestamp_ms;
             bkpsram::with_record_mut(|r| {
                 for (kind, data) in events_to_push.iter() {
                     event_seq = event_seq.wrapping_add(1);

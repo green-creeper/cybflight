@@ -38,12 +38,19 @@
 //! never awaits. The closure passed to it must respect the same
 //! constraints.
 
-use core::mem::MaybeUninit;
+use core::mem::{MaybeUninit, size_of};
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use crate::hal::pac;
 
-use super::record::PostmortemRecord;
+use super::record::{PostmortemRecord, RECORD_SIZE};
+
+const RECORD_WORDS: usize = RECORD_SIZE / size_of::<u32>();
+const _: () = assert!(RECORD_SIZE % size_of::<u32>() == 0);
+
+const PANIC_TEXT_MAGIC: u32 = 0x504E_4331; // "PNC1"
+pub const PANIC_TEXT_MAX_BYTES: usize = 184;
+const PANIC_TEXT_WORDS: usize = 2 + (PANIC_TEXT_MAX_BYTES / size_of::<u32>()); // 48 words = 192 B
 
 /// The post-mortem record itself, pinned at a fixed address in the
 /// BKPSRAM region declared in `memory.x`.
@@ -54,9 +61,23 @@ use super::record::PostmortemRecord;
 /// boot they're whatever the prior session wrote. Either way, callers
 /// must validate via [`super::record::is_valid`] (magic + CRC) before
 /// trusting any field.
+///
+/// **ARMv7-M alignment note (STM32F745):** On STM32F745, BKPSRAM lives at
+/// `0x4002_4000`, inside the `0x4000_0000..0x5FFF_FFFF` `Device` memory
+/// region where Cortex-M7 faults (`UsageFault: UNALIGNED`) on any unaligned
+/// access. Never hand a `&PostmortemRecord` or `&mut PostmortemRecord`
+/// pointing directly into `.bkpsram` to general Rust code or `crc32fast`;
+/// always copy to/from normal SRAM via 32-bit word `read_volatile` /
+/// `write_volatile` helpers below.
 #[unsafe(link_section = ".bkpsram")]
 #[unsafe(no_mangle)]
 static mut POSTMORTEM_SLOT: MaybeUninit<PostmortemRecord> = MaybeUninit::uninit();
+
+/// Companion slot in `.bkpsram` storing formatted `file:line: message` bytes
+/// from `#[panic_handler]`. Accessed strictly as aligned `u32` words.
+#[unsafe(link_section = ".bkpsram")]
+#[unsafe(no_mangle)]
+static mut POSTMORTEM_PANIC_TEXT: MaybeUninit<[u32; PANIC_TEXT_WORDS]> = MaybeUninit::uninit();
 
 /// Idempotency latch: `enable()` is safe to call more than once, but
 /// the underlying RCC/PWR writes are best done once during init.
@@ -80,7 +101,7 @@ static ENABLED: AtomicBool = AtomicBool::new(false);
 /// Idempotent — repeated calls just observe `ENABLED == true` and
 /// return.
 pub fn enable() {
-    if ENABLED.swap(true, Ordering::AcqRel) {
+    if ENABLED.load(Ordering::Acquire) {
         return;
     }
     let rcc = pac::RCC;
@@ -88,44 +109,96 @@ pub fn enable() {
     #[cfg(not(feature = "board_flywoof745"))]
     {
         rcc.ahb4enr().modify(|w| w.set_bkpsramen(true));
+        let _ = rcc.ahb4enr().read();
+        cortex_m::asm::dsb();
         pwr.cr1().modify(|w| w.set_dbp(true));
         pwr.cr2().modify(|w| w.set_bren(true));
+        cortex_m::asm::dsb();
     }
     #[cfg(feature = "board_flywoof745")]
     {
+        // STM32F7 Errata ES0290 §2.1.6: read back RCC clock-enable register
+        // + barrier before accessing peripheral registers on slower APB1/AHB1.
         rcc.apb1enr().modify(|w| w.set_pwren(true));
-        rcc.ahb1enr().modify(|w| w.set_bkpsramen(true));
+        let _ = rcc.apb1enr().read();
+        cortex_m::asm::dsb();
+
         pwr.cr1().modify(|w| w.set_dbp(true));
+        for _ in 0..1024 {
+            if pwr.cr1().read().dbp() {
+                break;
+            }
+        }
+
+        rcc.ahb1enr().modify(|w| w.set_bkpsramen(true));
+        let _ = rcc.ahb1enr().read();
+        cortex_m::asm::dsb();
+
         pwr.csr1().modify(|w| w.set_bre(true));
+        cortex_m::asm::dsb();
     }
-    // No explicit poll on BRRDY — the ready bit only matters for
-    // VBAT switchover; in normal operation the regulator is already
-    // running. Skip the busy-wait so `enable()` is callable from a
-    // path where stalling is undesirable (e.g., re-entry from a
-    // recovery handler).
+    // Mark `ENABLED` only AFTER clocks and `DBP` are live so an asynchronous
+    // fault handler interrupting `enable()` mid-sequence still completes
+    // hardware initialization rather than returning early on `ENABLED == true`.
+    ENABLED.store(true, Ordering::Release);
+}
+
+#[inline(never)]
+unsafe fn read_slot_words(dst: *mut u32) {
+    let src = (&raw const POSTMORTEM_SLOT).cast::<u32>();
+    let mut i = 0;
+    while i < RECORD_WORDS {
+        unsafe {
+            dst.add(i).write(core::ptr::read_volatile(src.add(i)));
+        }
+        i += 1;
+    }
+}
+
+#[inline(never)]
+unsafe fn write_slot_words(src: *const u32) {
+    let dst = (&raw mut POSTMORTEM_SLOT).cast::<u32>();
+    unsafe {
+        // Clear `magic` (word 0) first so any interrupted update reads invalid.
+        core::ptr::write_volatile(dst, 0);
+        cortex_m::asm::dsb();
+
+        // Write payload body (words 2..RECORD_WORDS), then `crc32` (word 1).
+        let mut i = 2;
+        while i < RECORD_WORDS {
+            core::ptr::write_volatile(dst.add(i), *src.add(i));
+            i += 1;
+        }
+        core::ptr::write_volatile(dst.add(1), *src.add(1));
+        cortex_m::asm::dsb();
+
+        // Publish `magic` (word 0) last.
+        core::ptr::write_volatile(dst, *src);
+        cortex_m::asm::dsb();
+    }
 }
 
 /// Read-only access to the post-mortem record. Caller's closure runs
-/// against a borrow of the static — do not copy out raw pointers.
+/// against an aligned SRAM copy — safe on both Normal memory (STM32H7)
+/// and Device-mapped BKPSRAM (STM32F7 `0x4002_4000`).
 ///
 /// **Safety contract for the caller:** [`enable`] must have been
 /// called already. Reading from BKPSRAM before clocking it produces a
 /// bus fault.
 pub fn with_record<R>(f: impl FnOnce(&PostmortemRecord) -> R) -> R {
-    // SAFETY: `POSTMORTEM_SLOT` is `static mut` so we synthesize a
-    // shared reference for the duration of `f`. No async, no other
-    // accessor can be concurrent because every call site is either
-    // (a) running on the post-mortem task with no other writers, or
-    // (b) running in a fault handler with interrupts disabled.
-    // `MaybeUninit::assume_init_ref` is sound because every public
-    // accessor either initializes the slot (writers via finalize) or
-    // validates it (readers via `is_valid`) before trusting fields.
-    let r: &PostmortemRecord = unsafe { (&*(&raw const POSTMORTEM_SLOT)).assume_init_ref() };
+    let mut local = MaybeUninit::<PostmortemRecord>::uninit();
+    // SAFETY: `local` and `POSTMORTEM_SLOT` are both 8-byte aligned and
+    // `RECORD_WORDS * 4 == size_of::<PostmortemRecord>()`.
+    let r: &PostmortemRecord = unsafe {
+        read_slot_words(local.as_mut_ptr().cast::<u32>());
+        local.assume_init_ref()
+    };
     f(r)
 }
 
 /// Mutable access to the post-mortem record. Caller's closure runs
-/// against an exclusive borrow.
+/// against an aligned SRAM copy which is committed back via 32-bit
+/// word-aligned volatile writes (magic-last).
 ///
 /// **Hard rule:** the closure must not await, allocate, take a lock
 /// that any post-mortem-emitting path also takes, or call back into
@@ -135,36 +208,83 @@ pub fn with_record<R>(f: impl FnOnce(&PostmortemRecord) -> R) -> R {
 /// **Safety contract for the caller:** [`enable`] must have been
 /// called already.
 pub fn with_record_mut<R>(f: impl FnOnce(&mut PostmortemRecord) -> R) -> R {
-    // SAFETY: same reasoning as `with_record`. `static mut` exclusive
-    // access is a deliberate choice: the post-mortem task is the
-    // single async writer and serializes all mutations through itself
-    // during normal operation; fault handlers run with IRQs disabled.
-    let r: &mut PostmortemRecord = unsafe { (&mut *(&raw mut POSTMORTEM_SLOT)).assume_init_mut() };
-    f(r)
-}
-
-/// Raw pointer to the slot. Used only by the boot-recovery reader
-/// before `enable()` has been called: in `pre_init` we want to read
-/// BKPSRAM if a prior boot wrote something, but PWR/RCC may not be
-/// initialized yet. The returned pointer is valid for the lifetime
-/// of the firmware.
-///
-/// **Hard rule:** the returned pointer must not be dereferenced
-/// before clocks/PWR are sufficient. STM32H7's RCC default at reset
-/// already has BKPRAMEN clear; reads will stall until clock-gating
-/// and DBP are configured (typically by the time `main` runs).
-pub fn raw_ptr() -> *mut PostmortemRecord {
-    &raw mut POSTMORTEM_SLOT as *mut PostmortemRecord
+    let mut local = MaybeUninit::<PostmortemRecord>::uninit();
+    let res = unsafe {
+        read_slot_words(local.as_mut_ptr().cast::<u32>());
+        let r = local.assume_init_mut();
+        let out = f(r);
+        write_slot_words((r as *const PostmortemRecord).cast::<u32>());
+        out
+    };
+    res
 }
 
 /// Convenience: write the entire record from a freshly-built value.
-/// Equivalent to `with_record_mut(|r| { *r = src; finalize(r); })`
-/// but inlines the finalize step so the magic-last write order is
-/// always honored. Used by writers that build the full record on the
-/// stack and copy it in atomically.
+/// Finalizes CRC + magic in aligned SRAM, then commits to BKPSRAM via
+/// 32-bit word-aligned volatile writes (magic-last) without needing to
+/// read the prior slot contents first.
 pub fn store_finalized(src: &PostmortemRecord) {
-    with_record_mut(|r| {
-        *r = *src;
-        super::record::finalize(r);
-    });
+    let mut local = *src;
+    super::record::finalize(&mut local);
+    unsafe {
+        write_slot_words((&local as *const PostmortemRecord).cast::<u32>());
+    }
+}
+
+/// Save formatted panic text (`file:line: message`) into `.bkpsram` using
+/// strictly 32-bit aligned volatile writes. Safe to call from `#[panic_handler]`.
+pub fn store_panic_text(bytes: &[u8]) {
+    enable();
+    let len = bytes.len().min(PANIC_TEXT_MAX_BYTES);
+    let dst = (&raw mut POSTMORTEM_PANIC_TEXT).cast::<u32>();
+    unsafe {
+        core::ptr::write_volatile(dst, 0);
+        cortex_m::asm::dsb();
+        core::ptr::write_volatile(dst.add(1), len as u32);
+        let payload_words = PANIC_TEXT_WORDS - 2;
+        let mut w = 0;
+        while w < payload_words {
+            let base = w * 4;
+            let mut b = [0u8; 4];
+            let mut k = 0;
+            while k < 4 {
+                if base + k < len {
+                    b[k] = bytes[base + k];
+                }
+                k += 1;
+            }
+            core::ptr::write_volatile(dst.add(2 + w), u32::from_le_bytes(b));
+            w += 1;
+        }
+        cortex_m::asm::dsb();
+        core::ptr::write_volatile(dst, PANIC_TEXT_MAGIC);
+        cortex_m::asm::dsb();
+    }
+}
+
+/// Read and clear any panic text saved by the prior boot's `#[panic_handler]`.
+pub fn take_panic_text(out: &mut [u8; PANIC_TEXT_MAX_BYTES]) -> Option<usize> {
+    let ptr = (&raw mut POSTMORTEM_PANIC_TEXT).cast::<u32>();
+    unsafe {
+        let magic = core::ptr::read_volatile(ptr);
+        if magic != PANIC_TEXT_MAGIC {
+            return None;
+        }
+        let len = (core::ptr::read_volatile(ptr.add(1)) as usize).min(PANIC_TEXT_MAX_BYTES);
+        let payload_words = (len + 3) / 4;
+        let mut w = 0;
+        while w < payload_words {
+            let word = core::ptr::read_volatile(ptr.add(2 + w)).to_le_bytes();
+            let base = w * 4;
+            let mut k = 0;
+            while k < 4 && base + k < len {
+                out[base + k] = word[k];
+                k += 1;
+            }
+            w += 1;
+        }
+        core::ptr::write_volatile(ptr, 0);
+        cortex_m::asm::dsb();
+        Some(len)
+    }
 }

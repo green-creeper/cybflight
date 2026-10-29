@@ -428,14 +428,18 @@ mod vehicle_bake {
             // and rust-analyzer have no .env. `just` loads .env, so real
             // builds always set VEHICLE; the baked name is also logged at
             // boot and shown in the shell banner, so a wrong-vehicle
-            // flash is detectable on the bench. sakura_vicon matches the
-            // crate's default feature set (board_sakurah743 +
-            // est_pos_mocap), so the fallback bake is guard-consistent.
+            // flash is detectable on the bench. Match the active board's
+            // default vehicle so bare cargo invocations stay consistent.
+            let fallback = if std::env::var_os("CARGO_FEATURE_BOARD_FLYWOOF745").is_some() {
+                "goku_f745"
+            } else {
+                "sakura_vicon"
+            };
             println!(
-                "cargo:warning=VEHICLE not set — baking default vehicle 'sakura_vicon' \
+                "cargo:warning=VEHICLE not set — baking default vehicle '{fallback}' \
                  (set VEHICLE in .env or the environment for real builds)"
             );
-            "sakura_vicon".into()
+            fallback.into()
         });
         let yaml_path = Path::new("../../vehicles").join(format!("{vehicle}.yaml"));
         println!("cargo:rerun-if-changed={}", yaml_path.display());

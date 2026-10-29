@@ -171,8 +171,13 @@ pub fn discover_serial_ports() -> Vec<DiscoveredPort> {
         if p.port_name.contains("Bluetooth") || p.port_name.contains("debug-console") {
             continue;
         }
-        if p.port_name.starts_with("/dev/cu.") {
-            // Keep `/dev/tty.*` to avoid duplicate entries per device on macOS unless no tty exists
+        if cfg!(target_os = "macos") {
+            // On macOS, prefer the call-out device (`/dev/cu.*`), which never
+            // blocks on carrier detect, and skip `/dev/tty.*` duplicates.
+            if p.port_name.starts_with("/dev/tty.") {
+                continue;
+            }
+        } else if p.port_name.starts_with("/dev/cu.") {
             continue;
         }
 

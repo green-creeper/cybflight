@@ -22,30 +22,43 @@
 //! starting state. The post-mortem task and fault handlers may
 //! mutate it freely from here.
 
+use core::cell::RefCell;
 use core::sync::atomic::{AtomicBool, Ordering};
 
+use critical_section::Mutex;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::signal::Signal;
 
-use super::bkpsram;
+use super::bkpsram::{self, PANIC_TEXT_MAX_BYTES};
 use super::record::{self, FatalKind, PostmortemRecord};
 use super::reset_cause;
+
+/// Threshold (ms since boot) under which a fatal crash on the prior boot
+/// triggers Early-Crash USB Safe Mode on the next boot so USB CDC stays
+/// alive for `postmortem show` inspection instead of reset-looping.
+const EARLY_CRASH_SAFE_MODE_MS: u32 = 10_000;
 
 /// Latched copy of the prior boot's record. Filled by
 /// [`boot_recovery`] when a valid record is found; otherwise stays
 /// empty.
 ///
 /// Single-shot semantics: the blackbox recorder takes it via
-/// [`take_pending`] when the next flight session opens. After it's
-/// taken, subsequent calls return `None`. The shell's `postmortem
-/// show` reads BKPSRAM directly (so it works even after the recorder
-/// has consumed the Signal); this Signal exists so the recorder gets
-/// woken automatically.
-///
-/// `Signal` rather than `OnceCell` because the recorder uses
-/// signal-based wakeups elsewhere; consistent with the rest of the
-/// blackbox surface.
+/// [`take_pending`] when the next flight session opens.
 pub static PRIOR_RECORD: Signal<CriticalSectionRawMutex, PostmortemRecord> = Signal::new();
+
+/// Non-consuming latched snapshot of the prior boot's record so
+/// `postmortem show` in the USB shell can always inspect the prior crash
+/// even after BKPSRAM has been re-initialized for the current boot.
+static PRIOR_SNAPSHOT: Mutex<RefCell<Option<PostmortemRecord>>> = Mutex::new(RefCell::new(None));
+
+/// Non-consuming latched copy of formatted `file:line:col: message` text
+/// captured by the prior boot's `#[panic_handler]`.
+static PRIOR_PANIC_TEXT: Mutex<RefCell<([u8; PANIC_TEXT_MAX_BYTES], usize)>> =
+    Mutex::new(RefCell::new(([0u8; PANIC_TEXT_MAX_BYTES], 0)));
+
+/// Set to `true` when [`boot_recovery`] decides this boot should run in
+/// minimal USB Safe Mode due to an early crash on the previous boot.
+static SAFE_MODE_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 /// One-shot guard against re-entry. `boot_recovery` is idempotent
 /// (a second call would not re-publish the prior record because the
@@ -56,40 +69,79 @@ static RECOVERED: AtomicBool = AtomicBool::new(false);
 /// Boot-time entry point. Call exactly once from `main.rs` after
 /// `bsp::init()` and [`super::bkpsram::enable`].
 ///
+/// Returns `true` if the previous boot suffered an early fatal crash
+/// (`Panic`, `HardFault`, or `IndependentWatchdog` within the first
+/// [`EARLY_CRASH_SAFE_MODE_MS`] ms) and the caller should enter minimal
+/// USB Safe Mode instead of re-triggering the crash loop.
+///
 /// **Hard rules:** does not allocate, does not await, does not panic
 /// (a panic here would land in the same panic handler the post-mortem
 /// subsystem provides — re-entry is guarded by the depth counter in
 /// `fault.rs`, but we still avoid the situation).
-pub fn boot_recovery() {
+pub fn boot_recovery() -> bool {
     if RECOVERED.swap(true, Ordering::AcqRel) {
         defmt::warn!("postmortem: boot_recovery called twice — ignoring");
-        return;
+        return SAFE_MODE_ACTIVE.load(Ordering::Acquire);
     }
 
     let cause = reset_cause::read();
     let cause_kind = reset_cause::classify(cause);
 
     let prior = bkpsram::with_record(|r| if record::is_valid(r) { Some(*r) } else { None });
+    let mut panic_buf = [0u8; PANIC_TEXT_MAX_BYTES];
+    let panic_len = bkpsram::take_panic_text(&mut panic_buf).unwrap_or(0);
+
+    let mut enter_safe_mode = false;
 
     let next_boot_count = match prior.as_ref() {
         Some(p) => {
             let prior_kind = FatalKind::from_u8(p.fatal.kind);
-            defmt::error!(
-                "postmortem: prior boot crash recovered (boot_count={=u32}, reset_cause={:?}, fatal={:?}, pc=0x{=u32:08x}, lr=0x{=u32:08x})",
-                p.header.boot_count,
-                cause_kind,
-                prior_kind,
-                p.fatal.pc,
-                p.fatal.lr,
-            );
-            // Publish for downstream consumers. `signal()` overwrites
-            // any prior pending value (there shouldn't be one — boot
-            // recovery is single-shot — but if a future change adds a
-            // re-entry, the latest record wins).
+            if matches!(prior_kind, FatalKind::None)
+                && !matches!(cause_kind, reset_cause::ResetKind::IndependentWatchdog)
+            {
+                defmt::info!(
+                    "postmortem: prior boot {} ended cleanly (reset_cause={:?}, uptime={=u32}ms)",
+                    p.header.boot_count,
+                    cause_kind,
+                    p.header.uptime_ms,
+                );
+            } else {
+                defmt::error!(
+                    "postmortem: prior boot crash recovered (boot_count={=u32}, reset_cause={:?}, fatal={:?}, uptime={=u32}ms, pc=0x{=u32:08x}, lr=0x{=u32:08x})",
+                    p.header.boot_count,
+                    cause_kind,
+                    prior_kind,
+                    p.header.uptime_ms,
+                    p.fatal.pc,
+                    p.fatal.lr,
+                );
+                if panic_len > 0 {
+                    if let Ok(s) = core::str::from_utf8(&panic_buf[..panic_len]) {
+                        defmt::error!("postmortem: prior panic: {}", s);
+                    }
+                }
+            }
+
+            let is_crash = !matches!(prior_kind, FatalKind::Brownout)
+                && (matches!(prior_kind, FatalKind::Panic | FatalKind::HardFault)
+                    || matches!(cause_kind, reset_cause::ResetKind::IndependentWatchdog));
+            if is_crash && p.header.uptime_ms < EARLY_CRASH_SAFE_MODE_MS {
+                enter_safe_mode = true;
+            }
+
+            critical_section::with(|cs| {
+                *PRIOR_SNAPSHOT.borrow_ref_mut(cs) = Some(*p);
+                *PRIOR_PANIC_TEXT.borrow_ref_mut(cs) = (panic_buf, panic_len);
+            });
             PRIOR_RECORD.signal(*p);
             p.header.boot_count.wrapping_add(1)
         }
         None => {
+            if panic_len > 0 {
+                critical_section::with(|cs| {
+                    *PRIOR_PANIC_TEXT.borrow_ref_mut(cs) = (panic_buf, panic_len);
+                });
+            }
             defmt::info!(
                 "postmortem: no prior record (cold boot or first run after firmware update); reset_cause={:?}",
                 cause_kind
@@ -98,13 +150,49 @@ pub fn boot_recovery() {
         }
     };
 
-    // Initialize this boot's record.
+    SAFE_MODE_ACTIVE.store(enter_safe_mode, Ordering::Release);
+
+    // Initialize this boot's record (clean FatalKind::None, so rebooting
+    // out of Safe Mode will try normal boot again).
     let mut fresh = PostmortemRecord::ZERO;
     fresh.header.boot_count = next_boot_count;
     fresh.header.reset_cause = cause;
     fresh.header.fw_git_hash = git_hash_u32();
     fresh.header.uptime_ms = 0;
     bkpsram::store_finalized(&fresh);
+
+    enter_safe_mode
+}
+
+/// Returns `true` if the firmware booted into Early-Crash USB Safe Mode.
+pub fn in_safe_mode() -> bool {
+    SAFE_MODE_ACTIVE.load(Ordering::Acquire)
+}
+
+/// Non-consuming read of the prior boot's record latched by [`boot_recovery`].
+pub fn prior_boot_record() -> Option<PostmortemRecord> {
+    critical_section::with(|cs| *PRIOR_SNAPSHOT.borrow_ref(cs))
+}
+
+/// Non-consuming copy of the prior boot's formatted panic string, if any.
+pub fn prior_panic_text(out: &mut [u8; PANIC_TEXT_MAX_BYTES]) -> Option<usize> {
+    critical_section::with(|cs| {
+        let (ref buf, len) = *PRIOR_PANIC_TEXT.borrow_ref(cs);
+        if len == 0 {
+            None
+        } else {
+            out[..len].copy_from_slice(&buf[..len]);
+            Some(len)
+        }
+    })
+}
+
+/// Clear the in-RAM latched prior-boot record and panic text (`postmortem clear`).
+pub fn clear_prior_snapshot() {
+    critical_section::with(|cs| {
+        *PRIOR_SNAPSHOT.borrow_ref_mut(cs) = None;
+        PRIOR_PANIC_TEXT.borrow_ref_mut(cs).1 = 0;
+    });
 }
 
 /// Drain the prior-boot record. Returns `Some(...)` exactly once if a
@@ -116,21 +204,7 @@ pub fn take_pending() -> Option<PostmortemRecord> {
     PRIOR_RECORD.try_take()
 }
 
-/// Read the prior boot's record without consuming it. Used by the
-/// shell `postmortem show` command — works whether or not the
-/// recorder has already drained the Signal.
-///
-/// Returns `None` if BKPSRAM has already been overwritten with this
-/// boot's state and the original prior record wasn't latched (this
-/// would only happen if `boot_recovery` ran with no valid prior
-/// record — i.e. a clean first boot).
-///
-/// The Signal `peek` is best-effort: embassy's `Signal` doesn't
-/// expose a non-consuming read in stable, so we re-read BKPSRAM (now
-/// the *current* boot's record) and report the prior record only if
-/// the Signal still has a pending value. Callers that need the
-/// prior record specifically (vs. "any record at all") should drain
-/// the Signal via [`take_pending`].
+/// Read the current boot's live BKPSRAM record without consuming anything.
 pub fn current_boot_record() -> PostmortemRecord {
     bkpsram::with_record(|r| *r)
 }
