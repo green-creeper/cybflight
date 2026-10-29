@@ -1,0 +1,4 @@
+Milestone #7:
+1. Fixed Issue #19 in crates/cybflight/src/usb_serial.rs (measure_rate): embassy_time::Timer::at(deadline) initializes yielded_once=false and returns Poll::Pending on its first poll even past deadline. When paired with yield_now().await every 4 polls against P8 8 kHz IMU_1, constructing Timer::at(deadline) inside loop caused sub.next_message() to always win select while feeding IWDG indefinitely. Hoisted let mut deadline_timer = Timer::at(deadline) outside loop, added top-of-loop Instant::now() >= deadline break guard, and drained trailing try_next_message() samples so sample count and elapsed Instant::now() align.
+2. Updated DECISION_LOG.md and FIRMWARE_COMPARISON.md with Flash #4/#5/#6 outcomes (Issues #17-#19).
+3. Adversarial review PASS (43fc05a6), all host tests passing, 0 .f64 VFP opcodes. Ready for Flash #7 + 65 s stress test.
