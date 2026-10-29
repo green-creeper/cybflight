@@ -1,0 +1,8 @@
+Milestone #9 (Final Verification Docs):
+- Updated DECISION_LOG.md (Issues #1-#21 + Final Live Hardware & 65-Second Multi-Stream Stress Verification table) and FIRMWARE_COMPARISON.md (Ranked Remediation Checklist) with complete Flash #8 (67b57a5) live hardware, warm-reboot, and 65s stress-test telemetry:
+  * 0 IWDG resets / 0 faults across 11,677 streamed frames (111.8 s continuous uptime)
+  * MPU-6000 IMU on P8 EXECUTOR_IMU: 8000.3 Hz (+0.00%), GyroStartupCal bias=[+0.0066, +0.0157, -0.0554] rad/s, 0.002 deg/s stationary yaw drift
+  * SPL06 baro1 on I2C1: 101371 Pa, 37.7 C before/after imurate, across warm reboot, and after 65s stress
+  * QMC5883L magext on I2C1: [-27.73, 10.67, 42.27] uT, 27.6 C across cold boot, warm reboot, and 65s stress
+  * Flywoo GM10 V3 u-blox M10 GPS: baud=230400, mean=99957 us (10.00 Hz) from cold boot through 65s stress
+  * 2 kHz INDI on P10: max 410.3 us (< 500 us budget), 0 .f64 VFP opcodes, 332/332 parameters verified.
