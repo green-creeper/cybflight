@@ -1,0 +1,4 @@
+Milestone #5 I2C1 runtime reliability & IWDG safety:
+1. Raised I2C1 timeout in board_init/flywoof745.rs from 20 ms to 50 ms (200x a 0.25 ms 400 kHz transfer, avoiding cooperative Thread-Executor scheduling timeouts under P6/P8/P10 preemption while staying strictly below the 141 ms worst-case 47 kHz LSI IWDG margin even if an external compass-mast I2C wire shorts low in flight) and removed outer with_timeout wrappers around I2C1 init.
+2. Added RM0385 §30.4.6 compliant reset_i2c1_if_wedged() (critical_section-guarded CR1.PE 0 -> 1us -> 1 when BUSY/TC/TCR/START is stuck with zero I2C1_BUS lock holders) plus 10 ms yield before recover() in sensors/baro.rs and sensors/mag.rs.
+3. Capped QMC5883L REG_STATUS polling from 100 to 5 iterations in drivers/mag/qmc5883l.rs to avoid hammering shared I2C1.
