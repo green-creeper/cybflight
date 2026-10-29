@@ -1,0 +1,7 @@
+Bring-up milestone #1 (verified live on Flywoo GOKU GN 745 V3 hardware):
+- Disabled double-precision VFP (-C target-feature=-fp64) for STM32F745 FPv5-SP-D16 to fix 415ms UNDEFINSTR HardFault.
+- Replaced packed-struct BKPSRAM accesses with 32-bit word-aligned volatile bounce buffers to fix 3.35s Device-memory unaligned HardFault.
+- Unlocked PWR_CR1.DBP before RTC_BKP0R DFU magic write and added BKPSRAM early-crash USB Safe Mode + DefaultHandler IRQ capture.
+- Added InstallParams imu_rpy_r/p/y (FirmwareConfig v57), set MPU-6000 Cw270Deg + 135 deg FLU yaw and external QMC5883L Cw270Deg, and aligned goku_f745.yaml with proven ArduPilot parameters.
+- Added UART error backoff on CRSF/GHST, macOS /dev/cu.* preference in cybflight-gs, and tools/fc_shell.py USB CDC automation tool.
+- Verified live on hardware (>16.5 min continuous uptime, 0 crashes, 0 IWDG resets).
