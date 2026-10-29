@@ -3132,11 +3132,22 @@ where
     let t0 = Instant::now();
     let deadline = t0 + IMU_RATE_WINDOW;
     let mut samples: u64 = 0;
+    let mut polls: u32 = 0;
     loop {
         match select(Timer::at(deadline), sub.next_message()).await {
             Either::First(_) => break,
             Either::Second(WaitResult::Message(_)) => samples += 1,
             Either::Second(WaitResult::Lagged(n)) => samples += n,
+        }
+        polls = polls.wrapping_add(1);
+        // Yield cooperatively every 4 polls (~0.5 ms at 8 kHz) so an `P8`
+        // interrupt-executor publisher cannot keep `sub.next_message()`
+        // continuously `Poll::Ready` for 1,000 ms and starve `iwdg_feed_task`
+        // or `I2C1` baro/mag tasks on the Thread Executor. (`PubSubChannel`
+        // accounts any overflow via `WaitResult::Lagged(n)`, so zero samples
+        // are ever missed from the rate tally.)
+        if polls & 3 == 0 {
+            embassy_futures::yield_now().await;
         }
     }
     Some((samples, Instant::now().saturating_duration_since(t0)))

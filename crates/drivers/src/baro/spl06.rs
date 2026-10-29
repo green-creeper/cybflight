@@ -341,13 +341,22 @@ where
     type Error = Error<B::Error>;
 
     async fn read(&mut self) -> Result<BaroReading, Self::Error> {
-        // Poll for PRS_RDY
-        for _ in 0..50 {
-            let mut status = [0u8];
+        // Verify continuous P+T mode (`MEAS_CTRL == 0x07`) is still active and
+        // poll briefly for `PRS_RDY`. In continuous mode (`16x` P + `16x` T =
+        // ~55 ms pair period vs 31 ms reader period), `0x00..0x05` latch the
+        // latest completed conversion even when `PRS_RDY` was cleared on the
+        // prior tick; however, if the sensor reset to standby (`MEAS_CTRL != 0x07`
+        // or all-zero registers), return `Error::NotReady` so `BaroReader` runs
+        // `recover()` (`Self::configure`) instead of publishing `c00` Pa.
+        let mut status = [0u8];
+        for _ in 0..3 {
             self.bus
                 .read_reg(REG_MEAS_CFG, &mut status)
                 .await
                 .map_err(Error::Bus)?;
+            if status[0] & 0x07 != 0x07 {
+                return Err(Error::NotReady);
+            }
             if status[0] & MEAS_CFG_PRS_RDY != 0 {
                 break;
             }
@@ -365,6 +374,9 @@ where
         let raw_psr = sign_extend(raw_psr, 24);
         let raw_tmp = ((buf[3] as i32) << 16) | ((buf[4] as i32) << 8) | (buf[5] as i32);
         let raw_tmp = sign_extend(raw_tmp, 24);
+        if raw_psr == 0 && raw_tmp == 0 {
+            return Err(Error::NotReady);
+        }
 
         // Scale
         let p_sc = raw_psr as f32 / SCALE_FACTOR;
@@ -387,41 +399,14 @@ where
     }
 
     async fn recover(&mut self) -> Result<(), Self::Error> {
-        // Soft reset
-        self.bus
-            .write_reg(REG_RESET, 0x09)
-            .await
-            .map_err(Error::Bus)?;
-
-        // Poll for COEF_RDY + SENSOR_RDY (each I2C/SPI transaction ~100us)
-        for _ in 0..400 {
-            let mut status = [0u8];
-            self.bus
-                .read_reg(REG_MEAS_CFG, &mut status)
-                .await
-                .map_err(Error::Bus)?;
-            if status[0] & (MEAS_CFG_COEF_RDY | MEAS_CFG_SENSOR_RDY)
-                == (MEAS_CFG_COEF_RDY | MEAS_CFG_SENSOR_RDY)
-            {
-                break;
-            }
-        }
-
-        // Re-read coefficients in 9-byte chunks (SPL06/DPS310 >9-byte I2C burst erratum)
-        let mut coef_raw = [0u8; 18];
-        self.bus
-            .read_reg(REG_COEF, &mut coef_raw[..9])
-            .await
-            .map_err(Error::Bus)?;
-        self.bus
-            .read_reg(REG_COEF + 9, &mut coef_raw[9..18])
-            .await
-            .map_err(Error::Bus)?;
-        self.coefs = parse_coefs(&coef_raw);
-
-        // Reconfigure
+        // Re-apply continuous P+T measurement configuration without issuing
+        // `REG_RESET = 0x09`: `ReadBaro::recover` has no async `DelayNs` for
+        // SPL06's mandatory 40 ms post-reset OTP reload window, so writing
+        // `REG_RESET` and immediately writing `MEAS_CFG` leaves the chip in
+        // standby (`raw_psr = 0, raw_tmp = 0` -> `c00` Pa / `c0 * 0.5` °C) and
+        // risks reading unready OTP coefficients over `self.coefs` (which are
+        // immutable factory constants already validated in `init()`).
         Self::configure(&mut self.bus).await?;
-
         Ok(())
     }
 
