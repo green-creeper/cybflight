@@ -1014,9 +1014,17 @@ pub async fn indi_task() {
     }
 
     // DWT cycle counter for the step-cost probe (`step_stats`).
+    // On Cortex-M7 r0p1 (STM32F745/F746), CoreSight Software Lock (`DWT->LAR`
+    // at 0xE000_1FB0) is locked at reset (`LSR = 0x03`), causing writes to
+    // `DWT->CTRL` to be silently ignored unless unlocked with `0xC5AC_CE55`.
+    // On Cortex-M7 r1p1 (STM32H7), `SLI == 0` so the LAR write is a harmless no-op.
     {
         let mut cp = unsafe { cortex_m::Peripherals::steal() };
         cp.DCB.enable_trace();
+        unsafe {
+            core::ptr::write_volatile(0xE000_1FB0 as *mut u32, 0xC5AC_CE55);
+            cortex_m::asm::dsb();
+        }
         cp.DWT.enable_cycle_counter();
     }
     let mut probe_prev_start: u32 = 0;

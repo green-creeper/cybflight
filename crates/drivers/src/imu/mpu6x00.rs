@@ -160,8 +160,11 @@ impl<SPI: SpiDevice, DRDY: Wait> Mpu6x00<SPI, DRDY> {
                 drv.write_reg(REG_ACCEL_CONFIG, 0x18).await?;
                 delay.delay_us(15).await;
 
-                // INT_ANYRD_2CLEAR, active-high, push-pull
-                drv.write_reg(REG_INT_PIN_CFG, 0x10).await?;
+                // LATCH_INT_EN (0x20) | INT_RD_CLEAR (0x10), active-high, push-pull.
+                // Without LATCH_INT_EN, INT emits a 50 us pulse that misses ~19% of
+                // 8 kHz samples whenever INDI (~40-60 us) is running on the same P10
+                // executor; latched INT stays high until REG_ACCEL_XOUT_H is read.
+                drv.write_reg(REG_INT_PIN_CFG, 0x30).await?;
                 delay.delay_us(15).await;
 
                 // Enable DATA_RDY interrupt
@@ -200,8 +203,11 @@ impl<SPI: SpiDevice, DRDY: Wait> Mpu6x00<SPI, DRDY> {
                 drv.write_reg(REG_SMPLRT_DIV, 0x00).await?;
                 delay.delay_ms(100).await;
 
-                // INT_ANYRD_2CLEAR, active-high, push-pull
-                drv.write_reg(REG_INT_PIN_CFG, 0x10).await?;
+                // LATCH_INT_EN (0x20) | INT_RD_CLEAR (0x10), active-high, push-pull.
+                // Without LATCH_INT_EN, INT emits a 50 us pulse that misses ~19% of
+                // 8 kHz samples whenever INDI (~40-60 us) is running on the same P10
+                // executor; latched INT stays high until REG_ACCEL_XOUT_H is read.
+                drv.write_reg(REG_INT_PIN_CFG, 0x30).await?;
                 delay.delay_ms(15).await;
 
                 // Enable DATA_RDY interrupt
@@ -220,9 +226,9 @@ impl<SPI: SpiDevice, DRDY: Wait> Mpu6x00<SPI, DRDY> {
         // 5. Wait for startup
         delay.delay_ms(100).await;
 
-        // 6. Drain stale samples
+        // 6. Drain stale samples (level-triggered on latched INT)
         for _ in 0..10 {
-            drv.drdy.wait_for_rising_edge().await.ok();
+            drv.drdy.wait_for_high().await.ok();
             let mut buf = [0u8; 15];
             buf[0] = SPI_READ | REG_ACCEL_XOUT_H;
             let _ = drv.spi.transfer_in_place(&mut buf).await;
@@ -271,8 +277,9 @@ where
     ///
     /// Returns an [`ImuReading`] with physical units in chip-native axis order.
     async fn read(&mut self) -> Result<ImuReading, Self::Error> {
-        // Wait for data-ready rising edge
-        self.drdy.wait_for_rising_edge().await.ok();
+        // Wait for latched data-ready level (cleared automatically by the
+        // REG_ACCEL_XOUT_H burst read via INT_RD_CLEAR).
+        self.drdy.wait_for_high().await.ok();
 
         // Burst read: ACCEL(6) + TEMP(2) + GYRO(6) = 14 bytes from 0x3B
         let mut buf = [0u8; 15];

@@ -35,7 +35,7 @@ pub struct DiscoveredPort {
 #[derive(Debug, Clone)]
 pub struct TelemetrySnapshot {
     pub timestamp_ms: f64,
-    /// Orientation quaternion `[x, y, z, w]` (ENU world -> FLU body).
+    /// Orientation quaternion `[x, y, z, w]` (FLU body -> ENU world).
     pub quat_xyzw: [f32; 4],
     /// ZYX Euler angles in degrees `(roll, pitch, yaw)` in FLU convention:
     /// +Roll = right wing down, +Pitch = nose down, +Yaw = CCW from top.
@@ -49,7 +49,7 @@ pub struct TelemetrySnapshot {
     /// IMU die temperature in °C.
     pub imu_temp_c: f32,
     /// Normalized motor commands `[m0, m1, m2, m3]` in `0.0..=1.0`.
-    /// Motor numbering: M1=0 (FR CCW), M2=1 (RL CCW), M3=2 (FL CW), M4=3 (RR CW).
+    /// Motor numbering: m0 (RR CW), m1 (FR CCW), m2 (RL CCW), m3 (FL CW).
     pub motor_throttle: [f32; 4],
     /// Per-motor thrust in Newtons `[m0, m1, m2, m3]`.
     pub motor_thrust_n: [f32; 4],

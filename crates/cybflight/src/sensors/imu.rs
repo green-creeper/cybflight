@@ -56,14 +56,110 @@ pub type Bmi270Dev = Bmi270<
     embassy_time::Delay,
 >;
 
+/// Stationary motion threshold (per-axis standard deviation in rad/s) for
+/// Betaflight-style startup gyro zero-rate offset calibration (~2.86 deg/s,
+/// matching Betaflight `gyroMovementCalibrationThreshold = 48` LSB).
+const GYRO_CAL_MAX_STD_RAD_S: f32 = 0.05;
+
+/// Sanity ceiling on magnitude of calibrated startup gyro bias (~20.0 deg/s,
+/// matching MPU-6000 / ICM-42688 datasheet Zero-Rate Output tolerance).
+const GYRO_CAL_MAX_BIAS_RAD_S: f32 = 0.35;
+
+/// Pure-`f32` first-sample-centered window accumulator for stationary startup
+/// gyro zero-rate bias calibration. Uses `delta = gyro - ref_sample` to avoid
+/// `f32` variance cancellation without invoking soft-float `f64` at 8 kHz on
+/// single-precision Cortex-M7 (`FPv5-SP-D16`).
+struct GyroStartupCal {
+    target_samples: u32,
+    count: u32,
+    ref_sample: nalgebra::Vector3<f32>,
+    sum_delta: nalgebra::Vector3<f32>,
+    sum_delta_sq: nalgebra::Vector3<f32>,
+    bias: nalgebra::Vector3<f32>,
+    calibrated: bool,
+}
+
+impl GyroStartupCal {
+    fn new(sample_hz: f32) -> Self {
+        let target_samples = if sample_hz.is_finite() && sample_hz > 0.0 {
+            (sample_hz as u32).clamp(64, 16_000)
+        } else {
+            1_000
+        };
+        Self {
+            target_samples,
+            count: 0,
+            ref_sample: nalgebra::Vector3::zeros(),
+            sum_delta: nalgebra::Vector3::zeros(),
+            sum_delta_sq: nalgebra::Vector3::zeros(),
+            bias: nalgebra::Vector3::zeros(),
+            calibrated: false,
+        }
+    }
+
+    #[inline]
+    fn reset_window(&mut self) {
+        self.count = 0;
+        self.sum_delta = nalgebra::Vector3::zeros();
+        self.sum_delta_sq = nalgebra::Vector3::zeros();
+    }
+
+    #[inline]
+    fn observe(&mut self, gyro: nalgebra::Vector3<f32>, armed: bool) -> Option<nalgebra::Vector3<f32>> {
+        if self.calibrated {
+            return None;
+        }
+        if armed || !gyro[0].is_finite() || !gyro[1].is_finite() || !gyro[2].is_finite() {
+            self.reset_window();
+            return None;
+        }
+        if self.count == 0 {
+            self.ref_sample = gyro;
+            self.count = 1;
+            return None;
+        }
+        let d = gyro - self.ref_sample;
+        self.sum_delta += d;
+        self.sum_delta_sq += d.component_mul(&d);
+        self.count += 1;
+        if self.count < self.target_samples {
+            return None;
+        }
+
+        let inv_n = 1.0 / (self.count as f32);
+        let mean_d = self.sum_delta * inv_n;
+        let var = self.sum_delta_sq * inv_n - mean_d.component_mul(&mean_d);
+        let mean = self.ref_sample + mean_d;
+        self.reset_window();
+
+        let max_var = GYRO_CAL_MAX_STD_RAD_S * GYRO_CAL_MAX_STD_RAD_S;
+        let stationary = (0..3).all(|i| {
+            var[i].is_finite()
+                && var[i] <= max_var
+                && mean[i].is_finite()
+                && libm::fabsf(mean[i]) <= GYRO_CAL_MAX_BIAS_RAD_S
+        });
+        if stationary {
+            self.bias = mean;
+            self.calibrated = true;
+            Some(mean)
+        } else {
+            None
+        }
+    }
+}
+
 pub struct ImuReader<D: ReadImu> {
     imu: D,
     align: SensorAlign,
+    mount_rot: Option<nalgebra::Matrix3<f32>>,
     accel_filter: [BiquadFilter<f32, DirectForm2<f32>>; 3],
     gyro_filter: [BiquadFilter<f32, DirectForm2<f32>>; 3],
     /// On-grid timestamp reconstruction + lost-sample detection; see
     /// [`cybflight_core::imu_stamp`].
     stamper: SampleStamper,
+    /// Stationary startup gyro zero-rate offset calibrator.
+    gyro_cal: GyroStartupCal,
 }
 
 /// Samples the primary IMU reader judged lost (never observed) since
@@ -72,6 +168,14 @@ pub struct ImuReader<D: ReadImu> {
 pub static IMU1_LOST_SAMPLES: AtomicU32 = AtomicU32::new(0);
 /// Secondary-IMU counterpart of [`IMU1_LOST_SAMPLES`].
 pub static IMU2_LOST_SAMPLES: AtomicU32 = AtomicU32::new(0);
+/// Whether primary IMU stationary startup gyro calibration has converged.
+pub static IMU1_GYRO_CALIBRATED: AtomicBool = AtomicBool::new(false);
+/// Primary IMU calibrated body-FLU gyro bias `[x, y, z]` in rad/s (as `f32::to_bits`).
+pub static IMU1_GYRO_BIAS_BITS: [AtomicU32; 3] = [
+    AtomicU32::new(0),
+    AtomicU32::new(0),
+    AtomicU32::new(0),
+];
 
 /// Nyquist-clamp an IMU low-pass cutoff so no parameter value can panic
 /// the reader into a flash-persistent boot loop.
@@ -156,6 +260,30 @@ impl<D: ReadImu> ImuReader<D> {
             IMU1_EFFECTIVE_ACCEL_LPF_HZ_BITS.store(accel_cutoff_hz.to_bits(), Ordering::Release);
             IMU1_EFFECTIVE_GYRO_LPF_HZ_BITS.store(gyro_cutoff_hz.to_bits(), Ordering::Release);
         }
+        let rpy_deg = crate::params::get().airframe.install.imu_rpy_deg;
+        let mount_rot = if rpy_deg == [0.0, 0.0, 0.0]
+            || !rpy_deg[0].is_finite()
+            || !rpy_deg[1].is_finite()
+            || !rpy_deg[2].is_finite()
+        {
+            None
+        } else {
+            const DEG2RAD: f32 = core::f32::consts::PI / 180.0;
+            let (sr, cr) = libm::sincosf(rpy_deg[0] * DEG2RAD);
+            let (sp, cp) = libm::sincosf(rpy_deg[1] * DEG2RAD);
+            let (sy, cy) = libm::sincosf(rpy_deg[2] * DEG2RAD);
+            Some(nalgebra::Matrix3::new(
+                cy * cp,
+                cy * sp * sr - sy * cr,
+                cy * sp * cr + sy * sr,
+                sy * cp,
+                sy * sp * sr + cy * cr,
+                sy * sp * cr - cy * sr,
+                -sp,
+                cp * sr,
+                cp * cr,
+            ))
+        };
         let common_config_options = BiquadFilterConfigBuilder::direct_form_2()
             .sample_frequency_hz(sample_hz)
             .filter_type(BiquadFilterType::LowPass);
@@ -169,6 +297,8 @@ impl<D: ReadImu> ImuReader<D> {
             ),
             imu,
             align,
+            mount_rot,
+            gyro_cal: GyroStartupCal::new(sample_hz),
             accel_filter: core::array::from_fn(|_| {
                 BiquadFilter::new(
                     common_config_options
@@ -266,8 +396,32 @@ impl<D: ReadImu> ImuReader<D> {
                     }
                     let timestamp = Instant::from_ticks((stamped.stamp >> STAMP_Q).max(0) as u64);
 
-                    let accel = apply_alignment(self.align, reading.accel_m_s2);
-                    let gyro = apply_alignment(self.align, reading.gyro_rad_s);
+                    let mut accel = apply_alignment(self.align, reading.accel_m_s2);
+                    let mut gyro = apply_alignment(self.align, reading.gyro_rad_s);
+                    if let Some(ref r) = self.mount_rot {
+                        accel = r * accel;
+                        gyro = r * gyro;
+                    }
+
+                    if !self.gyro_cal.calibrated {
+                        let armed = crate::motors::IS_ARMED.load(Ordering::Relaxed);
+                        if let Some(bias) = self.gyro_cal.observe(gyro, armed) {
+                            if is_imu1 {
+                                IMU1_GYRO_BIAS_BITS[0].store(bias[0].to_bits(), Ordering::Relaxed);
+                                IMU1_GYRO_BIAS_BITS[1].store(bias[1].to_bits(), Ordering::Relaxed);
+                                IMU1_GYRO_BIAS_BITS[2].store(bias[2].to_bits(), Ordering::Release);
+                                IMU1_GYRO_CALIBRATED.store(true, Ordering::Release);
+                            }
+                            defmt::info!(
+                                "IMU{} gyro bias calibrated: [{}, {}, {}] rad/s",
+                                if is_imu1 { 1u8 } else { 2u8 },
+                                bias[0],
+                                bias[1],
+                                bias[2]
+                            );
+                        }
+                    }
+                    gyro -= self.gyro_cal.bias;
 
                     // Raw publish *before* the biquad apply — analyse.py
                     // style RPM-notch fits need pre-filter samples.

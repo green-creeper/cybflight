@@ -28,9 +28,7 @@ use embassy_embedded_hal::shared_bus::asynch::spi::SpiDevice;
 use embassy_executor::{SendSpawner, Spawner};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::mutex::Mutex;
-use embassy_time::Timer;
-#[cfg(feature = "est_pos_gps")]
-use embassy_time::{Duration, with_timeout};
+use embassy_time::{Duration, Timer, with_timeout};
 use static_cell::StaticCell;
 
 use crate::bsp;
@@ -96,8 +94,11 @@ pub async fn init(
     // Wait for power to stabilize before touching SPI devices.
     Timer::after_millis(100).await;
 
+    // Start SPI4 at 1 MHz (54 MHz / 64 = 843.75 kHz) to satisfy the MPU-6000
+    // <= 1 MHz register-write specification during WHO_AM_I probe & config,
+    // then switch to high-speed SPI (6.75 MHz / 13.5 MHz) for 8 kHz DMA reads.
     let mut spi_config = spi::Config::default();
-    spi_config.frequency = Hertz(8_000_000);
+    spi_config.frequency = Hertz(1_000_000);
     spi_config.mode = spi::MODE_3;
 
     // --- IMU1 on SPI4 (PE2 SCK / PE5 MISO / PE6 MOSI, CS=PE4, DRDY=PE1) ---
@@ -134,7 +135,16 @@ pub async fn init(
             } else {
                 match Mpu6x00::new(dev4, board.sensors.gyro1_drdy, &mut delay).await {
                     Ok(imu1) => {
-                        defmt::info!("IMU1 init OK (MPU6000 on SPI4)");
+                        let mut fast_cfg = spi::Config::default();
+                        // PCLK2 = 54 MHz; embassy-stm32's integer division `54_000_000 / freq`
+                        // maps `13_500_000` -> `4` (`Br::DIV4` = 13.5 MHz), safely within
+                        // MPU-6000's 20 MHz sensor-read spec (note: `20_000_000` truncated to `2` = 27 MHz!).
+                        fast_cfg.frequency = Hertz(13_500_000);
+                        fast_cfg.mode = spi::MODE_3;
+                        let _ = spi4_bus.lock().await.set_config(&fast_cfg);
+                        defmt::info!("IMU1 init OK (MPU6000 on SPI4 @ 13.5 MHz)");
+                        // Pass `None` for IMU_1_RAW: this AIO has no blackbox SD/flash storage,
+                        // avoiding 8,000 unconsumed critical-section PubSub writes/sec.
                         ctrl_spawner
                             .spawn(mpu_reader_task(
                                 ImuReader::new(
@@ -144,7 +154,7 @@ pub async fn init(
                                     gyro_cutoff_hz,
                                 ),
                                 &crate::sensors::IMU_1,
-                                Some(&crate::sensors::IMU_1_RAW),
+                                None,
                             ))
                             .unwrap();
                     }
@@ -166,7 +176,12 @@ pub async fn init(
             .await
             {
                 Ok(imu1) => {
-                    defmt::info!("IMU1 init OK (ICM426xx on SPI4)");
+                    let mut fast_cfg = spi::Config::default();
+                    // 54_000_000 / 13_500_000 = 4 -> Br::DIV4 = 13.5 MHz (<= 24 MHz spec)
+                    fast_cfg.frequency = Hertz(13_500_000);
+                    fast_cfg.mode = spi::MODE_3;
+                    let _ = spi4_bus.lock().await.set_config(&fast_cfg);
+                    defmt::info!("IMU1 init OK (ICM426xx on SPI4 @ 13.5 MHz)");
                     defmt::assert!(
                         imu1.sample_rate_hz() == crate::rates::IMU_ODR_HZ,
                         "IMU1 ODR does not match rates::IMU_ODR_HZ"
@@ -180,7 +195,7 @@ pub async fn init(
                                 gyro_cutoff_hz,
                             ),
                             &crate::sensors::IMU_1,
-                            Some(&crate::sensors::IMU_1_RAW),
+                            None,
                         ))
                         .unwrap();
                 }
@@ -191,17 +206,23 @@ pub async fn init(
             // BMI270 WHO_AM_I = 0x24
             match Bmi270::new(dev4, board.sensors.gyro1_drdy, embassy_time::Delay).await {
                 Ok(imu1) => {
-                    defmt::info!("IMU1 init OK (BMI270 on SPI4)");
+                    let mut fast_cfg = spi::Config::default();
+                    // 54_000_000 / 6_750_000 = 8 -> Br::DIV8 = 6.75 MHz (<= 10 MHz spec)
+                    fast_cfg.frequency = Hertz(6_750_000);
+                    fast_cfg.mode = spi::MODE_3;
+                    let _ = spi4_bus.lock().await.set_config(&fast_cfg);
+                    defmt::info!("IMU1 init OK (BMI270 on SPI4 @ 6.75 MHz)");
                     ctrl_spawner
                         .spawn(bmi270_reader_task(
                             ImuReader::new(
                                 imu1,
-                                board.sensors.gyro1_align,
+                                // BMI270 revision uses ROTATION_PITCH_180 in FlywooF745 hwdef -> Cw180Deg in FLU
+                                crate::SensorAlign::Cw180Deg,
                                 accel_cutoff_hz,
                                 gyro_cutoff_hz,
                             ),
                             &crate::sensors::IMU_1,
-                            Some(&crate::sensors::IMU_1_RAW),
+                            None,
                         ))
                         .unwrap();
                 }
@@ -219,6 +240,7 @@ pub async fn init(
     let rx_buf = &mut RX_BUF.init([0u8; 128])[..];
     let mut rc_uart_cfg = hal::usart::Config::default();
     rc_uart_cfg.baudrate = 420_000;
+    rc_uart_cfg.rx_pull = hal::gpio::Pull::Up;
 
     // --- SerialRx (CRSF / ELRS) ---
     #[cfg(feature = "rx_crsf")]
@@ -310,17 +332,18 @@ pub async fn init(
     // --- GPS (`PORT_GPS`, default USART6 PC6/PC7) ---
     #[cfg(feature = "est_pos_gps")]
     {
-        use crate::sensors::gps::{GPS_HEALTH, GpsHealth, err_kind};
+        use crate::sensors::gps::{GPS_HEALTH, GpsHealth};
         GPS_HEALTH.lock(|c| c.set(GpsHealth::Initializing));
         match bsp::PORT_GPS {
             bsp::SerialPortId::Usart6 => {
                 defmt::info!("GPS: starting USART6 init (T6=PC6, R6=PC7)");
                 static GPS_TX_BUF: StaticCell<[u8; 256]> = StaticCell::new();
-                static GPS_RX_BUF: StaticCell<[u8; 256]> = StaticCell::new();
+                static GPS_RX_BUF: StaticCell<[u8; 1024]> = StaticCell::new();
                 let tx_buf = &mut GPS_TX_BUF.init([0u8; 256])[..];
-                let rx_buf = &mut GPS_RX_BUF.init([0u8; 256])[..];
+                let rx_buf = &mut GPS_RX_BUF.init([0u8; 1024])[..];
                 let mut uart_config = hal::usart::Config::default();
                 uart_config.baudrate = 115_200;
+                uart_config.rx_pull = hal::gpio::Pull::Up;
                 match hal::usart::BufferedUart::new(
                     board.serial.usart6,
                     board.serial.usart6_rx,
@@ -330,29 +353,7 @@ pub async fn init(
                     SerialIrqs,
                     uart_config,
                 ) {
-                    Ok(uart) => {
-                        let mut delay = embassy_time::Delay;
-                        match with_timeout(Duration::from_secs(3), GpsDriver::new(uart, &mut delay))
-                            .await
-                        {
-                            Ok(Ok(gps)) => {
-                                defmt::info!("GPS u-blox init OK on USART6");
-                                spawner
-                                    .spawn(crate::sensors::gps::gps_task(GpsRunner::new(gps)))
-                                    .unwrap_or_else(|e| {
-                                        defmt::error!("Failed to spawn GPS task: {}", e)
-                                    });
-                            }
-                            Ok(Err(e)) => {
-                                GPS_HEALTH.lock(|c| c.set(GpsHealth::InitFailed(err_kind(&e))));
-                                defmt::warn!("GPS init failed: {}", e);
-                            }
-                            Err(_) => {
-                                GPS_HEALTH.lock(|c| c.set(GpsHealth::InitTimedOut));
-                                defmt::warn!("GPS init timed out (no module?)");
-                            }
-                        }
-                    }
+                    Ok(uart) => init_gps_uart(uart, spawner).await,
                     Err(e) => {
                         GPS_HEALTH.lock(|c| c.set(GpsHealth::UartInitFailed));
                         defmt::error!("GPS USART6 init failed: {}", e);
@@ -362,11 +363,12 @@ pub async fn init(
             bsp::SerialPortId::Usart3 => {
                 defmt::info!("GPS: starting USART3 init (T3=PB10, R3=PB11)");
                 static GPS_TX_BUF: StaticCell<[u8; 256]> = StaticCell::new();
-                static GPS_RX_BUF: StaticCell<[u8; 256]> = StaticCell::new();
+                static GPS_RX_BUF: StaticCell<[u8; 1024]> = StaticCell::new();
                 let tx_buf = &mut GPS_TX_BUF.init([0u8; 256])[..];
-                let rx_buf = &mut GPS_RX_BUF.init([0u8; 256])[..];
+                let rx_buf = &mut GPS_RX_BUF.init([0u8; 1024])[..];
                 let mut uart_config = hal::usart::Config::default();
                 uart_config.baudrate = 115_200;
+                uart_config.rx_pull = hal::gpio::Pull::Up;
                 match hal::usart::BufferedUart::new(
                     board.serial.usart3,
                     board.serial.usart3_rx,
@@ -376,29 +378,7 @@ pub async fn init(
                     SerialIrqs,
                     uart_config,
                 ) {
-                    Ok(uart) => {
-                        let mut delay = embassy_time::Delay;
-                        match with_timeout(Duration::from_secs(3), GpsDriver::new(uart, &mut delay))
-                            .await
-                        {
-                            Ok(Ok(gps)) => {
-                                defmt::info!("GPS u-blox init OK on USART3");
-                                spawner
-                                    .spawn(crate::sensors::gps::gps_task(GpsRunner::new(gps)))
-                                    .unwrap_or_else(|e| {
-                                        defmt::error!("Failed to spawn GPS task: {}", e)
-                                    });
-                            }
-                            Ok(Err(e)) => {
-                                GPS_HEALTH.lock(|c| c.set(GpsHealth::InitFailed(err_kind(&e))));
-                                defmt::warn!("GPS init failed: {}", e);
-                            }
-                            Err(_) => {
-                                GPS_HEALTH.lock(|c| c.set(GpsHealth::InitTimedOut));
-                                defmt::warn!("GPS init timed out (no module?)");
-                            }
-                        }
-                    }
+                    Ok(uart) => init_gps_uart(uart, spawner).await,
                     Err(e) => {
                         GPS_HEALTH.lock(|c| c.set(GpsHealth::UartInitFailed));
                         defmt::error!("GPS USART3 init failed: {}", e);
@@ -419,6 +399,9 @@ pub async fn init(
         static I2C1_BUS: StaticCell<I2cBusMtx> = StaticCell::new();
         let mut i2c_config = hal::i2c::Config::default();
         i2c_config.frequency = Hertz(400_000);
+        i2c_config.sda_pullup = true;
+        i2c_config.scl_pullup = true;
+        i2c_config.timeout = Duration::from_millis(20);
         let i2c1 = hal::i2c::I2c::new(
             board.i2c.i2c1,
             board.i2c.i2c1_scl,
@@ -428,21 +411,30 @@ pub async fn init(
             board.i2c.i2c1_rx_dma,
             i2c_config,
         );
+        Timer::after_millis(5).await;
         let i2c1_bus: &'static I2cBusMtx = I2C1_BUS.init(Mutex::<NoopRawMutex, _>::new(i2c1));
 
-        // 1. Probe & init QMC5883L external compass (0x0D)
+        // 1. Probe & init QMC5883L external compass (0x0D) with bounded timeout
         let mut probe_dev = I2cDevice::new(i2c1_bus);
-        let mag_opt = if Qmc5883l::probe(&mut probe_dev).await {
+        let qmc_found = matches!(
+            with_timeout(Duration::from_millis(100), Qmc5883l::probe(&mut probe_dev)).await,
+            Ok(true)
+        );
+        let mag_opt = if qmc_found {
             defmt::info!("I2C1: QMC5883L found, initializing...");
             let dev = I2cDevice::new(i2c1_bus);
             let mut delay = embassy_time::Delay;
-            match Qmc5883l::new(dev, &mut delay).await {
-                Ok(mag) => {
+            match with_timeout(Duration::from_millis(200), Qmc5883l::new(dev, &mut delay)).await {
+                Ok(Ok(mag)) => {
                     defmt::info!("QMC5883L init OK");
                     Some(mag)
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     defmt::warn!("QMC5883L init failed: {}", e);
+                    None
+                }
+                Err(_) => {
+                    defmt::warn!("QMC5883L init timed out");
                     None
                 }
             }
@@ -451,22 +443,39 @@ pub async fn init(
             None
         };
 
-        // 2. Probe & init SPL06 barometer (0x76)
+        // 2. Probe & init SPL06 barometer (0x76) with bounded timeout
         let mut probe_dev = I2cDevice::new(i2c1_bus);
-        let baro_opt = if Spl06::probe_i2c(&mut probe_dev, bsp::sensors::BARO_1_I2C_ADDR).await {
+        let spl_found = matches!(
+            with_timeout(
+                Duration::from_millis(100),
+                Spl06::probe_i2c(&mut probe_dev, bsp::sensors::BARO_1_I2C_ADDR),
+            )
+            .await,
+            Ok(true)
+        );
+        let baro_opt = if spl_found {
             defmt::info!(
                 "I2C1: SPL06 found at {:#x}, initializing...",
                 bsp::sensors::BARO_1_I2C_ADDR
             );
             let dev = I2cDevice::new(i2c1_bus);
             let mut delay = embassy_time::Delay;
-            match Spl06::new_i2c(dev, bsp::sensors::BARO_1_I2C_ADDR, &mut delay).await {
-                Ok(baro) => {
+            match with_timeout(
+                Duration::from_millis(250),
+                Spl06::new_i2c(dev, bsp::sensors::BARO_1_I2C_ADDR, &mut delay),
+            )
+            .await
+            {
+                Ok(Ok(baro)) => {
                     defmt::info!("SPL06 init OK");
                     Some(baro)
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     defmt::warn!("SPL06 init failed: {}", e);
+                    None
+                }
+                Err(_) => {
+                    defmt::warn!("SPL06 init timed out");
                     None
                 }
             }
@@ -503,6 +512,7 @@ pub async fn init(
         bsp::SerialPortId::Usart1 => {
             let mut uart_config = hal::usart::Config::default();
             uart_config.baudrate = 460_800;
+            uart_config.rx_pull = hal::gpio::Pull::Up;
 
             match hal::usart::Uart::new(
                 board.serial.usart1,
@@ -620,4 +630,108 @@ pub async fn init(
     spawner
         .spawn(power_task(power_mon))
         .unwrap_or_else(|_| defmt::error!("Failed to spawn power task"));
+}
+
+#[cfg(all(feature = "est_pos_gps", not(feature = "gps_unicore")))]
+async fn init_gps_uart(mut uart: hal::usart::BufferedUart<'static>, spawner: &Spawner) {
+    use core::sync::atomic::Ordering;
+    use crate::sensors::gps::{
+        GPS_DETECTED_BAUD, GPS_HEALTH, GPS_PROBE_RX_BYTES, GpsHealth, err_kind,
+    };
+    use embedded_io_async::{ErrorType, Read, Write};
+
+    struct CountingRw<'a, T>(&'a mut T);
+    impl<T: ErrorType> ErrorType for CountingRw<'_, T> {
+        type Error = T::Error;
+    }
+    impl<T: Read> Read for CountingRw<'_, T> {
+        async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
+            let n = self.0.read(buf).await?;
+            GPS_PROBE_RX_BYTES.fetch_add(n as u32, Ordering::Relaxed);
+            Ok(n)
+        }
+    }
+    impl<T: Write> Write for CountingRw<'_, T> {
+        async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+            self.0.write(buf).await
+        }
+        async fn flush(&mut self) -> Result<(), Self::Error> {
+            self.0.flush().await
+        }
+    }
+
+    GPS_PROBE_RX_BYTES.store(0, Ordering::Relaxed);
+    GPS_DETECTED_BAUD.store(0, Ordering::Relaxed);
+    Timer::after_millis(250).await;
+
+    const CANDIDATE_BAUDS: [u32; 5] = [115_200, 230_400, 38_400, 57_600, 9_600];
+    let mut last_err = None;
+
+    for &baud in &CANDIDATE_BAUDS {
+        let _ = uart.set_baudrate(baud);
+        // Drain any stale / wrong-baud framing bytes from the RX ring
+        let mut drain_buf = [0u8; 64];
+        while let Ok(Ok(n)) = with_timeout(
+            Duration::from_millis(10),
+            embedded_io_async::Read::read(&mut uart, &mut drain_buf),
+        )
+        .await
+        {
+            if n == 0 {
+                break;
+            }
+            GPS_PROBE_RX_BYTES.fetch_add(n as u32, Ordering::Relaxed);
+        }
+
+        let mut rw = CountingRw(&mut uart);
+        match with_timeout(Duration::from_millis(550), GpsDriver::configure_once(&mut rw)).await {
+            Ok(Ok(())) => {
+                GPS_DETECTED_BAUD.store(baud, Ordering::Relaxed);
+                defmt::info!("GPS u-blox init OK at {} baud", baud);
+                spawner
+                    .spawn(crate::sensors::gps::gps_task(GpsRunner::new(
+                        GpsDriver::from_configured(uart),
+                    )))
+                    .unwrap_or_else(|e| defmt::error!("Failed to spawn GPS task: {}", e));
+                return;
+            }
+            Ok(Err(e)) => {
+                last_err = Some(err_kind(&e));
+            }
+            Err(_) => {}
+        }
+    }
+
+    if let Some(k) = last_err {
+        GPS_HEALTH.lock(|c| c.set(GpsHealth::InitFailed(k)));
+        defmt::warn!("GPS init failed across all candidate baudrates");
+    } else {
+        GPS_HEALTH.lock(|c| c.set(GpsHealth::InitTimedOut));
+        defmt::warn!(
+            "GPS init timed out across all baudrates (rx_bytes={})",
+            GPS_PROBE_RX_BYTES.load(Ordering::Relaxed)
+        );
+    }
+}
+
+#[cfg(all(feature = "est_pos_gps", feature = "gps_unicore"))]
+async fn init_gps_uart(uart: hal::usart::BufferedUart<'static>, spawner: &Spawner) {
+    use core::sync::atomic::Ordering;
+    use crate::sensors::gps::{GPS_DETECTED_BAUD, GPS_HEALTH, GpsHealth, err_kind};
+    let mut delay = embassy_time::Delay;
+    match with_timeout(Duration::from_secs(3), GpsDriver::new(uart, &mut delay)).await {
+        Ok(Ok(gps)) => {
+            GPS_DETECTED_BAUD.store(115_200, Ordering::Relaxed);
+            defmt::info!("GPS Unicore init OK at 115200 baud");
+            spawner
+                .spawn(crate::sensors::gps::gps_task(GpsRunner::new(gps)))
+                .unwrap_or_else(|e| defmt::error!("Failed to spawn GPS task: {}", e));
+        }
+        Ok(Err(e)) => {
+            GPS_HEALTH.lock(|c| c.set(GpsHealth::InitFailed(err_kind(&e))));
+        }
+        Err(_) => {
+            GPS_HEALTH.lock(|c| c.set(GpsHealth::InitTimedOut));
+        }
+    }
 }

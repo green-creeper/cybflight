@@ -83,6 +83,12 @@ pub fn carr_soln_str(c: u8) -> &'static str {
 pub static GPS_HEALTH: Mutex<CriticalSectionRawMutex, Cell<GpsHealth>> =
     Mutex::new(Cell::new(GpsHealth::NotConfigured));
 
+/// Diagnostic counters populated during UART baudrate auto-detection:
+/// - `GPS_DETECTED_BAUD`: active baudrate once u-blox/Unicore init succeeds (0 if uninitialized).
+/// - `GPS_PROBE_RX_BYTES`: total RX bytes observed across candidate baudrates during init.
+pub static GPS_DETECTED_BAUD: AtomicU32 = AtomicU32::new(0);
+pub static GPS_PROBE_RX_BYTES: AtomicU32 = AtomicU32::new(0);
+
 /// Latest NAV-PVT snapshot, writeable from the GPS task and readable from
 /// any shell context. Held as `Option` so the shell can distinguish "no
 /// fix yet" from "stale fix"; pair the snapshot's `timestamp` with
@@ -163,17 +169,26 @@ impl core::fmt::Display for GpsHealth {
             GpsHealth::UartInitFailed => write!(f, "GPS: UART init failed"),
             GpsHealth::InitTimedOut => write!(
                 f,
-                "GPS: init timed out (no response from module — check baud/wiring/power)"
+                "GPS: init timed out (rx_bytes={} — check baud/wiring/power)",
+                GPS_PROBE_RX_BYTES.load(Ordering::Relaxed)
             ),
-            GpsHealth::InitFailed(k) => write!(f, "GPS: init failed ({})", err_kind_str(*k)),
+            GpsHealth::InitFailed(k) => write!(
+                f,
+                "GPS: init failed ({}, rx_bytes={})",
+                err_kind_str(*k),
+                GPS_PROBE_RX_BYTES.load(Ordering::Relaxed)
+            ),
             GpsHealth::Waiting {
                 fix_type,
                 num_sv,
                 h_acc_mm,
             } => write!(
                 f,
-                "GPS: waiting for lock (fix_type={}, num_sv={}, h_acc={}mm)",
-                fix_type, num_sv, h_acc_mm
+                "GPS: waiting for lock (baud={}, fix_type={}, num_sv={}, h_acc={}mm)",
+                GPS_DETECTED_BAUD.load(Ordering::Relaxed),
+                fix_type,
+                num_sv,
+                h_acc_mm
             ),
             GpsHealth::Locked {
                 fix_type,
@@ -387,6 +402,7 @@ impl GpsRunner {
                 Err(e) => {
                     GPS_HEALTH.lock(|c| c.set(GpsHealth::ReadError(err_kind(&e))));
                     defmt::warn!("GPS read error: {}", e);
+                    embassy_time::Timer::after_millis(2).await;
                 }
             }
         }

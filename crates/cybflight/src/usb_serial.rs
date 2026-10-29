@@ -14,9 +14,11 @@ use crate::sensors::gps::{
     GPS_HEALTH, LATEST_GPS_HEADING, LATEST_NAV_PVT, NAV_PVT_MAX_INTERVAL_RECENT_US,
     NAV_PVT_MEAN_INTERVAL_RECENT_US, carr_soln_str,
 };
+#[cfg(any(feature = "est_pos_mocap", feature = "est_pos_gps"))]
+use crate::sensors::MAHONY_ATTITUDE;
 use crate::sensors::{
-    BARO_1, BARO_2, DSHOT_TELEMETRY, GPS_FIX, IMU_1, IMU_2, MAG_EXT, MAG_INT, POWER_STATUS,
-    RC_INPUT, RC_LINK_STATUS, VEHICLE_ATTITUDE, VICON_POSE,
+    BARO_1, BARO_2, DSHOT_TELEMETRY, GPS_FIX, IMU_1, IMU_1_DECIM, IMU_2, MAG_EXT, MAG_INT,
+    POWER_STATUS, RC_INPUT, RC_LINK_STATUS, VEHICLE_ATTITUDE, VICON_POSE,
 };
 use crate::shell::SHELL_OUT;
 use crate::shell::ShellLine;
@@ -61,10 +63,12 @@ const HELP_TEXT: &[u8] = b"\
   eskf                 one-shot estimator status\r\n\
   health               aggregated arming/health snapshot\r\n\
   resetcause           why the board last reset (IWDG / brownout / pin / POR)\r\n\
+  version              print firmware version, git hash, board and vehicle\r\n\
   stream <topic> on    stream data on <topic>\r\n\
   stream <topic> off   stop data stream on <topic>\r\n\
-                       (topics: imu1 imu2 att ocp rc rcstats dshot gps gpsrtk\r\n\
-                        magext magint baro1 baro2 attcontrol vicon timesync eskf)\r\n\
+  stream off           stop all active data streams\r\n\
+                       (topics: imu1 imu2 att ocp rc rcstats dshot power gps\r\n\
+                        gpsrtk magext magint baro1 baro2 attcontrol vicon timesync eskf)\r\n\
   motor <1-4> <0-100>  set motor throttle (test mode)\r\n\
   param list           list all vehicle parameters\r\n\
   param get <name>     get a parameter value\r\n\
@@ -123,12 +127,43 @@ pub static STREAM_VICON: AtomicBool = AtomicBool::new(false);
 pub static STREAM_TIMESYNC: AtomicBool = AtomicBool::new(false);
 pub static STREAM_ESKF: AtomicBool = AtomicBool::new(false);
 
+/// Minimum interval between formatted ASCII frames per stream topic (50 Hz max).
+/// Prevents high-rate topics (8 kHz IMU / 3.7 kHz DShot) from monopolizing
+/// the thread executor in a ready-loop and starving `iwdg_feed_task`.
+const STREAM_MIN_INTERVAL: Duration = Duration::from_millis(20);
+
+/// Sleep cadence for disabled stream tasks so high-rate publishers never pay
+/// `CriticalSection` waker overhead when USB streaming is off.
+const STREAM_IDLE_POLL: Duration = Duration::from_millis(50);
+
+fn disable_all_streams() {
+    STREAM_IMU1.store(false, Ordering::Relaxed);
+    STREAM_IMU2.store(false, Ordering::Relaxed);
+    STREAM_ATT.store(false, Ordering::Relaxed);
+    STREAM_OCP.store(false, Ordering::Relaxed);
+    STREAM_RC.store(false, Ordering::Relaxed);
+    STREAM_RC_LINK.store(false, Ordering::Relaxed);
+    STREAM_DSHOT.store(false, Ordering::Relaxed);
+    STREAM_POWER.store(false, Ordering::Relaxed);
+    STREAM_GPS.store(false, Ordering::Relaxed);
+    STREAM_GPSRTK.store(false, Ordering::Relaxed);
+    STREAM_MAGEXT.store(false, Ordering::Relaxed);
+    STREAM_MAGINT.store(false, Ordering::Relaxed);
+    STREAM_BARO1.store(false, Ordering::Relaxed);
+    STREAM_BARO2.store(false, Ordering::Relaxed);
+    STREAM_ATTITUDE_CONTROL.store(false, Ordering::Relaxed);
+    STREAM_VICON.store(false, Ordering::Relaxed);
+    STREAM_TIMESYNC.store(false, Ordering::Relaxed);
+    STREAM_ESKF.store(false, Ordering::Relaxed);
+}
+
 // ---------------------------------------------------------------------------
 // Generic stream bridge + concrete embassy task wrappers
 // ---------------------------------------------------------------------------
 
 /// Forwards messages from a pub/sub channel to the `SHELL_OUT` queue while
-/// `enabled` is set.  One instance runs per topic, permanently.
+/// `enabled` is set, coalescing bursts to the latest sample and capping output
+/// to <= 50 Hz.  One instance runs per topic, permanently.
 pub async fn msg_stream_task<
     M: msgs::Message,
     const CAP: usize,
@@ -144,25 +179,38 @@ where
     let mut sub = sub
         .subscriber()
         .expect("Programmer error: subscriber slots exhausted");
+    let mut was_enabled = false;
     loop {
-        match sub.next_message().await {
-            WaitResult::Message(msg) => {
-                if enabled.load(Ordering::Relaxed) {
-                    let mut line = ShellLine::new();
-                    line.format(|w| {
-                        write!(w, "{}\r\n", ShellMsg(&msg)).ok();
-                    });
-                    SHELL_OUT.try_send(line).ok();
-                }
+        if !enabled.load(Ordering::Relaxed) {
+            was_enabled = false;
+            Timer::after(STREAM_IDLE_POLL).await;
+            continue;
+        }
+        if !was_enabled {
+            was_enabled = true;
+            while sub.try_next_message_pure().is_some() {}
+        }
+        if let Ok(mut msg) = with_timeout(Duration::from_millis(100), next_message(&mut sub)).await
+        {
+            while let Some(newer) = sub.try_next_message_pure() {
+                msg = newer;
             }
-            WaitResult::Lagged(_) => {} // subscriber behind publisher — expected for high-rate topics
+            if enabled.load(Ordering::Relaxed) {
+                let mut line = ShellLine::new();
+                line.format(|w| {
+                    write!(w, "{}\r\n", ShellMsg(&msg)).ok();
+                });
+                SHELL_OUT.try_send(line).ok();
+            }
+            embassy_futures::yield_now().await;
+            Timer::after(STREAM_MIN_INTERVAL).await;
         }
     }
 }
 
 #[embassy_executor::task]
 pub async fn imu1_stream_task() {
-    msg_stream_task(&IMU_1, &STREAM_IMU1).await
+    msg_stream_task(&IMU_1_DECIM, &STREAM_IMU1).await
 }
 
 #[embassy_executor::task]
@@ -172,7 +220,77 @@ pub async fn imu2_stream_task() {
 
 #[embassy_executor::task]
 pub async fn att_stream_task() {
-    msg_stream_task(&VEHICLE_ATTITUDE, &STREAM_ATT).await
+    #[cfg(not(any(feature = "est_pos_mocap", feature = "est_pos_gps")))]
+    {
+        msg_stream_task(&VEHICLE_ATTITUDE, &STREAM_ATT).await
+    }
+    #[cfg(any(feature = "est_pos_mocap", feature = "est_pos_gps"))]
+    {
+        let mut veh_sub = VEHICLE_ATTITUDE
+            .subscriber()
+            .expect("Programmer error: VEHICLE_ATTITUDE subscriber slots exhausted");
+        let mut mahony_sub = MAHONY_ATTITUDE
+            .subscriber()
+            .expect("Programmer error: MAHONY_ATTITUDE subscriber slots exhausted");
+        let mut was_enabled = false;
+        loop {
+            if !STREAM_ATT.load(Ordering::Relaxed) {
+                was_enabled = false;
+                Timer::after(STREAM_IDLE_POLL).await;
+                continue;
+            }
+            if !was_enabled {
+                was_enabled = true;
+                while veh_sub.try_next_message_pure().is_some() {}
+                while mahony_sub.try_next_message_pure().is_some() {}
+            }
+            let awaiting = matches!(
+                ESTIMATOR_STATUS.lock(|c| c.get()),
+                EstimatorPhase::AwaitingExteroceptive
+            );
+            let next_att = if awaiting {
+                while veh_sub.try_next_message_pure().is_some() {}
+                match with_timeout(Duration::from_millis(100), next_message(&mut mahony_sub)).await
+                {
+                    Ok(mut msg) => {
+                        while let Some(newer) = mahony_sub.try_next_message_pure() {
+                            msg = newer;
+                        }
+                        Some(msg)
+                    }
+                    Err(_) => None,
+                }
+            } else {
+                match with_timeout(Duration::from_millis(100), next_message(&mut veh_sub)).await {
+                    Ok(mut msg) => {
+                        while let Some(newer) = veh_sub.try_next_message_pure() {
+                            msg = newer;
+                        }
+                        while mahony_sub.try_next_message_pure().is_some() {}
+                        Some(msg)
+                    }
+                    Err(_) => {
+                        let mut fallback = None;
+                        while let Some(newer) = mahony_sub.try_next_message_pure() {
+                            fallback = Some(newer);
+                        }
+                        fallback
+                    }
+                }
+            };
+            if let Some(msg) = next_att {
+                if STREAM_ATT.load(Ordering::Relaxed) {
+                    let mut line = ShellLine::new();
+                    line.format(|w| {
+                        write!(w, "{}\r\n", ShellMsg(&msg)).ok();
+                    });
+                    SHELL_OUT.try_send(line).ok();
+                }
+                embassy_futures::yield_now().await;
+                Timer::after(STREAM_MIN_INTERVAL).await;
+            }
+        }
+    }
 }
 
 #[embassy_executor::task]
@@ -527,24 +645,7 @@ pub async fn run(
 
 async fn shell_loop<'d>(class: &mut CdcAcmClass<'d, UsbDriver<'d>>) {
     // Reset stream flags so a fresh connection starts silent.
-    STREAM_IMU1.store(false, Ordering::Relaxed);
-    STREAM_IMU2.store(false, Ordering::Relaxed);
-    STREAM_ATT.store(false, Ordering::Relaxed);
-    STREAM_OCP.store(false, Ordering::Relaxed);
-    STREAM_RC.store(false, Ordering::Relaxed);
-    STREAM_RC_LINK.store(false, Ordering::Relaxed);
-    STREAM_DSHOT.store(false, Ordering::Relaxed);
-    STREAM_POWER.store(false, Ordering::Relaxed);
-    STREAM_GPS.store(false, Ordering::Relaxed);
-    STREAM_GPSRTK.store(false, Ordering::Relaxed);
-    STREAM_MAGEXT.store(false, Ordering::Relaxed);
-    STREAM_MAGINT.store(false, Ordering::Relaxed);
-    STREAM_BARO1.store(false, Ordering::Relaxed);
-    STREAM_BARO2.store(false, Ordering::Relaxed);
-    STREAM_ATTITUDE_CONTROL.store(false, Ordering::Relaxed);
-    STREAM_VICON.store(false, Ordering::Relaxed);
-    STREAM_TIMESYNC.store(false, Ordering::Relaxed);
-    STREAM_ESKF.store(false, Ordering::Relaxed);
+    disable_all_streams();
 
     // 96 (not 64): must fit the longest legal command line —
     // `blackbox get <32-char name> <u32 offset> <u32 len>` is 67.
@@ -552,16 +653,25 @@ async fn shell_loop<'d>(class: &mut CdcAcmClass<'d, UsbDriver<'d>>) {
     let mut line_len = 0usize;
     let mut rx_buf = [0u8; 64];
 
-    let mut banner_buf = [0u8; 160];
+    let mut banner_buf = [0u8; 224];
     let mut w = WriteBuf::new(&mut banner_buf);
+    #[cfg(feature = "postmortem")]
+    let safe_tag = if crate::postmortem::recovery::in_safe_mode() {
+        " [SAFE MODE - run 'postmortem show' or 'reboot']"
+    } else {
+        ""
+    };
+    #[cfg(not(feature = "postmortem"))]
+    let safe_tag = "";
     let _ = write!(
         w,
-        "cybflight v{} ({}) {} [{}] vehicle={}\r\ntype 'help' for commands\r\n\r\n> ",
+        "cybflight v{} ({}) {} [{}] vehicle={}{}\r\ntype 'help' for commands\r\n\r\n> ",
         crate::BUILD_VERSION,
         crate::GIT_HASH,
         crate::BUILD_TIMESTAMP,
         crate::bsp::BOARD_NAME,
         crate::vehicle::BAKED_VEHICLE,
+        safe_tag,
     );
 
     if write_all(class, w.as_slice()).await.is_err() {
@@ -689,7 +799,33 @@ async fn dispatch<'d>(
         "resetcause" => {
             dispatch_resetcause(class).await?;
         }
+        "version" => {
+            let mut buf = [0u8; 192];
+            let mut w = WriteBuf::new(&mut buf);
+            let _ = write!(
+                w,
+                "cybflight v{} ({}) {} [{}] vehicle={}\r\n",
+                crate::BUILD_VERSION,
+                crate::GIT_HASH,
+                crate::BUILD_TIMESTAMP,
+                crate::bsp::BOARD_NAME,
+                crate::vehicle::BAKED_VEHICLE,
+            );
+            write_all(class, w.as_slice()).await?;
+        }
         "att" => {
+            #[cfg(any(feature = "est_pos_mocap", feature = "est_pos_gps"))]
+            if matches!(
+                ESTIMATOR_STATUS.lock(|c| c.get()),
+                EstimatorPhase::AwaitingExteroceptive
+            ) {
+                let mut sub = match MAHONY_ATTITUDE.subscriber() {
+                    Ok(s) => s,
+                    Err(_) => return write_all(class, b"error: no subscriber slot\r\n").await,
+                };
+                oneshot(class, &mut sub, 256).await?;
+                return Ok(());
+            }
             let mut sub = match VEHICLE_ATTITUDE.subscriber() {
                 Ok(s) => s,
                 Err(_) => return write_all(class, b"error: no subscriber slot\r\n").await,
@@ -1103,6 +1239,10 @@ async fn dispatch<'d>(
         "stream eskf off" => {
             STREAM_ESKF.store(false, Ordering::Relaxed);
             write_all(class, b"ESKF status stream off\r\n").await?;
+        }
+        "stream off" => {
+            disable_all_streams();
+            write_all(class, b"all streams off\r\n").await?;
         }
         "health" => {
             // Read from the latest-frame cells populated by the RC task.
@@ -1791,20 +1931,92 @@ async fn dispatch_blackbox_clean<'d>(
     }
 }
 
-/// `postmortem show` — print the prior-boot crash record.
+/// `postmortem show` — print the prior-boot crash record and current boot slot.
 ///
-/// Reads BKPSRAM directly via [`crate::postmortem::recovery::current_boot_record`]
-/// (idempotent — the Signal-based `take_pending` is reserved for the
-/// blackbox recorder's single-shot mirror). Prints reset cause, fatal
-/// kind + register summary, last-N events, and the most recent
-/// snapshot.
+/// Reads both the latched prior-boot record ([`crate::postmortem::recovery::prior_boot_record`])
+/// and the current boot's live BKPSRAM slot ([`crate::postmortem::recovery::current_boot_record`]).
 #[cfg(feature = "postmortem")]
 async fn dispatch_postmortem_show<'d>(
     class: &mut CdcAcmClass<'d, UsbDriver<'d>>,
 ) -> Result<(), EndpointError> {
+    use crate::postmortem::bkpsram::PANIC_TEXT_MAX_BYTES;
     use crate::postmortem::record::{self as pmrec, FatalKind};
     use crate::postmortem::recovery;
     use crate::postmortem::reset_cause;
+
+    if recovery::in_safe_mode() {
+        write_all(
+            class,
+            b"postmortem: [SAFE MODE ACTIVE - prior boot crashed early; run 'reboot' to retry normal boot]\r\n",
+        )
+        .await?;
+    }
+
+    let mut panic_buf = [0u8; PANIC_TEXT_MAX_BYTES];
+    let panic_len = recovery::prior_panic_text(&mut panic_buf);
+
+    if let Some(prior) = recovery::prior_boot_record() {
+        let this_boot_cause = reset_cause::read();
+        let this_boot_cause_kind = reset_cause::classify(this_boot_cause);
+        let fatal_kind = FatalKind::from_u8(prior.fatal.kind);
+        let mut buf = [0u8; 256];
+        let mut w = WriteBuf::new(&mut buf);
+        let _ = write!(
+            w,
+            "prior boot {} (exit_reset_cause=0x{:08x} {:?}, fw=0x{:08x}, uptime={}ms)\r\n",
+            prior.header.boot_count,
+            this_boot_cause,
+            this_boot_cause_kind,
+            prior.header.fw_git_hash,
+            prior.header.uptime_ms,
+        );
+        write_all(class, w.as_slice()).await?;
+
+        if !matches!(fatal_kind, FatalKind::None) {
+            let mut buf = [0u8; 256];
+            let mut w = WriteBuf::new(&mut buf);
+            let _ = write!(
+                w,
+                "  fatal: {:?}  pc=0x{:08x} lr=0x{:08x} psr=0x{:08x}\r\n\
+                 \x20        cfsr=0x{:08x} hfsr=0x{:08x} mmfar=0x{:08x} bfar=0x{:08x}\r\n",
+                fatal_kind,
+                prior.fatal.pc,
+                prior.fatal.lr,
+                prior.fatal.psr,
+                prior.fatal.cfsr,
+                prior.fatal.hfsr,
+                prior.fatal.mmfar,
+                prior.fatal.bfar,
+            );
+            write_all(class, w.as_slice()).await?;
+        }
+        if let Some(n) = panic_len {
+            let msg = core::str::from_utf8(&panic_buf[..n]).unwrap_or("<non-utf8 panic>");
+            write_all(class, b"  panic: ").await?;
+            write_all(class, msg.as_bytes()).await?;
+            write_all(class, b"\r\n").await?;
+        }
+        let mut prior_ev = 0u32;
+        for ev in prior.events_in_order() {
+            let mut buf = [0u8; 96];
+            let mut w = WriteBuf::new(&mut buf);
+            let _ = write!(
+                w,
+                "  prior_ev[{}] @{}ms kind=0x{:02x} data=0x{:08x}\r\n",
+                ev.seq, ev.timestamp_ms, ev.kind, ev.data,
+            );
+            write_all(class, w.as_slice()).await?;
+            prior_ev += 1;
+            if prior_ev >= pmrec::EVENT_RING_LEN as u32 {
+                break;
+            }
+        }
+    } else if let Some(n) = panic_len {
+        let msg = core::str::from_utf8(&panic_buf[..n]).unwrap_or("<non-utf8 panic>");
+        write_all(class, b"prior panic: ").await?;
+        write_all(class, msg.as_bytes()).await?;
+        write_all(class, b"\r\n").await?;
+    }
 
     let rec = recovery::current_boot_record();
     let valid = pmrec::is_valid(&rec);
@@ -1888,7 +2100,7 @@ async fn dispatch_postmortem_show<'d>(
     write_all(class, w.as_slice()).await
 }
 
-/// `postmortem clear` — wipe the BKPSRAM slot.
+/// `postmortem clear` — wipe the BKPSRAM slot and latched prior-boot snapshot.
 ///
 /// Used after a developer has inspected `postmortem show` and wants
 /// to ensure the next boot starts clean. The next boot will still
@@ -1898,6 +2110,7 @@ async fn dispatch_postmortem_show<'d>(
 async fn dispatch_postmortem_clear<'d>(
     class: &mut CdcAcmClass<'d, UsbDriver<'d>>,
 ) -> Result<(), EndpointError> {
+    crate::postmortem::recovery::clear_prior_snapshot();
     crate::postmortem::bkpsram::with_record_mut(|r| {
         crate::postmortem::record::clear(r);
     });
@@ -3001,6 +3214,30 @@ async fn dispatch_imurate<'d>(
             None => {
                 write!(w, "  {}: no data (timeout)\r\n", name).ok();
             }
+        }
+        write_all(class, w.as_slice()).await?;
+    }
+    {
+        let mut buf = [0u8; 160];
+        let mut w = WriteBuf::new(&mut buf);
+        if crate::sensors::imu::IMU1_GYRO_CALIBRATED.load(Ordering::Acquire) {
+            let bx = f32::from_bits(
+                crate::sensors::imu::IMU1_GYRO_BIAS_BITS[0].load(Ordering::Relaxed),
+            );
+            let by = f32::from_bits(
+                crate::sensors::imu::IMU1_GYRO_BIAS_BITS[1].load(Ordering::Relaxed),
+            );
+            let bz = f32::from_bits(
+                crate::sensors::imu::IMU1_GYRO_BIAS_BITS[2].load(Ordering::Relaxed),
+            );
+            write!(
+                w,
+                "  imu1 gyro_cal: calibrated bias=[{:+.4}, {:+.4}, {:+.4}] rad/s\r\n",
+                bx, by, bz,
+            )
+            .ok();
+        } else {
+            write!(w, "  imu1 gyro_cal: calibrating (hold stationary for 1s)\r\n").ok();
         }
         write_all(class, w.as_slice()).await?;
     }

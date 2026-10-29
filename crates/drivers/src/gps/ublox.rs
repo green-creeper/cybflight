@@ -29,8 +29,22 @@ const UBX_ACK_ACK: u8 = 0x01;
 const UBX_ACK_NAK: u8 = 0x00;
 
 const UBX_CFG_MSG: u8 = 0x01;
+const UBX_CFG_VALSET: u8 = 0x8A;
 
 const NAV_PVT_LEN: u16 = 92;
+
+/// `UBX-CFG-VALSET` (RAM layer `0x01`, version `0x00`) payload configuring:
+/// - `CFG_UART1OUTPROT_UBX` (`0x1074_0001`, 1-byte bool) = `1`
+/// - `CFG_UART1OUTPROT_NMEA` (`0x1074_0002`, 1-byte bool) = `0`
+/// - `CFG_MSGOUT_UBX_NAV_PVT_UART1` (`0x2091_0007`, 1-byte u8) = `1`
+/// Required for u-blox Gen 10 (M10 / Flywoo GM10 V3, protocol >= 40.00 where
+/// legacy `CFG-MSG` is removed) and also supported on Gen 9 (M9N / F9P).
+const VALSET_NAV_PVT_UART1: [u8; 19] = [
+    0x00, 0x01, 0x00, 0x00, // version=0, layers=RAM(0x01), reserved=[0,0]
+    0x01, 0x00, 0x74, 0x10, 0x01, // CFG_UART1OUTPROT_UBX = true
+    0x02, 0x00, 0x74, 0x10, 0x00, // CFG_UART1OUTPROT_NMEA = false
+    0x07, 0x00, 0x91, 0x20, 0x01, // CFG_MSGOUT_UBX_NAV_PVT_UART1 = 1
+];
 
 // ---------------------------------------------------------------------------
 // Types
@@ -143,58 +157,98 @@ impl<RW> Ublox<RW>
 where
     RW: Read + Write,
 {
+    /// Wrap an already-configured transport (`configure_once` succeeded).
+    pub fn from_configured(rw: RW) -> Self {
+        Self { rw }
+    }
+
+    /// Perform a single configuration handshake on `&mut RW` without taking
+    /// ownership, allowing callers to probe multiple UART baudrates.
+    ///
+    /// Tries `UBX-CFG-VALSET` (`0x06 0x8A`, supported on u-blox M9/F9/M10)
+    /// first, falling back to legacy `UBX-CFG-MSG` (`0x06 0x01`, u-blox M8)
+    /// if the receiver replies with `ACK-NAK`. Also succeeds immediately if a
+    /// valid `UBX-NAV-PVT` frame is already streaming on the port.
+    pub async fn configure_once(rw: &mut RW) -> Result<(), Error<RW::Error>> {
+        const FRAMES_PER_ATTEMPT: u8 = 24;
+        let mut drv = Ublox { rw };
+
+        let mut valset_frame = [0u8; 32];
+        let valset_len = build_frame(
+            &mut valset_frame,
+            UBX_CLASS_CFG,
+            UBX_CFG_VALSET,
+            &VALSET_NAV_PVT_UART1,
+        );
+        drv.rw
+            .write_all(&valset_frame[..valset_len])
+            .await
+            .map_err(Error::Io)?;
+
+        match drv
+            .scan_for_ack_or_pvt(UBX_CLASS_CFG, UBX_CFG_VALSET, FRAMES_PER_ATTEMPT)
+            .await?
+        {
+            AckOutcome::Acked => {
+                defmt::info!("UBX: NAV-PVT enabled via CFG-VALSET");
+                return Ok(());
+            }
+            AckOutcome::Naked => {
+                // Legacy u-blox M8 rejects 0x06 0x8A -> fall back to CFG-MSG (0x06 0x01).
+                let payload = [UBX_CLASS_NAV, UBX_NAV_PVT, 1];
+                let mut msg_frame = [0u8; 16];
+                let msg_len = build_frame(&mut msg_frame, UBX_CLASS_CFG, UBX_CFG_MSG, &payload);
+                drv.rw
+                    .write_all(&msg_frame[..msg_len])
+                    .await
+                    .map_err(Error::Io)?;
+                match drv
+                    .scan_for_ack_or_pvt(UBX_CLASS_CFG, UBX_CFG_MSG, FRAMES_PER_ATTEMPT)
+                    .await?
+                {
+                    AckOutcome::Acked => {
+                        defmt::info!("UBX: NAV-PVT enabled via legacy CFG-MSG");
+                        return Ok(());
+                    }
+                    AckOutcome::Naked => return Err(Error::Nak),
+                    AckOutcome::Exhausted => return Err(Error::Timeout),
+                }
+            }
+            AckOutcome::Exhausted => Err(Error::Timeout),
+        }
+    }
+
     /// Initialise the receiver.
     ///
-    /// Repeatedly sends `CFG-MSG NAV-PVT 1` and watches for the matching
-    /// ACK-ACK. Each attempt is bounded by received frame count, not time;
-    /// a silent receiver requires the caller's outer timeout. Returns
-    /// `Error::Nak` if the receiver explicitly rejects the request, or
-    /// `Error::Timeout` if all frame-budgeted attempts are exhausted.
+    /// Repeatedly attempts `CFG-VALSET` (with `CFG-MSG` fallback for M8) and
+    /// watches for the matching ACK-ACK or active `NAV-PVT` frames.
     pub async fn new(
-        rw: RW,
+        mut rw: RW,
         delay: &mut impl embedded_hal_async::delay::DelayNs,
     ) -> Result<Self, Error<RW::Error>> {
         // Initial receiver startup delay; the caller bounds total startup time.
         delay.delay_ms(500).await;
 
-        let mut driver = Self { rw };
-
-        let payload = [UBX_CLASS_NAV, UBX_NAV_PVT, 1];
-        let mut frame = [0u8; 16];
-        let frame_len = build_frame(&mut frame, UBX_CLASS_CFG, UBX_CFG_MSG, &payload);
-
-        // Resend CFG-MSG after scanning a fixed number of unrelated frames.
-        // Silence does not exhaust this budget: read_header can remain pending
-        // until the caller's outer timeout cancels initialization.
         const MAX_ATTEMPTS: u8 = 5;
-        const FRAMES_PER_ATTEMPT: u8 = 30;
         for attempt in 0..MAX_ATTEMPTS {
-            driver
-                .rw
-                .write_all(&frame[..frame_len])
-                .await
-                .map_err(Error::Io)?;
-            match driver
-                .scan_for_ack(UBX_CLASS_CFG, UBX_CFG_MSG, FRAMES_PER_ATTEMPT)
-                .await?
-            {
-                AckOutcome::Acked => {
-                    defmt::info!("UBX: NAV-PVT enabled (attempt {})", attempt);
-                    return Ok(driver);
+            match Self::configure_once(&mut rw).await {
+                Ok(()) => {
+                    defmt::info!("UBX: receiver ready (attempt {})", attempt);
+                    return Ok(Self { rw });
                 }
-                AckOutcome::Naked => return Err(Error::Nak),
-                AckOutcome::Exhausted => {
-                    // Receiver wasn't ready; pause and retry.
+                Err(Error::Nak) => return Err(Error::Nak),
+                Err(Error::Timeout) | Err(Error::BadChecksum) => {
                     delay.delay_ms(500).await;
                 }
+                Err(Error::Io(e)) => return Err(Error::Io(e)),
             }
         }
         Err(Error::Timeout)
     }
 
     /// Read up to `budget` UBX frames looking for ACK-ACK / ACK-NAK matching
-    /// the given class/id.
-    async fn scan_for_ack(
+    /// the given class/id, or an already-active `NAV-PVT` stream.
+    async fn scan_for_ack_or_pvt(
         &mut self,
         expected_class: u8,
         expected_id: u8,
@@ -205,7 +259,7 @@ where
 
             if class == UBX_CLASS_ACK && payload_len == 2 {
                 let mut ack_payload = [0u8; 2];
-                self.read_payload(&mut ack_payload, 2).await?;
+                self.read_payload(class, id, &mut ack_payload, 2).await?;
                 if ack_payload[0] == expected_class && ack_payload[1] == expected_id {
                     if id == UBX_ACK_ACK {
                         return Ok(AckOutcome::Acked);
@@ -214,6 +268,9 @@ where
                         return Ok(AckOutcome::Naked);
                     }
                 }
+            } else if class == UBX_CLASS_NAV && id == UBX_NAV_PVT && payload_len == NAV_PVT_LEN {
+                self.skip_payload(payload_len).await?;
+                return Ok(AckOutcome::Acked);
             } else {
                 self.skip_payload(payload_len).await?;
             }
@@ -228,7 +285,8 @@ where
 
             if class == UBX_CLASS_NAV && id == UBX_NAV_PVT && payload_len == NAV_PVT_LEN {
                 let mut payload = [0u8; NAV_PVT_LEN as usize];
-                self.read_payload(&mut payload, NAV_PVT_LEN).await?;
+                self.read_payload(class, id, &mut payload, NAV_PVT_LEN)
+                    .await?;
                 return Ok(parse_nav_pvt(&payload));
             }
 
@@ -242,38 +300,73 @@ where
     }
 
     /// Sync on UBX header, return (class, id, payload_length).
+    /// Tolerates transient framing/overrun read errors while hunting for sync
+    /// (e.g. immediately after switching UART baudrates).
     async fn read_header(&mut self) -> Result<(u8, u8, u16), Error<RW::Error>> {
+        let mut io_errs: u8 = 0;
+        let mut seen_sync1 = false;
         loop {
             let mut b = [0u8; 1];
-            self.rw.read_exact(&mut b).await.map_err(map_read_err)?;
-            if b[0] != UBX_SYNC_1 {
-                continue;
+            match self.rw.read_exact(&mut b).await {
+                Ok(()) => {}
+                Err(e) => {
+                    seen_sync1 = false;
+                    io_errs = io_errs.saturating_add(1);
+                    if io_errs >= 16 {
+                        return Err(map_read_err(e));
+                    }
+                    continue;
+                }
             }
-            self.rw.read_exact(&mut b).await.map_err(map_read_err)?;
-            if b[0] != UBX_SYNC_2 {
-                continue;
+            if seen_sync1 {
+                if b[0] == UBX_SYNC_2 {
+                    break;
+                }
+                seen_sync1 = b[0] == UBX_SYNC_1;
+            } else if b[0] == UBX_SYNC_1 {
+                seen_sync1 = true;
             }
-            break;
         }
 
         let mut hdr = [0u8; 4]; // class, id, len_lo, len_hi
         self.rw.read_exact(&mut hdr).await.map_err(map_read_err)?;
         let payload_len = u16::from_le_bytes([hdr[2], hdr[3]]);
+        if payload_len > 1024 {
+            return Err(Error::BadChecksum);
+        }
         Ok((hdr[0], hdr[1], payload_len))
     }
 
-    /// Read payload + checksum. Checksum bytes are consumed but not validated;
-    /// the GPS module is treated as a trusted source on a wired bus.
-    async fn read_payload(&mut self, buf: &mut [u8], len: u16) -> Result<(), Error<RW::Error>> {
-        let len = len as usize;
+    /// Read payload + 2-byte Fletcher-8 checksum and verify integrity.
+    async fn read_payload(
+        &mut self,
+        class: u8,
+        id: u8,
+        buf: &mut [u8],
+        len: u16,
+    ) -> Result<(), Error<RW::Error>> {
+        let len_usize = len as usize;
         self.rw
-            .read_exact(&mut buf[..len])
+            .read_exact(&mut buf[..len_usize])
             .await
             .map_err(map_read_err)?;
 
         let mut ck = [0u8; 2];
         self.rw.read_exact(&mut ck).await.map_err(map_read_err)?;
-        let _ = ck;
+
+        let mut ck_a: u8 = 0;
+        let mut ck_b: u8 = 0;
+        let len_le = len.to_le_bytes();
+        for &byte in [class, id, len_le[0], len_le[1]]
+            .iter()
+            .chain(buf[..len_usize].iter())
+        {
+            ck_a = ck_a.wrapping_add(byte);
+            ck_b = ck_b.wrapping_add(ck_a);
+        }
+        if ck[0] != ck_a || ck[1] != ck_b {
+            return Err(Error::BadChecksum);
+        }
         Ok(())
     }
 

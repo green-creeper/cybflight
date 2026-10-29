@@ -402,7 +402,8 @@ fn load_firefly_multipart_stl(stl_dir: &Path) -> (Vec<Tri3D>, String) {
     (Vec::new(), "Procedural QuadX 3D Model".to_string())
 }
 
-/// Parse a binary STL file (in mm) and convert coordinates into meters (`* 0.001`).
+/// Parse a binary STL file (in mm, Fusion 360 Right-Front-Up `+X=Right, +Y=Front, +Z=Up`)
+/// and convert coordinates into meters (`* 0.001`) in Cybflight FLU (`+X=Front, +Y=Left, +Z=Up`).
 fn parse_binary_stl(bytes: &[u8], color: Color32, stride: usize) -> Vec<Tri3D> {
     if bytes.len() < 84 {
         return Vec::new();
@@ -416,14 +417,21 @@ fn parse_binary_stl(bytes: &[u8], color: Color32, stride: usize) -> Vec<Tri3D> {
     let mut out = Vec::with_capacity(tri_count / stride + 1);
     let scale = 0.001_f32; // mm -> m
 
+    // Fusion 360 STL uses Right-Front-Up (+X_stl = Right, +Y_stl = Front, +Z_stl = Up);
+    // proper -90° Z rotation (det = +1) maps to FLU (+X = Front, +Y = Left, +Z = Up)
+    // while preserving CCW triangle winding and outward surface normals.
+    let stl_mm_to_flu_m = |x_mm: f32, y_mm: f32, z_mm: f32| -> Vector3<f32> {
+        Vector3::new(y_mm * scale, -x_mm * scale, z_mm * scale)
+    };
+
     for i in (0..tri_count).step_by(stride) {
         let off = 84 + i * 50;
         let read_f32 = |o: usize| -> f32 {
             f32::from_le_bytes([bytes[o], bytes[o + 1], bytes[o + 2], bytes[o + 3]])
         };
-        let v0 = Vector3::new(read_f32(off + 12), read_f32(off + 16), read_f32(off + 20)) * scale;
-        let v1 = Vector3::new(read_f32(off + 24), read_f32(off + 28), read_f32(off + 32)) * scale;
-        let v2 = Vector3::new(read_f32(off + 36), read_f32(off + 40), read_f32(off + 44)) * scale;
+        let v0 = stl_mm_to_flu_m(read_f32(off + 12), read_f32(off + 16), read_f32(off + 20));
+        let v1 = stl_mm_to_flu_m(read_f32(off + 24), read_f32(off + 28), read_f32(off + 32));
+        let v2 = stl_mm_to_flu_m(read_f32(off + 36), read_f32(off + 40), read_f32(off + 44));
 
         let e1 = v1 - v0;
         let e2 = v2 - v0;
@@ -552,5 +560,35 @@ fn add_box(tris: &mut Vec<Tri3D>, center: Vector3<f32>, half: Vector3<f32>, colo
             normal,
             base_color: color,
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stl_rfu_mm_maps_to_flu_m_preserving_normals() {
+        let mut buf = vec![0u8; 84 + 50];
+        buf[80..84].copy_from_slice(&1u32.to_le_bytes());
+        // CCW triangle in XY plane around Fusion 360 FR motor pad (+31.466, +31.466, 5.0) mm
+        let write_v = |b: &mut [u8], off: usize, v: [f32; 3]| {
+            b[off..off + 4].copy_from_slice(&v[0].to_le_bytes());
+            b[off + 4..off + 8].copy_from_slice(&v[1].to_le_bytes());
+            b[off + 8..off + 12].copy_from_slice(&v[2].to_le_bytes());
+        };
+        write_v(&mut buf, 84 + 12, [31.466, 31.466, 5.0]);
+        write_v(&mut buf, 84 + 24, [32.466, 31.466, 5.0]);
+        write_v(&mut buf, 84 + 36, [31.466, 32.466, 5.0]);
+
+        let tris = parse_binary_stl(&buf, Color32::WHITE, 1);
+        assert_eq!(tris.len(), 1);
+        let t = tris[0];
+        // FR motor (+X_stl Right, +Y_stl Front) -> m1 FR (+X_flu Front, -Y_flu Right)
+        assert!((t.v0.x - 0.031466).abs() < 1e-6);
+        assert!((t.v0.y - (-0.031466)).abs() < 1e-6);
+        assert!((t.v0.z - 0.005).abs() < 1e-6);
+        // Proper det=+1 rotation keeps +Z normal pointing +Z
+        assert!((t.normal.z - 1.0).abs() < 1e-5);
     }
 }
