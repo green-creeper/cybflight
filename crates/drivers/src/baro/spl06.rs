@@ -295,9 +295,14 @@ impl<B: Spl06Bus> Spl06<B> {
             delay.delay_ms(10).await;
         }
 
-        // 4. Read calibration coefficients
+        // 4. Read calibration coefficients in two 9-byte chunks (SPL06/DPS310
+        // I2C state machines on affected silicon batches NACK bursts > 9 bytes,
+        // per Betaflight `barometer_dps310.c` and ArduPilot `AP_Baro_SPL06.cpp`).
         let mut coef_raw = [0u8; 18];
-        bus.read_reg(REG_COEF, &mut coef_raw)
+        bus.read_reg(REG_COEF, &mut coef_raw[..9])
+            .await
+            .map_err(Error::Bus)?;
+        bus.read_reg(REG_COEF + 9, &mut coef_raw[9..18])
             .await
             .map_err(Error::Bus)?;
         let coefs = parse_coefs(&coef_raw);
@@ -402,10 +407,14 @@ where
             }
         }
 
-        // Re-read coefficients
+        // Re-read coefficients in 9-byte chunks (SPL06/DPS310 >9-byte I2C burst erratum)
         let mut coef_raw = [0u8; 18];
         self.bus
-            .read_reg(REG_COEF, &mut coef_raw)
+            .read_reg(REG_COEF, &mut coef_raw[..9])
+            .await
+            .map_err(Error::Bus)?;
+        self.bus
+            .read_reg(REG_COEF + 9, &mut coef_raw[9..18])
             .await
             .map_err(Error::Bus)?;
         self.coefs = parse_coefs(&coef_raw);

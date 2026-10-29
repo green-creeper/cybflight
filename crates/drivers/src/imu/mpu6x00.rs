@@ -311,4 +311,14 @@ where
             temp_c: raw_temp as f32 * self.temp_scale + self.temp_offset,
         })
     }
+
+    async fn recover(&mut self) -> Result<(), Self::Error> {
+        // Read INT_STATUS (0x3A) — valid up to 20 MHz SPI — to clear any wedged DRDY latch.
+        let mut buf = [SPI_READ | 0x3A, 0x00];
+        self.spi
+            .transfer_in_place(&mut buf)
+            .await
+            .map_err(Error::Spi)?;
+        Ok(())
+    }
 }

@@ -25,7 +25,7 @@ use cybflight_drivers::led::Led;
 use cybflight_drivers::mag::Qmc5883l;
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_embedded_hal::shared_bus::asynch::spi::SpiDevice;
-use embassy_executor::{SendSpawner, Spawner};
+use embassy_executor::{InterruptExecutor, SendSpawner, Spawner};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::{Duration, Timer, with_timeout};
@@ -69,12 +69,29 @@ hal::bind_interrupts!(struct Usart1Irqs {
     USART1 => hal::usart::InterruptHandler<hal::peripherals::USART1>;
 });
 
+// Dedicated P8 interrupt executor for the 8 kHz IMU reader (strictly between
+// P6 `EXECUTOR_HIGH` DShot and P10 `EXECUTOR_CTRL` INDI/Failsafe/CRSF), so a
+// 126..210 us INDI WLS step on P10 can never stall 125 us MPU-6000 DRDY reads.
+use crate::hal::interrupt;
+static EXECUTOR_IMU: InterruptExecutor = InterruptExecutor::new();
+
+#[interrupt]
+unsafe fn CAN2_RX1() {
+    unsafe { EXECUTOR_IMU.on_interrupt() }
+}
+
 pub async fn init(
     spawner: &Spawner,
     ctrl_spawner: &SendSpawner,
     high_spawner: &SendSpawner,
     board: bsp::Board,
 ) {
+    let imu_spawner = {
+        use hal::interrupt::{self, InterruptExt, Priority};
+        interrupt::CAN2_RX1.set_priority(Priority::P8);
+        EXECUTOR_IMU.start(interrupt::CAN2_RX1)
+    };
+
     // --- Load vehicle parameters from flash (or defaults) ---
     crate::params::init_from_flash(board.internal_flash);
 
@@ -145,7 +162,7 @@ pub async fn init(
                         defmt::info!("IMU1 init OK (MPU6000 on SPI4 @ 13.5 MHz)");
                         // Pass `None` for IMU_1_RAW: this AIO has no blackbox SD/flash storage,
                         // avoiding 8,000 unconsumed critical-section PubSub writes/sec.
-                        ctrl_spawner
+                        imu_spawner
                             .spawn(mpu_reader_task(
                                 ImuReader::new(
                                     imu1,
@@ -186,7 +203,7 @@ pub async fn init(
                         imu1.sample_rate_hz() == crate::rates::IMU_ODR_HZ,
                         "IMU1 ODR does not match rates::IMU_ODR_HZ"
                     );
-                    ctrl_spawner
+                    imu_spawner
                         .spawn(icm_reader_task(
                             ImuReader::new(
                                 imu1,
@@ -212,7 +229,7 @@ pub async fn init(
                     fast_cfg.mode = spi::MODE_3;
                     let _ = spi4_bus.lock().await.set_config(&fast_cfg);
                     defmt::info!("IMU1 init OK (BMI270 on SPI4 @ 6.75 MHz)");
-                    ctrl_spawner
+                    imu_spawner
                         .spawn(bmi270_reader_task(
                             ImuReader::new(
                                 imu1,
@@ -234,10 +251,11 @@ pub async fn init(
         }
     }
 
-    static TX_BUF: StaticCell<[u8; 128]> = StaticCell::new();
-    static RX_BUF: StaticCell<[u8; 128]> = StaticCell::new();
-    let tx_buf = &mut TX_BUF.init([0u8; 128])[..];
-    let rx_buf = &mut RX_BUF.init([0u8; 128])[..];
+    let _ = &ctrl_spawner;
+    static TX_BUF: StaticCell<[u8; 256]> = StaticCell::new();
+    static RX_BUF: StaticCell<[u8; 256]> = StaticCell::new();
+    let tx_buf = &mut TX_BUF.init([0u8; 256])[..];
+    let rx_buf = &mut RX_BUF.init([0u8; 256])[..];
     let mut rc_uart_cfg = hal::usart::Config::default();
     rc_uart_cfg.baudrate = 420_000;
     rc_uart_cfg.rx_pull = hal::gpio::Pull::Up;

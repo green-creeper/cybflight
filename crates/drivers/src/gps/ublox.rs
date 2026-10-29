@@ -37,13 +37,19 @@ const NAV_PVT_LEN: u16 = 92;
 /// - `CFG_UART1OUTPROT_UBX` (`0x1074_0001`, 1-byte bool) = `1`
 /// - `CFG_UART1OUTPROT_NMEA` (`0x1074_0002`, 1-byte bool) = `0`
 /// - `CFG_MSGOUT_UBX_NAV_PVT_UART1` (`0x2091_0007`, 1-byte u8) = `1`
+/// - `CFG_RATE_MEAS` (`0x3021_0001`, 2-byte u16 LE) = `100` ms (`10 Hz`)
+/// - `CFG_RATE_NAV` (`0x3021_0002`, 2-byte u16 LE) = `1` cycle
+/// - `CFG_NAVSPG_DYNMODEL` (`0x2011_0021`, 1-byte enum) = `8` (`Airborne <4g`)
 /// Required for u-blox Gen 10 (M10 / Flywoo GM10 V3, protocol >= 40.00 where
 /// legacy `CFG-MSG` is removed) and also supported on Gen 9 (M9N / F9P).
-const VALSET_NAV_PVT_UART1: [u8; 19] = [
+const VALSET_NAV_PVT_UART1: [u8; 36] = [
     0x00, 0x01, 0x00, 0x00, // version=0, layers=RAM(0x01), reserved=[0,0]
     0x01, 0x00, 0x74, 0x10, 0x01, // CFG_UART1OUTPROT_UBX = true
     0x02, 0x00, 0x74, 0x10, 0x00, // CFG_UART1OUTPROT_NMEA = false
     0x07, 0x00, 0x91, 0x20, 0x01, // CFG_MSGOUT_UBX_NAV_PVT_UART1 = 1
+    0x01, 0x00, 0x21, 0x30, 0x64, 0x00, // CFG_RATE_MEAS = 100 ms (10 Hz)
+    0x02, 0x00, 0x21, 0x30, 0x01, 0x00, // CFG_RATE_NAV = 1
+    0x21, 0x00, 0x11, 0x20, 0x08, // CFG_NAVSPG_DYNMODEL = 8 (Airborne <4g)
 ];
 
 // ---------------------------------------------------------------------------
@@ -173,7 +179,7 @@ where
         const FRAMES_PER_ATTEMPT: u8 = 24;
         let mut drv = Ublox { rw };
 
-        let mut valset_frame = [0u8; 32];
+        let mut valset_frame = [0u8; 48];
         let valset_len = build_frame(
             &mut valset_frame,
             UBX_CLASS_CFG,

@@ -45,6 +45,7 @@ pub struct LinkSnapshot {
 pub struct SystemHealth {
     pub failsafe_active: bool,
     pub armed: bool,
+    pub gyro_calibrated: bool,
     pub link: LinkSnapshot,
     pub throttle: Option<u16>,
 
@@ -100,6 +101,7 @@ impl SystemHealth {
 
         let failsafe_active = crate::control::failsafe::FAILSAFE_ACTIVE.load(Ordering::Acquire);
         let armed = crate::motors::IS_ARMED.load(Ordering::Acquire);
+        let gyro_calibrated = crate::sensors::imu::IMU1_GYRO_CALIBRATED.load(Ordering::Acquire);
 
         #[cfg(any(feature = "est_pos_mocap", feature = "est_pos_gps"))]
         let (
@@ -183,6 +185,7 @@ impl SystemHealth {
         Self {
             failsafe_active,
             armed,
+            gyro_calibrated,
             link,
             throttle,
             estimator_ready,
@@ -242,6 +245,10 @@ impl SystemHealth {
                 min: cfg.min_link_quality,
             });
         }
+        if !self.gyro_calibrated {
+            return Some(BlockReason::GyroCalibrating);
+        }
+        #[cfg(not(feature = "outer_rate"))]
         if !self.estimator_ready {
             return Some(BlockReason::EstimatorNotReady);
         }
@@ -266,6 +273,7 @@ impl SystemHealth {
                 });
             }
         }
+        #[cfg(not(feature = "outer_rate"))]
         if self.attitude_health_required != 0
             && self.attitude_health_bits & self.attitude_health_required
                 != self.attitude_health_required
@@ -279,6 +287,7 @@ impl SystemHealth {
         // is itself gated on `armed` — so pre-arm it is always false and
         // this branch sees every asserted fault bit. No separate severe
         // check is needed (or reachable) here.
+        #[cfg(not(feature = "outer_rate"))]
         if self.estimator_degraded {
             return Some(BlockReason::EskfDegraded {
                 faults: self.estimator_faults,
@@ -514,6 +523,7 @@ impl fmt::Debug for DebugReason {
             BlockReason::LinkLowQuality { quality, min } => {
                 write!(f, "LinkLowQuality({}/{}%)", quality, min)
             }
+            BlockReason::GyroCalibrating => write!(f, "GyroCalibrating"),
             BlockReason::EstimatorNotReady => write!(f, "EstimatorNotReady"),
             BlockReason::TiltOutOfEnvelope {
                 roll_deg,

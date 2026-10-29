@@ -53,7 +53,9 @@ pub async fn rc_interpreter_task() {
     let pitch_cal = RateChannelCalibration::centered_with(1, endpoints);
     let roll_cal = RateChannelCalibration::centered_with(0, endpoints);
     let throttle_cal = RateChannelCalibration::throttle_with(2, endpoints);
-    let yaw_cal = RateChannelCalibration::centered_with(3, endpoints);
+    // Standard AETR right yaw stick (~2012 us) requests CW nose-right yaw (-omega_z in FLU),
+    // matching `RcMapper::aetr` and position mode (`centered_inverted_with(3, ...)`).
+    let yaw_cal = RateChannelCalibration::centered_inverted_with(3, endpoints);
 
     let min_channels: u8 = {
         let mut m = pitch_cal

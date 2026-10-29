@@ -688,6 +688,12 @@ where
         self.new_baudrate = Some(baud);
         Ok(())
     }
+
+    /// Reject a V3 speed proposal (`ACK = false`) so the receiver remains at
+    /// the current `420_000` baud when dynamic UART baudrate switching is not wired.
+    pub async fn reject_speed_proposal(&mut self, port_id: u8) -> Result<(), Error<RW::Error>> {
+        self.write_speed_response(port_id, false).await
+    }
 }
 
 // ---------------------------------------------------------------------------

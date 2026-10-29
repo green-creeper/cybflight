@@ -170,6 +170,7 @@ pub enum BlockReason {
         quality: u8,
         min: u8,
     },
+    GyroCalibrating,
     EstimatorNotReady,
     TiltOutOfEnvelope {
         roll_deg: f32,
@@ -316,8 +317,15 @@ impl ArmStateMachine {
             return;
         }
 
-        // Gate 4: ESKF estimator ready (Mahony has no convergence phase)
-        #[cfg(feature = "est_eskf")]
+        // Gate 4: stationary startup gyro calibration converged (BF: ARMING_DISABLED_CALIBRATING)
+        if !crate::sensors::imu::IMU1_GYRO_CALIBRATED.load(Ordering::Acquire) {
+            self.note_block(now, BlockReason::GyroCalibrating);
+            return;
+        }
+
+        // Gate 5: ESKF estimator ready (required for position/velocity outer loops;
+        // pure manual `outer_rate` consumes `IMU_1` directly and does not require RTK GPS)
+        #[cfg(all(feature = "est_eskf", not(feature = "outer_rate")))]
         if !crate::estimation::ESTIMATOR_READY.load(Ordering::Acquire) {
             self.note_block(now, BlockReason::EstimatorNotReady);
             return;
@@ -417,17 +425,15 @@ pub mod crsf_runner {
                             }
                             CrsfEvent::SpeedProposal { port_id, baud } => {
                                 defmt::info!(
-                                    "CRSF V3 speed proposal: port={} baud={}",
+                                    "CRSF V3 speed proposal: port={} baud={} (rejecting; staying at 420k)",
                                     port_id,
                                     baud
                                 );
-                                // Accept the speed proposal
-                                if let Err(e) = self.crsf.accept_speed_proposal(port_id, baud).await
-                                {
-                                    defmt::warn!("Failed to send speed response: {}", e);
+                                // Reject until runtime UART baudrate reconfiguration + fallback is wired,
+                                // otherwise the receiver switches baudrate and drops the RC link.
+                                if let Err(e) = self.crsf.reject_speed_proposal(port_id).await {
+                                    defmt::warn!("Failed to send speed rejection: {}", e);
                                 }
-                                // Note: actual UART baudrate change would need to be
-                                // handled by the board_init layer via take_baudrate_hint()
                             }
                             CrsfEvent::Other { .. } => {}
                         }

@@ -381,8 +381,10 @@ impl<D: ReadImu> ImuReader<D> {
         let mut decim_ctr: u32 = 0;
 
         loop {
-            match self.imu.read().await {
-                Ok(reading) => {
+            match embassy_time::with_timeout(embassy_time::Duration::from_millis(10), self.imu.read())
+                .await
+            {
+                Ok(Ok(reading)) => {
                     // Observation time (data-ready + burst, ~constant
                     // offset) → reconstructed on-grid sample time. Wall
                     // time here carries the reader's wake jitter, which
@@ -458,8 +460,22 @@ impl<D: ReadImu> ImuReader<D> {
                     }
                     publisher.publish_immediate(filtered);
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     defmt::warn!("IMU read error: {}", e);
+                    self.stamper.reset();
+                    if let Err(re) = self.imu.recover().await {
+                        defmt::error!("IMU recovery failed: {}", re);
+                        self.accel_filter
+                            .reset([0.0; 3])
+                            .expect("accel filter reset failed");
+                        self.gyro_filter
+                            .reset([0.0; 3])
+                            .expect("gyro filter reset failed");
+                        Timer::after_millis(100).await;
+                    }
+                }
+                Err(_) => {
+                    defmt::warn!("IMU DRDY timed out (>10ms); attempting recovery");
                     self.stamper.reset();
                     if let Err(re) = self.imu.recover().await {
                         defmt::error!("IMU recovery failed: {}", re);
