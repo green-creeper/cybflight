@@ -1,0 +1,5 @@
+Milestone #8:
+- crates/drivers/src/gps/ublox.rs: Added VALSET_M10_SIGNALS (BDS B1C + GLO off on single L1 1575.42 MHz band, matching ArduPilot config_M10) with 550 ms M10 GNSS subsystem-reset delay before VALSET_NAV_PVT_UART1 (10 Hz, Airborne <4g, NMEA=0), 5 Hz VALSET fallback, legacy M8 CFG-MSG fallback, and non-short-circuiting scan_for_ack so cold-booted u-blox M10 runs at full 10.00 Hz without altering F9P/M9N constellations.
+- crates/drivers/src/mag/qmc5883l.rs: Cleared ROL_PNT (REG_CONTROL2 = 0x00), split field (0x00..=0x05) and temperature (0x07..=0x08) reads to fix 189-204 C pointer-rollover temperature bug, primed 0x00 with 5x retries in probe(), and restored full register config in recover().
+- crates/cybflight/src/board_init/flywoof745.rs: Added 3x outer QMC5883L probe retries with reset_i2c1_if_wedged() + 5 ms settle, prioritized 230400 baud first in CANDIDATE_BAUDS, and passed Delay with 1300 ms timeout to Ublox::configure_once.
+- Reviewed and approved (PASS, 0 blocking issues, 0 warnings) by adversarial firmware reviewer.
