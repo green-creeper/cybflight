@@ -1,0 +1,4 @@
+Milestone #6 imurate cooperative yield & SPL06 recovery fix:
+1. Added cooperative yield_now() every 4 polls (~0.5 ms at 8 kHz) in usb_serial::measure_rate (imurate) so continuous P8 EXECUTOR_IMU publications cannot starve I2C1 tasks or iwdg_feed_task on the Thread Executor during the 1000 ms measurement window, while preserving exact sample counts via PubSubChannel WaitResult::Lagged(n).
+2. Removed un-delayed REG_RESET=0x09 and OTP re-read from Spl06::recover() (drivers/baro/spl06.rs) so recovery re-applies Self::configure() without leaving SPL06 in standby (raw_psr=0, raw_tmp=0 -> c00=80523 Pa) or clobbering validated init() factory coefficients; guarded Spl06::read() against standby (MEAS_CTRL != 0x07 or all-zero registers -> Err(Error::NotReady)).
+3. Passed adversarial subagent review (0 blocking issues, 0 warnings, 0 .f64 VFP opcodes).
