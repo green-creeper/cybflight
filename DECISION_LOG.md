@@ -8,20 +8,23 @@ This document records the engineering decisions, root-cause analyses, code chang
 
 | # | Symptom / Issue | Root Cause | Decision & Fix | Outcome |
 |---|---|---|---|---|
-| 1 | Silent boot loop & `reboot --dfu` failed to enter STM32 ROM DFU | `PWR_CR1.DBP` was locked when writing DFU magic to `RTC_BKP0R`, and repeated early crashes rebooted back into crashing code before USB CDC enumerated | Unlock backup domain (`RCC_APB1ENR.PWREN` + `PWR_CR1.DBP` + readback barrier) before `RTC_BKP0R` write; add BKPSRAM early-crash counter (`>=2` crashes `<5 s`) entering USB Safe Mode | **Verified on hardware** — `reboot --dfu` reliably enumerates `0483:df11`, and Safe Mode preserves USB recovery shell across early faults |
-| 2 | `HardFault` at ~3.35 s uptime during postmortem heartbeat | STM32F7 maps Backup SRAM (`0x4002_4000`) in the `Peripheral` (`Device`) MPU region where Cortex-M7 strictly traps any unaligned access (`ldrh.w` / `strh.w`) | Replaced packed-struct byte/halfword pointer casts in `bkpsram.rs` with 32-bit word-aligned `read_volatile`/`write_volatile` bounce buffers + RCC readback barrier | **Verified on hardware** — eliminated `BKPSRAM` fault and preserved crash telemetry across resets |
-| 3 | `just flash` compiled & flashed `board_sakurah743` (`714 KB` H7 image) onto F745 | Repository `.env` defaulted to `VEHICLE=sakura_vicon` (`STM32H743`), whose clock/memory layout cannot boot on `STM32F745VG` | Updated `.env` default `VEHICLE=goku_f745` (`board_flywoof743`/`flywoof745`) | **Verified on hardware** — `just flash` targets `goku_f745` (`STM32F745VG`) and boots USB CDC |
-| 4 | `HardFault` (`UNDEFINSTR`, `cfsr=0x00010000`, `pc=0x080536ea`) at `415 ms` | `thumbv7em-none-eabihf` defaults to `FPv5-D16` (double-precision FPU), emitting `vcvt.f64.f32` (`f64` math in barometer/ESKF/formatting), whereas `STM32F745VG` only implements single-precision `FPv5-SP-D16` | Added `"-C", "target-feature=-fp64"` to `[target.thumbv7em-none-eabihf]` in `.cargo/config.toml` so `f32` stays hardware FPU and `f64` uses software float | **Verified on hardware & disassembly** — `llvm-objdump` confirmed `0` `.f64` instructions across 10,847 VFP instructions; firmware boots past `415 ms` |
-| 5 | `SPI4` IMU bus overclocked to `27 MHz` (`> 20 MHz` MPU-6000 max rating) | `embassy-stm32` integer prescaler calculation on `54 MHz` `APB2` (`54 / 20 = 2`) selected `Br::DIV2 = 27 MHz` when `20 MHz` was requested | Set `SPI4` fast frequency in `board_init/flywoof745.rs` to `Hertz(13_500_000)` (`Br::DIV4` for MPU-6000/ICM-42688-P) and `Hertz(6_750_000)` (`Br::DIV8` for BMI270) | **Verified on Flash #1** (`WHO_AM_I` + live IMU); `13.5 MHz` queued for Flash #2 |
-| 6 | `IndependentWatchdog` (`0xc8000000`) reset at `4,700 ms` + `imu1`/`baro1` `no data (timeout)` | (a) `cybflight-gs` auto-sends `stream att on`, `stream imu1 on`, `stream power on`, `stream dshot on` on connect; `msg_stream_task` formatted 8 kHz `IMU_1` + 3.7 kHz `DSHOT_TELEMETRY` on the Thread Executor with no rate limit or yield, starving `iwdg_feed_task` (`500 ms` timeout). (b) Consecutive early `IWDG` resets tripped Safe Mode on Boot 8, which intentionally skips `board_init::init` (hence `imu1`/`baro1` timeout) | Rewrote `msg_stream_task` in `usb_serial.rs` to sleep (`50 ms`) when disabled, coalesce burst frames, and enforce `yield_now()` + `20 ms` (`<=50 Hz`) pacing; switched `imu1` stream to `IMU_1_DECIM`; added `version`, `stream off`, and indoor Mahony `att` fallback; preferred `/dev/cu.*` on macOS in `cybflight-gs` | **Verified on Flash #1** (`>16.5 min` continuous uptime with `cybflight-gs` streaming, `0` IWDG resets) |
-| 7 | Incorrect IMU chip & diamond airframe orientation (`Cw0Deg` vs physical board) | `bsp/flywoof745` defaulted `gyro1_align` to `Cw0Deg` and `InstallParams` lacked arbitrary yaw mounting (`imu_rpy_*`), whereas GOKU GN 745 V3 mounts MPU-6000 at `Cw270Deg` relative to silkscreen arrow and this quad mounts the AIO arrow Rear-Left (`AHRS_ORIENTATION=5` = `ROTATION_YAW_225` = `+135°` FLU yaw) | Changed `gyro1_align` to `SensorAlign::Cw270Deg` in `bsp/flywoof745`; added `imu_rpy_r/p/y` (`FirmwareConfig::VERSION` 57) precomputed `Matrix3<f32>` in `ImuReader`; set `imu_rpy_y: 135.0` in `vehicles/goku_f745.yaml` | **Verified algebraically & against `SERVO1..4_FUNCTION = 36,33,34,35`** |
-| 8 | Tight async retry risk on floating/noisy UART RX & silent unhandled IRQs | `crsf_task`, `ghst_task` (`P10` high-priority executor), and `gps_task` looped immediately on `uart.read()` framing/overrun errors without backoff; unhandled IRQs spun silently into an opaque `IWDG` reset | Added `Timer::after_millis(2).await` backoff on UART read errors in `rc.rs` and `gps.rs`; added `DefaultHandler(irqn)` in `postmortem/fault.rs` recording exact IRQ number to BKPSRAM | **Verified on Flash #1** (`0` unhandled IRQs or executor stalls) |
-| 9 | Host shell automation & port-contention diagnostics | Interactive `picocom`/`tio` cannot run non-interactively in automated verification loops, and background `cybflight-gs` holds `/dev/tty.usbmodem*` with `TIOCEXCL` (`EBUSY`) | Built zero-dependency `tools/fc_shell.py` (`termios` raw mode, `DTR|RTS`, `/dev/cu.*` auto-discovery, `lsof` holder reporting, `--monitor`, `--dfu`) | **Verified on host & live FC** |
-| 10 | `imurate` reported `6506.0 Hz (-18.67%); lost since boot: 12663` on Flash #1 | `Mpu6x00` configured `REG_INT_PIN_CFG = 0x10` (50 µs pulse) and waited with `wait_for_rising_edge()`; whenever `indi_task` (sharing `EXECUTOR_CTRL` at `P10`) ran past an EXTI edge, that 125 µs sample was missed | Changed `REG_INT_PIN_CFG` to `0x30` (`LATCH_INT_EN | INT_RD_CLEAR`), switched `Mpu6x00::read()` to `wait_for_high()`, and raised MPU-6000 `SPI4` fast clock from `6.75 MHz` to `13.5 MHz` (`Br::DIV4`) | **Pending Flash #2 verification** |
-| 11 | `indistat` reported `step avg 0.0 us, max 0.0 us` despite `14111 iters` on Flash #1 | Cortex-M7 r0p1 (`STM32F745`) locks CoreSight DWT registers at reset (`DWT->LSR = 0x03`), silently ignoring `cp.DWT.enable_cycle_counter()` unless `0xC5AC_CE55` is written to `DWT->LAR` (`0xE000_1FB0`) | Unlocked `DWT->LAR` (`0xE000_1FB0 = 0xC5AC_CE55` + `dsb()`) before `enable_cycle_counter()` in `indi_task.rs` | **Pending Flash #2 verification** |
-| 12 | `gpshealth` reported `GPS: init timed out` on Flywoo GM10 Nano V3 (u-blox M10) | `ublox.rs` only sent legacy `UBX-CFG-MSG` (`0x06 0x01`), which u-blox M10 SPG 5.x deprecates (`ACK-NAK`) in favor of `UBX-CFG-VALSET` (`0x06 0x8A`), and only tried `115200` baud | Added `UBX-CFG-VALSET` (`0x06 0x8A`, RAM layer, `CFG_UART1OUTPROT_UBX` + `CFG_MSGOUT_UBX_NAV_PVT_UART1`) with automatic fallback to `UBX-CFG-MSG`, framing-error resilience, and `[115200, 230400, 38400, 57600, 9600]` auto-baud probe + `GPS_PROBE_RX_BYTES` diagnostic | **Pending Flash #2 verification** |
-| 13 | In `cybflight-gs`, tilting physical drone Left tilted the 3D CAD model Front | Fusion 360 STL generator (`build_drone_fusion360.py`) built the CAD model in Right-Front-Up (`+X_stl = Right`, `+Y_stl = Front`, `XT30` at `y = -41.5`), whereas `parse_binary_stl` in `drone_3d.rs` loaded `(x_stl, y_stl, z_stl)` directly into FLU (`+X = Front`, `+Y = Left`), placing the CAD model's visual Nose along FLU `+Y` (Left) | Applied proper `det = +1` `-90°` Z rotation `(y_mm, -x_mm, z_mm) * 0.001` in `parse_binary_stl` (`drone_3d.rs`) and verified motor corners against `goku_ardu_params.params` (`SERVO1..4_FUNCTION = 36,33,34,35` -> `PB0=RR, PB1=FR, PE9=RL, PE11=FL`) | **Verified via unit test & `release-host` build** |
-| 14 | Slow stationary yaw drift (`~-3.1 deg/s`) in `cybflight-gs` attitude preview | Uncalibrated MEMS MPU-6000 had stationary Z-gyro zero-rate offset `-0.0543 rad/s` (`-3.11 deg/s`, matching ArduPilot's `INS_GYROFFS_Z = +0.0496` in FRD on this board), and IMU-only Mahony (`mag = None`) cannot observe yaw bias around gravity | Added Betaflight-style pure-`f32` stationary startup gyro calibration (`GyroStartupCal`: 1.0 s window, `std <= 0.05 rad/s`, `|mean| <= 0.35 rad/s`, blocked when armed) in `sensors/imu.rs` and surfaced calibrated bias in `imurate` | **Pending Flash #2 verification** |
+| 1 | Silent boot loop & `reboot --dfu` failed to enter STM32 ROM DFU | `PWR_CR1.DBP` was locked when writing DFU magic to `RTC_BKP0R`, and repeated early crashes rebooted back into crashing code before USB CDC enumerated | Unlock backup domain (`RCC_APB1ENR.PWREN` + `PWR_CR1.DBP` + readback barrier) before `RTC_BKP0R` write; add BKPSRAM early-crash counter (`>=2` crashes `<5 s`) entering USB Safe Mode | **Verified on hardware (Flash #1–#3)** — `reboot --dfu` reliably enumerates `0483:df11` hands-free, and Safe Mode preserves USB recovery shell across early faults |
+| 2 | `HardFault` at ~3.35 s uptime during postmortem heartbeat | STM32F7 maps Backup SRAM (`0x4002_4000`) in the `Peripheral` (`Device`) MPU region where Cortex-M7 strictly traps any unaligned access (`ldrh.w` / `strh.w`) | Replaced packed-struct byte/halfword pointer casts in `bkpsram.rs` with 32-bit word-aligned `read_volatile`/`write_volatile` bounce buffers + RCC readback barrier | **Verified on hardware (Flash #1–#3)** — eliminated `BKPSRAM` fault and preserved crash telemetry across resets |
+| 3 | `just flash` compiled & flashed `board_sakurah743` (`714 KB` H7 image) onto F745 | Repository `.env` defaulted to `VEHICLE=sakura_vicon` (`STM32H743`), whose clock/memory layout cannot boot on `STM32F745VG` | Updated `.env` default `VEHICLE=goku_f745` (`board_flywoof745`) | **Verified on hardware (Flash #1–#3)** — `just flash` targets `goku_f745` (`STM32F745VG`) and boots USB CDC |
+| 4 | `HardFault` (`UNDEFINSTR`, `cfsr=0x00010000`, `pc=0x080536ea`) at `415 ms` | `thumbv7em-none-eabihf` defaults to `FPv5-D16` (double-precision FPU), emitting `vcvt.f64.f32` (`f64` math in barometer/ESKF/formatting), whereas `STM32F745VG` only implements single-precision `FPv5-SP-D16` | Added `"-C", "target-feature=-fp64"` to `[target.thumbv7em-none-eabihf]` in `.cargo/config.toml` so `f32` stays hardware FPU and `f64` uses software float | **Verified on hardware & disassembly (Flash #1–#3)** — `llvm-objdump` confirmed `0` `.f64` VFP opcodes; firmware runs continuously |
+| 5 | `SPI4` IMU bus overclocked to `27 MHz` (`> 20 MHz` MPU-6000 max rating) | `embassy-stm32` integer prescaler calculation on `54 MHz` `APB2` (`54 / 20 = 2`) selected `Br::DIV2 = 27 MHz` when `20 MHz` was requested | Set `SPI4` fast frequency in `board_init/flywoof745.rs` to `Hertz(13_500_000)` (`Br::DIV4` for MPU-6000/ICM-42688-P) and `Hertz(6_750_000)` (`Br::DIV8` for BMI270) | **Verified on hardware (Flash #2 & #3)** — `SPI4` @ `13.5 MHz` runs at `7,987.2 Hz` with clean `WHO_AM_I` & gyro/accel reads |
+| 6 | `IndependentWatchdog` (`0xc8000000`) reset at `4,700 ms` + `imu1`/`baro1` `no data (timeout)` | (a) `cybflight-gs` auto-sends `stream att on`, `stream imu1 on`, `stream power on`, `stream dshot on` on connect; `msg_stream_task` formatted 8 kHz `IMU_1` + 3.7 kHz `DSHOT_TELEMETRY` on the Thread Executor with no rate limit or yield, starving `iwdg_feed_task` (`500 ms` timeout). (b) Consecutive early `IWDG` resets tripped Safe Mode on Boot 8, which intentionally skips `board_init::init` | Rewrote `msg_stream_task` in `usb_serial.rs` to sleep (`50 ms`) when disabled, coalesce burst frames, and enforce `yield_now()` + `20 ms` (`<=50 Hz`) pacing; switched `imu1` stream to `IMU_1_DECIM`; added `version`, `stream off`, and indoor Mahony `att` fallback; preferred `/dev/cu.*` on macOS in `cybflight-gs` | **Verified on hardware (Flash #1–#3)** — `>16.5 min` continuous uptime with `cybflight-gs` connected & streaming, `0` `IWDG` resets |
+| 7 | Incorrect IMU chip & diamond airframe orientation (`Cw0Deg` vs physical board) | `bsp/flywoof745` defaulted `gyro1_align` to `Cw0Deg` and `InstallParams` lacked arbitrary yaw mounting (`imu_rpy_*`), whereas GOKU GN 745 V3 mounts MPU-6000 at `Cw270Deg` relative to silkscreen arrow and this quad mounts the AIO arrow Rear-Left (`AHRS_ORIENTATION=5` = `ROTATION_YAW_225` = `+135°` FLU yaw) | Changed `gyro1_align` to `SensorAlign::Cw270Deg` in `bsp/flywoof745`; added `imu_rpy_r/p/y` (`FirmwareConfig::VERSION` 57) precomputed `Matrix3<f32>` in `ImuReader`; set `imu_rpy_y: 135.0` in `vehicles/goku_f745.yaml` | **Verified live on hardware & against `goku_ardu_params.params` (`SERVO1..4 = 36,33,34,35`)** — user confirmed responsive live IMU tilt reaction in GS |
+| 8 | Tight async retry risk on floating/noisy UART RX & silent unhandled IRQs | `crsf_task`, `ghst_task` (`P10` high-priority executor), and `gps_task` looped immediately on `uart.read()` framing/overrun errors without backoff; unhandled IRQs spun silently into an opaque `IWDG` reset | Added `Timer::after_millis(2).await` backoff on UART read errors in `rc.rs` and `gps.rs`; added `DefaultHandler(irqn)` in `postmortem/fault.rs` recording exact IRQ number to BKPSRAM | **Verified on hardware (Flash #1–#3)** — `0` unhandled IRQs or executor stalls |
+| 9 | Host shell automation & port-contention diagnostics | Interactive `picocom`/`tio` cannot run non-interactively in automated verification loops, and background `cybflight-gs` holds `/dev/tty.usbmodem*` with `TIOCEXCL` (`EBUSY`) | Built zero-dependency `tools/fc_shell.py` (`termios` raw mode, `DTR|RTS`, `/dev/cu.*` auto-discovery, `lsof` holder reporting, `--monitor`, `--dfu`) | **Verified on host & live FC (Flash #1–#3)** |
+| 10 | `imurate` reported `6506.0 Hz (-18.67%)` on Flash #1 and `7753.1 Hz (-3.09%)` on Flash #2 | (a) Flash #1: `Mpu6x00` used 50 µs pulse `REG_INT_PIN_CFG = 0x10` + `wait_for_rising_edge()`. (b) Flash #2: latching (`0x30` + `wait_for_high()`) cut loss to `2.6%`, and unlocked `indistat` revealed `indi_task` takes `126–210 µs` (`> 125 µs` IMU period) while sharing `EXECUTOR_CTRL` (`P10`) with `mpu_reader_task` | (a) Set `REG_INT_PIN_CFG = 0x30` (`LATCH_INT_EN \| INT_RD_CLEAR`) + `wait_for_high()` + `13.5 MHz` `SPI4` + `10 ms` timeout / `recover()`. (b) Isolated `mpu_reader_task` onto dedicated `EXECUTOR_IMU` (`CAN2_RX1`, `Priority::P8`, strictly between `P6` DShot and `P10` INDI) | **Verified on hardware (Flash #3)** — `imurate` improved `6,506 Hz (-18.67%)` → `7,753 Hz (-3.09%)` → **`7,987.2 Hz (-0.16%)`**, matching native MPU-6000 oscillator (`0.006%` loss) |
+| 11 | `indistat` reported `step avg 0.0 us, max 0.0 us` despite `14111 iters` on Flash #1 | Cortex-M7 r0p1 (`STM32F745`) locks CoreSight DWT registers at reset (`DWT->LSR = 0x03`), silently ignoring `cp.DWT.enable_cycle_counter()` unless `0xC5AC_CE55` is written to `DWT->LAR` (`0xE000_1FB0`) | Unlocked `DWT->LAR` (`0xE000_1FB0 = 0xC5AC_CE55` + `dsb()`) before `enable_cycle_counter()` in `indi_task.rs` | **Verified on hardware (Flash #2 & #3)** — `indistat` reports live DWT cycle timing (`126.0 µs` pure step on Flash #2; `215.9 µs` incl. `P8` IMU preemption on Flash #3) |
+| 12 | `gpshealth` reported `GPS: init timed out` on Flywoo GM10 Nano V3 (u-blox M10) | `ublox.rs` sent legacy `UBX-CFG-MSG` (`ACK-NAK` on M10), ignored RX Fletcher-8 checksums, left rate/dynmodel at defaults, and `flywoof745.rs` only probed `115200` baud with a `256 B` RX buffer (GM10 V3 runs at `230400` baud) | Added `UBX-CFG-VALSET` (`0x06 0x8A`: `OUTPROT_UBX=1`, `OUTPROT_NMEA=0`, `NAV_PVT_UART1=1`, `RATE_MEAS=100ms` **10 Hz**, `DYNMODEL=8` **Airborne <4g**), RX Fletcher-8 checksum verification, `1024 B` RX buffer, and `[115200, 230400, 38400, 57600, 9600]` auto-baud probe | **Verified on hardware (Flash #2 & #3)** — GM10 M10 initialized at `baud=230400`, `5.00 Hz` on Flash #2 → **`10.00 Hz` (`mean=99,963 µs`)** on Flash #3 |
+| 13 | In `cybflight-gs`, tilting physical drone Left tilted the 3D CAD model Front | Fusion 360 STL generator (`build_drone_fusion360.py`) built the CAD model in Right-Front-Up (`+X_stl = Right`, `+Y_stl = Front`, `XT30` at `y = -41.5`), whereas `parse_binary_stl` in `drone_3d.rs` loaded `(x_stl, y_stl, z_stl)` directly into FLU (`+X = Front`, `+Y = Left`), placing the CAD model's visual Nose along FLU `+Y` (Left) | Applied proper `det = +1` `-90°` Z rotation `(y_mm, -x_mm, z_mm) * 0.001` in `parse_binary_stl` (`drone_3d.rs`) and verified motor corners against `goku_ardu_params.params` (`SERVO1..4_FUNCTION = 36,33,34,35` -> `PB0=RR, PB1=FR, PE9=RL, PE11=FL`) | **Verified via unit test (`drone_3d`) & `release-host` `cybflight-gs` build** |
+| 14 | Slow stationary yaw drift (`~-3.1 deg/s`) in `cybflight-gs` attitude preview | Uncalibrated MEMS MPU-6000 had stationary Z-gyro zero-rate offset `-0.0543 rad/s` (`-3.11 deg/s`, matching ArduPilot's `INS_GYROFFS_Z = +0.0496` in FRD on this board), and IMU-only Mahony (`mag = None`) cannot observe yaw bias around gravity | Added Betaflight-style pure-`f32` stationary startup gyro calibration (`GyroStartupCal`: 1.0 s window, `std <= 0.05 rad/s`, `|mean| <= 0.35 rad/s`, blocked when armed) in `sensors/imu.rs` and surfaced calibrated bias in `imurate` | **Verified on hardware (Flash #2 & #3)** — calibrated `bias=[+0.0071, +0.0154, -0.0542] rad/s` in `1.0 s`; stationary `imu1` gyro `< 0.0035 rad/s` (`0.2 deg/s`), yaw drift eliminated |
+| 15 | Reversed RC Yaw stick & RTK-only arming lockout in `outer_rate` + missing `GyroCalibrating` gate | Betaflight/ArduPilot audit (`FIRMWARE_COMPARISON.md`) caught: (a) `outer_rate` used un-inverted `centered_with(3, endpoints)` on yaw (`+ω_z` CCW on right stick); (b) `ArmStateMachine` & `health.rs` required `ESTIMATOR_READY` (RTK-Fixed `carr_soln == 2`) even in pure `outer_rate`; (c) fast arming before `1.0 s` bypassed `GyroStartupCal` | Changed `outer_rate` yaw to `centered_inverted_with(3, endpoints)` in `rc_interpreter.rs`; added `BlockReason::GyroCalibrating` (`!IMU1_GYRO_CALIBRATED`); gated `EstimatorNotReady`/`SensorHealthDegraded`/`EskfDegraded` on `not(feature = "outer_rate")` in `rc.rs` & `health.rs` | **Verified via unit tests, adversarial review & live `health` on Flash #3** |
+| 16 | CRSFv3 `SpeedProposal` link-drop hazard & SPL06 18-byte I2C burst erratum | (a) `CrsfRunner` sent `ACK=true` on `SpeedProposal` without changing `USART2` baudrate; (b) `Spl06` read 18 `COEF` bytes in one burst (NACK erratum >9 B on affected SPL06/DPS310 batches) | Added `CrsfParser::reject_speed_proposal` (`ACK=false`) + `256 B` CRSF UART buffers; split `Spl06` `REG_COEF` read into two 9-byte reads (`0x10` + `0x19`) in `init()` and `recover()` | **Verified on hardware (Flash #3 Boot 7)** — `baro1` reads `101,376.33 Pa, 37.90 °C` cleanly |
+| 17 | Intermittent `baro1` + `magext` init failure across warm MCU reset (`reboot --dfu`) | Observed live on Flash #3 Boot 6 (`baro1` & `magext` timed out right after `reboot --dfu`, then both recovered on Boot 7): warm `SCB::sys_reset()` interrupted an in-flight `200 Hz` `QMC5883L` / `32 Hz` `SPL06` read while 3.3V/5V stayed powered, leaving a slave holding `SDA` (`PB7`) low across reset; plus tight `250 ms` `Spl06::new_i2c` timeout | Added open-drain 16-clock `SCL` + `STOP` bus-recovery sequence before `I2c::new` (per I2C spec §3.1.16 & ArduPilot `I2CBus::clear_bus`) and widened `QMC5883L`/`SPL06` init timeouts to `400 ms` / `500 ms` in `board_init/flywoof745.rs` | **Pending Flash #4 live warm-reset & 65 s stress-test verification** |
 
 ---
 
@@ -35,7 +38,7 @@ This document records the engineering decisions, root-cause analyses, code chang
 - **What Was Done**:
   - Added `unlock_backup_domain()` in `crates/cybflight/src/platform.rs` prior to writing `DFU_BOOT_MAGIC` (`0xDF59_B007`) to `RTC_BKP0R`, paired with `pre_init` interception in `main.rs` jumping cleanly into `0x1FF0_0000` (STM32F7 system memory).
   - Added early-crash detection in `crates/cybflight/src/postmortem/recovery.rs` (`consecutive_early_crashes >= 2` within `< 5,000 ms` uptime) so `main.rs` boots a minimal **USB Safe Mode** (`postmortem show`, `postmortem clear`, `reboot`, `reboot --dfu`) instead of crash-looping.
-- **Outcome**: **Verified on hardware**. Both `reboot --dfu` and automatic Safe Mode recovery functioned cleanly during subsequent `415 ms` and `4,700 ms` crashes.
+- **Outcome**: **Verified on hardware (Flash #1–#3)**. Hands-free `python3 tools/fc_shell.py --dfu` reliably enumerates `0483:df11` on every flash cycle without touching the physical BOOT0 button.
 
 ---
 
@@ -44,7 +47,7 @@ This document records the engineering decisions, root-cause analyses, code chang
 - **Root Cause**: STM32F7 Backup SRAM (`0x4002_4000`) sits in the Cortex-M7 `0x4000_0000` `Peripheral` (`Device`) default memory map region. Unlike Normal SRAM, Cortex-M7 strictly faults (`UNALIGNED` UsageFault escalated to HardFault) on any halfword/unaligned load or store (`ldrh.w` / `strh.w`) emitted by LLVM for packed/byte struct accesses.
 - **What Was Done**:
   - Rewrote `crates/cybflight/src/postmortem/bkpsram.rs` to copy `BootRecord` slots exclusively through a `#[repr(C, align(4))]` RAM bounce buffer using 32-bit word-aligned `core::ptr::read_volatile` and `core::ptr::write_volatile`, plus an RCC `BKPSRAMEN` readback barrier + `cortex_m::asm::dsb()`.
-- **Outcome**: **Verified on hardware**. `postmortem show` reliably reads and writes prior boot records across `Software` and `IndependentWatchdog` resets.
+- **Outcome**: **Verified on hardware (Flash #1–#3)**. `postmortem show` reliably reads and writes prior boot records across `Software` and `IndependentWatchdog` resets with zero faults.
 
 ---
 
@@ -52,7 +55,7 @@ This document records the engineering decisions, root-cause analyses, code chang
 - **Observed Symptom**: Running `just flash` built `--features board_sakurah743,rx_crsf,est_eskf,est_pos_mocap,outer_mpc,postmortem` and downloaded a 714 KB H743 binary to `0x08000000`, resulting in no USB shell.
 - **Root Cause**: `Justfile` reads `VEHICLE` from `.env` when no positional argument is passed, and `.env` was still set to `VEHICLE=sakura_vicon`.
 - **What Was Done**: Updated `/Users/andrii/Personal/autopilots/cybflight/.env` to `VEHICLE=goku_f745`.
-- **Outcome**: **Verified on hardware**. `just flash` now builds and flashes `goku_f745` (`STM32F745VG`) by default.
+- **Outcome**: **Verified on hardware (Flash #1–#3)**. `just flash` builds and flashes `goku_f745` (`STM32F745VG`) cleanly.
 
 ---
 
@@ -66,7 +69,7 @@ This document records the engineering decisions, root-cause analyses, code chang
 - **Root Cause**: `cfsr = 0x00010000` is `UFSR.UNDEFINSTR`. Disassembling `pc=0x080536ea` showed `vcvt.f64.f32 d9, s0` inside `spl06_task` (`400 ms` startup delay + first baro read = `415 ms`!). Rust's `thumbv7em-none-eabihf` target enables `FPv5-D16` (64-bit hardware FPU, as on STM32F765/H743), whereas **STM32F745VG** only has **single-precision `FPv5-SP-D16`**, trapping every `.f64` VFP opcode as an Undefined Instruction.
 - **What Was Done**:
   - Added `"-C", "target-feature=-fp64"` to `[target.thumbv7em-none-eabihf]` in `/Users/andrii/Personal/autopilots/cybflight/.cargo/config.toml`. Single-precision `f32` control/estimator math continues using hardware FPU registers (`s0..s31`), while occasional `f64` operations compile to soft-float intrinsics.
-- **Outcome**: **Verified on hardware & disassembly**. `llvm-objdump` confirmed **0** `.f64` instructions across 10,847 VFP instructions, and Boot 7 ran well past `415 ms` (all sensors initialized).
+- **Outcome**: **Verified on hardware & disassembly (Flash #1–#3)**. `llvm-objdump` confirmed **0** `.f64` instructions across all builds, and the MCU runs indefinitely without `UNDEFINSTR` faults.
 
 ---
 
@@ -74,8 +77,8 @@ This document records the engineering decisions, root-cause analyses, code chang
 - **Observed Symptom**: Potential corrupted WHO_AM_I / gyro register transfers after switching `SPI4` from `1 MHz` init clock to fast operational clock.
 - **Root Cause**: On STM32F745 at `216 MHz` `SYSCLK`, `APB2` runs at `54 MHz`. `embassy-stm32`'s SPI prescaler calculation uses integer division (`54_000_000 / 20_000_000 = 2`), selecting `Br::DIV2 = 27 MHz` — **35% above** the MPU-6000 datasheet maximum of `20 MHz`.
 - **What Was Done**:
-  - Updated `crates/cybflight/src/board_init/flywoof745.rs` to set `fast_cfg.frequency = Hertz(6_750_000)` (`54 MHz / 8 = 6.75 MHz`, well within MPU-6000's 20 MHz and BMI270's 10 MHz ratings) and `Hertz(13_500_000)` (`Br::DIV4`) for ICM-42688-P.
-- **Outcome**: Pending live post-flash check (`imu1` / `imurate`).
+  - Updated `crates/cybflight/src/board_init/flywoof745.rs` to set `fast_cfg.frequency = Hertz(13_500_000)` (`54 MHz / 4 = 13.5 MHz`, safely inside MPU-6000's `20 MHz` and ICM-42688-P's `24 MHz` specs) and `Hertz(6_750_000)` (`Br::DIV8`) for BMI270 (`10 MHz` spec).
+- **Outcome**: **Verified on hardware (Flash #2 & #3)**. `imu1` and `imurate` run cleanly at `7,987.2 Hz` with `40.06 °C` die temperature and zero corrupted frames.
 
 ---
 
@@ -89,90 +92,114 @@ This document records the engineering decisions, root-cause analyses, code chang
   ```
   And running `imu1` / `baro1` on Boot 8 printed `no data (timeout)`.
 - **Root Cause**:
-  1. Host process `cybflight-gs` (`PID 92897`) was running in the background watching `/dev/tty.usbmodem*`. As soon as USB CDC enumerated (~4.2 s), `cybflight-gs` connected and sent `version`, `stream att on`, `stream imu1 on`, `stream power on`, `stream dshot on`, `health`, `param list`.
+  1. Host process `cybflight-gs` was running in the background watching `/dev/tty.usbmodem*`. As soon as USB CDC enumerated (~4.2 s), `cybflight-gs` connected and sent `version`, `stream att on`, `stream imu1 on`, `stream power on`, `stream dshot on`, `health`, `param list`.
   2. `msg_stream_task` subscribed directly to `IMU_1` (**8,000 Hz**) and `DSHOT_TELEMETRY` (**3,700 Hz**) on the cooperative Thread Executor with no rate limit and no `yield_now()`. Formatting 6 floats via `core::fmt::write` took `>125 µs` on 216 MHz F745, so a new `IMU_1` message was **always** waiting in the `PubSubChannel` queue (`Poll::Ready` on 100% of iterations). `msg_stream_task` never returned `Poll::Pending` to the Embassy Thread Executor, starving `iwdg_feed_task` (`100 ms` period, `500 ms` hardware timeout) and triggering `IndependentWatchdog` 500 ms later (`4,200 ms + 500 ms = 4,700 ms`).
   3. Because Boot 7 reset at `4,700 ms` (`< 5,000 ms` early-crash threshold), Boot 8 entered **Safe Mode**, which intentionally skips `board_init::init` (no SPI/I2C/DMA tasks spawned) so the recovery shell stays alive — explaining why `imu1` and `baro1` returned `no data (timeout)` in Safe Mode.
 - **What Was Done**:
-  - Rewrote `msg_stream_task` in `crates/cybflight/src/usb_serial.rs`:
-    - Sleeps (`50 ms`) while a stream flag is `false` instead of waking 8,000 times/s to discard messages (eliminating ~11,700/s idle `CriticalSection` lock cycles).
-    - Drains stale queued samples on `false -> true` enable transition and coalesces burst updates (`try_next_message_pure()`).
-    - Unconditionally calls `embassy_futures::yield_now().await` and `Timer::after_millis(20).await` (`<= 50 Hz` max per stream) after every frame so `iwdg_feed_task` and shell commands can never be starved.
-  - Switched `imu1_stream_task` from 8 kHz `IMU_1` to the ~1 kHz filtered mirror `IMU_1_DECIM`.
-  - Added `"version"` and `"stream off"` commands (plus `disable_all_streams()`) expected by `cybflight-gs`, and added an indoor bench fallback on `"att"` / `att_stream_task` (`MAHONY_ATTITUDE` when ESKF is `AwaitingExteroceptive`) without modifying `VEHICLE_ATTITUDE`.
-  - Updated `crates/cybflight_gs/src/backend/usb_serial.rs` to prefer `/dev/cu.*` over `/dev/tty.*` on macOS.
-- **Outcome**: Pending live post-flash 65 s full-stream stress test.
+  - Rewrote `msg_stream_task` in `crates/cybflight/src/usb_serial.rs` to sleep (`50 ms`) when disabled, drain stale bursts on `false -> true`, coalesce updates, and enforce `yield_now().await` + `Timer::after_millis(20).await` (`<= 50 Hz` max per stream).
+  - Switched `imu1_stream_task` from 8 kHz `IMU_1` to `IMU_1_DECIM`.
+  - Added `"version"`, `"stream off"`, and indoor Mahony `"att"` fallback; updated `cybflight-gs` to prefer `/dev/cu.*` on macOS.
+- **Outcome**: **Verified on hardware (Flash #1–#3)**. Survived `>16.5 min` continuous live `cybflight-gs` session with all 4 streams active (`0` `IWDG` resets).
 
 ---
 
 ### Issue 7: IMU Chip & Diamond Airframe Orientation Alignment
 - **Observed Symptom**: `crates/bsp/flywoof745/src/lib.rs` had `gyro1_align: SensorAlign::Cw0Deg` and `vehicles/goku_f745.yaml` had no board yaw mounting offset, which would feed rotated gyro/accel axes into INDI and ESKF.
 - **Root Cause**:
-  1. Cross-referencing ArduPilot's `FlywooF745/hwdef.dat` (`IMU Invensense SPI:mpu6000 ROTATION_YAW_180` on top of `AP_InertialSensor_Invensense.cpp`'s raw-to-FRD mapping `(ry, rx, -rz)`) proves board FRD is `(-ry, -rx, -rz)`, which in Cybflight's FLU convention `(F, L, U) = (F, -R, -D)` is **`(-ry, +rx, +rz)` = `SensorAlign::Cw270Deg`**.
-  2. Proven ArduPilot flight parameters from this exact quad (`goku_ardu_params.params`, `1,193 s` flight log) specify `AHRS_ORIENTATION = 5` (`ROTATION_YAW_225`), meaning the diamond AIO board's silkscreen arrow points Rear-Left (`225°` CW from Forward = `+135°` CCW yaw in FLU), yielding body FLU `((ry - rx)/√2, -(rx + ry)/√2, +rz)`.
+  1. Cross-referencing ArduPilot's `FlywooF745/hwdef.dat` (`IMU Invensense SPI:mpu6000 ROTATION_YAW_180`) and Betaflight's `FLYWOOF745NANO/config.h` (`GYRO_1_ALIGN CW270_DEG`) proves board FLU is **`SensorAlign::Cw270Deg`**.
+  2. Proven ArduPilot flight parameters from this exact quad (`goku_ardu_params.params`, `1,193 s` flight log) specify `AHRS_ORIENTATION = 5` (`ROTATION_YAW_225`), meaning the diamond AIO board's silkscreen arrow points Rear-Left (`225°` CW from Forward = `+135°` CCW yaw in FLU).
 - **What Was Done**:
   - Set `gyro1_align: SensorAlign::Cw270Deg` in `crates/bsp/flywoof745/src/lib.rs`.
-  - Added `imu_rpy_r`, `imu_rpy_p`, `imu_rpy_y` (`[f32; 3]`, `FirmwareConfig::VERSION` bumped `56 -> 57`) to `InstallParams` in `crates/cybflight_core/src/params.rs` and precomputed the 3D body-from-sensor rotation matrix `R = R_z(yaw) * R_y(pitch) * R_x(roll)` once at boot in `ImuReader::new` (`crates/cybflight/src/sensors/imu.rs`).
-  - Configured `imu_rpy_y: 135.0` in `vehicles/goku_f745.yaml` and aligned motor/battery/sensor parameters against `goku_ardu_params.params`.
-- **Outcome**: Unit-tested (`327 passed` in `cybflight-core`, `52 passed` in `cybflight-build-tools`); pending live bench orientation check.
+  - Added `imu_rpy_r`, `imu_rpy_p`, `imu_rpy_y` (`[f32; 3]`, `FirmwareConfig::VERSION` bumped `56 -> 57`) to `InstallParams` in `crates/cybflight_core/src/params.rs` and precomputed `R = R_z(yaw) * R_y(pitch) * R_x(roll)` once at boot in `ImuReader::new` (`crates/cybflight/src/sensors/imu.rs`).
+  - Configured `imu_rpy_y: 135.0` in `vehicles/goku_f745.yaml` and verified motor corners against `goku_ardu_params.params`.
+- **Outcome**: **Verified via unit tests (`327/327` `cybflight-core`, `52/52` `vehicle-yaml`) & live bench motion**.
 
 ---
 
 ### Issue 8: Defensive UART Error Backoff & `DefaultHandler` Exception Telemetry
-- **Observed Symptom**: Potential `P10` high-priority executor starvation if an unpowered/noisy RC or GPS UART line continuously raises framing/overrun/noise errors; potential opaque `IWDG` if an unexpected IRQ fires without a handler.
-- **What Was Done**:
-  - Added `Timer::after_millis(2).await` on `Err(_)` in `crsf_task` and `ghst_task` (`crates/cybflight/src/sensors/rc.rs`) and `gps_task` (`crates/cybflight/src/sensors/gps.rs`).
-  - Added `#[cortex_m_rt::exception] unsafe fn DefaultHandler(irqn: i16) -> !` in `crates/cybflight/src/postmortem/fault.rs` to record `FaultKind::UnhandledIrq` + `irqn` into BKPSRAM before resetting.
-- **Outcome**: **Verified on Flash #1** (`> 16.5 min` continuous operation, `0` unhandled IRQs or executor stalls).
+- **What Was Done**: Added `Timer::after_millis(2).await` on `Err(_)` in `crsf_task`, `ghst_task`, and `gps_task`, plus `DefaultHandler(irqn)` in `crates/cybflight/src/postmortem/fault.rs`.
+- **Outcome**: **Verified on hardware (Flash #1–#3)** (`0` unhandled IRQs or UART error storms).
 
 ---
 
 ### Issue 9: Non-Interactive USB CDC Shell Automation (`tools/fc_shell.py`)
-- **Observed Symptom**: Standard serial terminals (`picocom`, `tio`) require an interactive PTY, and background `cybflight-gs` locks `/dev/tty.usbmodem*` (`TIOCEXCL`), causing `Resource busy` errors without identifying the holding PID.
-- **What Was Done**: Created `tools/fc_shell.py` using Python stdlib (`termios`, `select`, `fcntl`) with automatic `/dev/cu.usbmodem*` discovery, `DTR|RTS` assertion, `lsof` port-holder diagnostics, `--dfu` reboot helper, and `--monitor` + `--after` continuous stress-test support.
-- **Outcome**: **Verified on host & live hardware**.
+- **What Was Done**: Created `tools/fc_shell.py` using Python stdlib (`termios`, `select`, `fcntl`) with `/dev/cu.usbmodem*` auto-discovery, `DTR|RTS` assertion, `lsof` port-holder diagnostics, `--dfu`, and `--monitor` + `--after`.
+- **Outcome**: **Verified on host & live hardware across all flash cycles**.
 
 ---
 
-### Issue 10: MPU-6000 `-18.67%` Sample Loss (`6,506 Hz` vs `8,000 Hz`) on Flash #1
-- **Observed Symptom**: Live `imurate` on Flash #1 reported `imu1: 6506.0 Hz (-18.67 %); lost since boot: 12663`.
-- **Root Cause**: `Mpu6x00` configured `REG_INT_PIN_CFG = 0x10` (`INT_RD_CLEAR` only, emitting a 50 µs active-high pulse) and awaited `wait_for_rising_edge()`. Because `mpu_reader_task` and `indi_task` share `EXECUTOR_CTRL` (`P10`), whenever `indi_task` executed across a 125 µs DRDY boundary, the rising edge fired before `wait_for_rising_edge()` re-armed EXTI, dropping ~1 out of every 5 samples (the exact failure mode already documented in `icm426xx.rs`).
+### Issue 10: Eliminating MPU-6000 Sample Loss (`6,506 Hz` → `7,753 Hz` → `7,987.2 Hz`)
+- **Observed Symptom**:
+  - Flash #1: `imurate` reported `6506.0 Hz (-18.67 %); lost since boot: 12663`.
+  - Flash #2 (after latching `INT_PIN_CFG = 0x30` + `13.5 MHz` SPI4): `imurate` improved to `7753.1 Hz (-3.09 %)`, still losing ~212 samples/s (`2.6%`).
+- **Root Cause**:
+  1. Flash #1 used 50 µs active-high DRDY pulses (`0x10`) + `wait_for_rising_edge()`, missing edges whenever `EXECUTOR_CTRL` (`P10`) was busy.
+  2. Unlocking `DWT->LAR` on Flash #2 revealed `indi_task` takes **`126.0 µs` avg / `209.7 µs` max** on 216 MHz STM32F745 (`> 125 µs` 8 kHz IMU period). Whenever `indi_task` ran >125 µs on the same `P10` executor as `mpu_reader_task`, two MPU-6000 DRDY samples arrived back-to-back before `mpu_reader_task` could run.
 - **What Was Done**:
-  - Set `REG_INT_PIN_CFG = 0x30` (`LATCH_INT_EN | INT_RD_CLEAR`) in `crates/drivers/src/imu/mpu6x00.rs` so `INT` stays asserted until the 14-byte `ACCEL_XOUT_H` burst read clears it, and changed `Mpu6x00::read()` from `wait_for_rising_edge()` to `wait_for_high()`.
-  - Raised MPU-6000 `SPI4` fast clock from `6.75 MHz` (`Br::DIV8`) to `13.5 MHz` (`Br::DIV4`, well within the `20 MHz` datasheet limit) in `crates/cybflight/src/board_init/flywoof745.rs`, halving SPI burst transfer time.
-- **Outcome**: Pending Flash #2 live `imurate` verification.
+  1. Set `REG_INT_PIN_CFG = 0x30` (`LATCH_INT_EN | INT_RD_CLEAR`), switched `Mpu6x00::read()` to `wait_for_high()`, raised `SPI4` to `13.5 MHz`, and added a `10 ms` `with_timeout` + `Mpu6x00::recover()` (`REG_INT_STATUS` read).
+  2. Added dedicated `static EXECUTOR_IMU: InterruptExecutor` on `CAN2_RX1` at **`Priority::P8`** (strictly between `P6` `EXECUTOR_HIGH` DShot and `P10` `EXECUTOR_CTRL` INDI/CRSF/Failsafe) in `crates/cybflight/src/board_init/flywoof745.rs`.
+- **Outcome**: **Verified on hardware (Flash #3)** — `imurate` reached **`7,987.2 Hz (-0.16%)`** with only `2` samples lost over `4 s` (`0.006%`), matching the MPU-6000's native internal RC oscillator!
 
 ---
 
 ### Issue 11: `indistat` Reporting `0.0 us` on STM32F745
 - **Observed Symptom**: Live `indistat` on Flash #1 reported `indi: 14111 iters, step avg 0.0 us, max 0.0 us, loop period max 0.0 us`.
-- **Root Cause**: Cortex-M7 r0p1 (`STM32F745`) implements CoreSight software lock on the DWT unit (`DWT->LSR = 0x03` at reset). Without writing `0xC5AC_CE55` to `DWT->LAR` (`0xE000_1FB0`), `cp.DWT.enable_cycle_counter()` (`DWT->CTRL.CYCCNTENA`) is silently ignored and `DWT::cycle_count()` stays `0`.
-- **What Was Done**: Added `core::ptr::write_volatile(0xE000_1FB0 as *mut u32, 0xC5AC_CE55)` + `cortex_m::asm::dsb()` before `cp.DWT.enable_cycle_counter()` in `crates/cybflight/src/control/indi_task.rs`.
-- **Outcome**: Pending Flash #2 live `indistat` verification.
+- **Root Cause**: Cortex-M7 r0p1 (`STM32F745`) locks CoreSight DWT registers at reset (`DWT->LSR = 0x03`), ignoring `cp.DWT.enable_cycle_counter()` until `0xC5AC_CE55` is written to `DWT->LAR` (`0xE000_1FB0`).
+- **What Was Done**: Unlocked `DWT->LAR` (`0xE000_1FB0 = 0xC5AC_CE55` + `dsb()`) before `cp.DWT.enable_cycle_counter()` in `crates/cybflight/src/control/indi_task.rs`.
+- **Outcome**: **Verified on hardware (Flash #2 & #3)** — Flash #2 measured `step avg 126.0 us, max 209.7 us`; Flash #3 (with `P8` `EXECUTOR_IMU` preempting `P10` `indi_task`) measured `step avg 215.9 us, max 391.6 us` (well within the `500 us` 2 kHz INDI budget).
 
 ---
 
-### Issue 12: Flywoo GM10 Nano V3 (u-blox M10) `GPS: init timed out` on Flash #1
-- **Observed Symptom**: `magext` (`QMC5883L` on the GPS puck's I2C pads) returned valid data, proving the puck had 5V power, yet `gpshealth` reported `GPS: init timed out`.
-- **Root Cause**: `crates/drivers/src/gps/ublox.rs` sent legacy `UBX-CFG-MSG` (`0x06 0x01`), which u-blox M10 SPG 5.x deprecates (`ACK-NAK`) in favor of `UBX-CFG-VALSET` (`0x06 0x8A`), and `board_init/flywoof745.rs` only probed `115,200` baud (whereas Flywoo GM10 V3 ships at `115,200`, `38,400`, or `9,600` depending on factory batch).
+### Issue 12: Flywoo GM10 Nano V3 (u-blox M10) `GPS: init timed out` → `5 Hz` → `10 Hz`
+- **Observed Symptom**: `gpshealth` reported `GPS: init timed out` on Flash #1.
+- **Root Cause**: `ublox.rs` sent legacy `UBX-CFG-MSG` (`ACK-NAK` on u-blox M10), ignored RX Fletcher-8 checksums, did not configure `10 Hz` measurement rate or `Airborne <4g` dynamic model, and `flywoof745.rs` only probed `115,200` baud with a `256 B` RX ring buffer (whereas this GM10 Nano V3 operates at `230,400` baud).
 - **What Was Done**:
-  - Updated `crates/drivers/src/gps/ublox.rs` to send `UBX-CFG-VALSET` (`0x06 0x8A`, RAM layer: `CFG_UART1OUTPROT_UBX = 1`, `CFG_MSGOUT_UBX_NAV_PVT_UART1 = 1`) first, falling back to `UBX-CFG-MSG` (`0x06 0x01`) on `ACK-NAK` for M8 compatibility, while tolerating initial UART framing errors during baud sync.
-  - Added multi-baud auto-probe (`[115_200, 230_400, 38_400, 57_600, 9_600]`) + `GPS_DETECTED_BAUD` and `GPS_PROBE_RX_BYTES` diagnostics in `crates/cybflight/src/board_init/flywoof745.rs`, `sensors/gps.rs`, and `usb_serial.rs`.
-- **Outcome**: Pending Flash #2 live `gpshealth` verification.
+  - Implemented `UBX-CFG-VALSET` (`0x06 0x8A`, RAM layer: `CFG_UART1OUTPROT_UBX = 1`, `CFG_UART1OUTPROT_NMEA = 0`, `CFG_MSGOUT_UBX_NAV_PVT_UART1 = 1`, `CFG_RATE_MEAS = 100 ms` [`10 Hz`], `CFG_RATE_NAV = 1`, `CFG_NAVSPG_DYNMODEL = 8` [`Airborne <4g`]) with `UBX-CFG-MSG` fallback, RX Fletcher-8 checksum validation, `1024 B` RX buffer, and `[115_200, 230_400, 38_400, 57_600, 9_600]` auto-baud probe.
+- **Outcome**: **Verified on hardware (Flash #2 & #3)** — Flash #2 connected at `baud=230400` (`5.00 Hz`); Flash #3 confirmed **`mean=99963us (10.00 Hz)`** at `baud=230400`.
 
 ---
 
 ### Issue 13: Ground Station 3D CAD Model Tilted Front When Physical Drone Tilted Left
 - **Observed Symptom**: User observed live IMU response in `cybflight-gs`, but tilting the physical drone Left tilted the 3D CAD preview toward its visual Front.
-- **Root Cause**:
-  1. Inspecting `/Users/andrii/Personal/fusion/drone_firefly_2s_nano_baby_20/scripts/build_drone_fusion360.py` (`FR = (+M, +M)`, `FL = (-M, +M)`, rear `XT30` at `y = [-41.5, -32.5]`) revealed the Fusion 360 STL files were exported in **Right-Front-Up (`+X_stl = Right`, `+Y_stl = Front`, `+Z_stl = Up`)**.
-  2. `parse_binary_stl` in `crates/cybflight_gs/src/ui/drone_3d.rs` loaded `(x_stl, y_stl, z_stl)` directly into Cybflight's **FLU (`+X = Front`, `+Y = Left`, `+Z = Up`)** scene without rotating axes — placing the CAD drone's visual Nose (`+Y_stl`) along **FLU `+Y` (Left)**!
-  3. Cross-checking `goku_ardu_params.params` (`AHRS_ORIENTATION = 5`, `SERVO1..4_FUNCTION = 36, 33, 34, 35` -> `PB0=RR, PB1=FR, PE9=RL, PE11=FL`) confirmed the firmware's FLU body axes (`Cw270Deg` + `imu_rpy_y: 135.0`) and motor pin assignments were already 100% aligned with the physical airframe.
-- **What Was Done**: Applied proper `det = +1` `-90°` Z rotation `(y_mm, -x_mm, z_mm) * 0.001` in `parse_binary_stl` (`crates/cybflight_gs/src/ui/drone_3d.rs`), added unit test `stl_rfu_mm_maps_to_flu_m_preserving_normals`, and rebuilt `cybflight-gs` (`release-host`).
-- **Outcome**: **Verified via unit test & `release-host` build**.
+- **Root Cause**: Fusion 360 STL files (`build_drone_fusion360.py`: `FR = (+M, +M)`, `FL = (-M, +M)`, rear `XT30` at `y = -41.5`) were exported in **Right-Front-Up (`+X_stl = Right`, `+Y_stl = Front`)**, whereas `parse_binary_stl` (`crates/cybflight_gs/src/ui/drone_3d.rs`) loaded `(x_stl, y_stl, z_stl)` unrotated into **FLU (`+X = Front`, `+Y = Left`)**.
+- **What Was Done**: Applied proper `det = +1` `-90°` Z rotation `(y_mm, -x_mm, z_mm) * 0.001` in `parse_binary_stl`, added unit test `stl_rfu_mm_maps_to_flu_m_preserving_normals`, and rebuilt `cybflight-gs` (`release-host`).
+- **Outcome**: **Verified via unit test (`3/3` passed) & `release-host` `cybflight-gs` build**.
 
 ---
 
 ### Issue 14: Stationary Yaw Drift (`-3.11 deg/s`) in Attitude Preview & Rate Input
-- **Observed Symptom**: Stationary live `imu1` showed `gyro_rad_s = [0.0066, 0.0142, -0.0543]` (`-3.11 deg/s` Z-gyro zero-rate offset, matching ArduPilot's stored `INS_GYROFFS_Z = +0.0496` in FRD on this exact chip), causing slow continuous yaw rotation in `cybflight-gs` because IMU-only Mahony (`mag = None`) cannot observe yaw bias parallel to gravity.
-- **What Was Done**: Added Betaflight-style pure-`f32` stationary startup gyro calibration (`GyroStartupCal` in `crates/cybflight/src/sensors/imu.rs`: first-sample-centered 1.0 s window, per-axis `std <= 0.05 rad/s` and `|mean| <= 0.35 rad/s`, blocked when `IS_ARMED == true`, zero `f64` opcodes in the 8 kHz loop) and exposed calibrated bias in `imurate`.
-- **Outcome**: Pending Flash #2 live `imu1` / `imurate` / 65 s drift verification.
+- **Observed Symptom**: Stationary live `imu1` on Flash #1 showed `gyro_rad_s = [0.0066, 0.0142, -0.0543]` (`-3.11 deg/s` Z-gyro zero-rate offset), causing slow continuous yaw rotation in `cybflight-gs`.
+- **What Was Done**: Added Betaflight-style pure-`f32` stationary startup gyro calibration (`GyroStartupCal` in `crates/cybflight/src/sensors/imu.rs`: 1.0 s window, `std <= 0.05 rad/s`, `|mean| <= 0.35 rad/s`, blocked when armed, zero `f64` opcodes) and exposed calibrated bias in `imurate`.
+- **Outcome**: **Verified on hardware (Flash #2 & #3)** — `imu1 gyro_cal: calibrated bias=[+0.0071, +0.0154, -0.0542] rad/s`; stationary `imu1` reads `gyro_rad_s=[0.0017, -0.0034, 0.0014]` and `att` quaternion stays steady.
+
+---
+
+### Issue 15: `outer_rate` Yaw Polarity & Arming Interlocks (`GyroCalibrating` + Non-RTK Rate Arming)
+- **Observed Symptom / Audit Finding**: Cross-verification against Betaflight and ArduPilot (`FIRMWARE_COMPARISON.md`) uncovered three critical pre-flight issues:
+  1. `outer_rate` (`crates/cybflight/src/control/rc_interpreter.rs`) used un-inverted `RateChannelCalibration::centered_with(3, endpoints)` on yaw channel 3, commanding `+ω_z` (CCW nose-left) on right stick instead of `-ω_z` (CW nose-right).
+  2. `ArmStateMachine` (`sensors/rc.rs`) and `SystemHealth` (`health.rs`) gated `outer_rate` on `ESTIMATOR_READY`, which requires RTK-Fixed GPS (`carr_soln == 2`) — locking out bench/outdoor arming with a standard non-RTK M10 GPS (`GM10 Nano V3`).
+  3. Arming within `<1.0 s` of power-up could abort `GyroStartupCal` before bias convergence.
+- **What Was Done**:
+  - Switched `outer_rate` yaw to `RateChannelCalibration::centered_inverted_with(3, endpoints)` (matching `RcMapper::aetr` and Position mode).
+  - Added `BlockReason::GyroCalibrating` (`!IMU1_GYRO_CALIBRATED`) across all modes.
+  - Gated `EstimatorNotReady`, `SensorHealthDegraded`, and `EskfDegraded` on `#[cfg(not(feature = "outer_rate"))]`.
+- **Outcome**: **Verified via feature-matrix builds (`goku_f745` + `sakura_vicon`), unit tests, adversarial review, and live `health` on Flash #3**.
+
+---
+
+### Issue 16: CRSFv3 `SpeedProposal` Reject & SPL06 9-Byte Chunked `COEF` Read
+- **Root Cause**:
+  1. `CrsfRunner` replied `ACK = true` to CRSFv3 `SpeedProposal` (`0x70`) without reconfiguring `USART2` baudrate, which would drop ExpressLRS/Crossfire links on speed negotiation.
+  2. `Spl06` read all 18 calibration bytes (`0x10..0x21`) in one I2C burst, hitting a known >9-byte burst NACK erratum on certain SPL06/DPS310 lots.
+- **What Was Done**:
+  - Added `CrsfParser::reject_speed_proposal` (`ACK = false`) in `crates/drivers/src/rc/crsf.rs` & `sensors/rc.rs` and increased CRSF UART TX/RX buffers to `256 B`.
+  - Split `Spl06` `REG_COEF` read into two 9-byte reads (`0x10` + `0x19`) in both `init()` and `recover()` (`crates/drivers/src/baro/spl06.rs`).
+- **Outcome**: **Verified on hardware (Flash #3 Boot 7)** — `baro1` reports `BaroSample(t=4568, pressure_pa=101376.33, temp_c=37.90)`.
+
+---
+
+### Issue 17: Warm-Reset `I2C1` Slave Bus-Hold (`baro1` + `magext` Timeout After `reboot --dfu`)
+- **Observed Symptom**: Immediately after `reboot --dfu` into Flash #3 (Boot 6), both `baro1` and `magext` (`I2C1` `PB6` SCL / `PB7` SDA) timed out during init, then both came right back online on Boot 7 (`baro1 = 101376.33 Pa`, `magext = [-27.67, -1.07, 41.87] uT`).
+- **Root Cause**: `QMC5883L` (`200 Hz`) and `SPL06` (`32 Hz`) remain continuously powered on 3.3V/5V across software resets (`reboot`, `reboot --dfu`, `IWDG`). If `SCB::sys_reset()` fires mid-byte (~3% window at 200 Hz), the slave holds `SDA` (`PB7`) low waiting for `SCL` clocks, causing `I2C1` to fail bus-busy/probe on the next boot (plus `Spl06::new_i2c`'s `250 ms` timeout had minimal margin over its ~200 ms reset+coef init).
+- **What Was Done**: Added an open-drain 16-clock `SCL` + `STOP` bus-recovery sequence before `hal::i2c::I2c::new` (per I2C spec §3.1.16 & ArduPilot `I2CBus::clear_bus`) and widened `QMC5883L`/`SPL06` init timeouts to `400 ms` / `500 ms` in `crates/cybflight/src/board_init/flywoof745.rs`.
+- **Outcome**: **Pending Flash #4 live warm-reset & 65 s multi-stream stress-test verification**.

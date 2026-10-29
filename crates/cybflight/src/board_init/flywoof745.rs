@@ -414,6 +414,49 @@ pub async fn init(
     // Per docs/sensor_bus_sharing.md: initialize ALL devices on a shared I2C bus
     // before spawning ANY sensor reader tasks.
     {
+        // Unstick I2C1 (`PB6` SCL, `PB7` SDA) before `I2c::new` in case a warm
+        // MCU reset (`reboot`, `reboot --dfu`, or `IWDG`) interrupted an
+        // in-flight QMC5883L (200 Hz) or SPL06 (32 Hz) byte read while 3.3V/5V
+        // remained powered, leaving a slave holding SDA low (I2C spec §3.1.16 /
+        // ArduPilot `I2CBus::clear_bus`: open-drain SCL recovery clocks + STOP).
+        let mut i2c1_scl = board.i2c.i2c1_scl;
+        let mut i2c1_sda = board.i2c.i2c1_sda;
+        {
+            let mut scl = Flex::new(i2c1_scl.reborrow());
+            let mut sda = Flex::new(i2c1_sda.reborrow());
+            scl.set_high();
+            sda.set_high();
+            scl.set_as_input_output_pull(Speed::Medium, hal::gpio::Pull::Up);
+            sda.set_as_input_output_pull(Speed::Medium, hal::gpio::Pull::Up);
+            Timer::after_micros(20).await;
+            for _round in 0..2 {
+                // Clock 9 full SCL pulses with SDA released high (NXP UM10204 §3.1.16)
+                // so any slave mid-read shifts out all remaining data bits and samples
+                // Master NACK (SDA=1) on the 9th clock, rather than breaking on an
+                // intermediate '1' data bit whose next SCL falling edge shifts a '0'.
+                sda.set_high();
+                Timer::after_micros(20).await;
+                for _ in 0..9 {
+                    scl.set_low();
+                    Timer::after_micros(20).await;
+                    scl.set_high();
+                    Timer::after_micros(20).await;
+                }
+                // Generate clean I2C STOP condition (SDA Low -> High while SCL is High)
+                scl.set_low();
+                Timer::after_micros(20).await;
+                sda.set_low();
+                Timer::after_micros(20).await;
+                scl.set_high();
+                Timer::after_micros(20).await;
+                sda.set_high();
+                Timer::after_micros(20).await;
+                if sda.is_high() && scl.is_high() {
+                    break;
+                }
+            }
+        }
+
         static I2C1_BUS: StaticCell<I2cBusMtx> = StaticCell::new();
         let mut i2c_config = hal::i2c::Config::default();
         i2c_config.frequency = Hertz(400_000);
@@ -422,8 +465,8 @@ pub async fn init(
         i2c_config.timeout = Duration::from_millis(20);
         let i2c1 = hal::i2c::I2c::new(
             board.i2c.i2c1,
-            board.i2c.i2c1_scl,
-            board.i2c.i2c1_sda,
+            i2c1_scl,
+            i2c1_sda,
             I2c1Irqs,
             board.i2c.i2c1_tx_dma,
             board.i2c.i2c1_rx_dma,
@@ -442,7 +485,7 @@ pub async fn init(
             defmt::info!("I2C1: QMC5883L found, initializing...");
             let dev = I2cDevice::new(i2c1_bus);
             let mut delay = embassy_time::Delay;
-            match with_timeout(Duration::from_millis(200), Qmc5883l::new(dev, &mut delay)).await {
+            match with_timeout(Duration::from_millis(400), Qmc5883l::new(dev, &mut delay)).await {
                 Ok(Ok(mag)) => {
                     defmt::info!("QMC5883L init OK");
                     Some(mag)
@@ -479,7 +522,7 @@ pub async fn init(
             let dev = I2cDevice::new(i2c1_bus);
             let mut delay = embassy_time::Delay;
             match with_timeout(
-                Duration::from_millis(250),
+                Duration::from_millis(500),
                 Spl06::new_i2c(dev, bsp::sensors::BARO_1_I2C_ADDR, &mut delay),
             )
             .await
