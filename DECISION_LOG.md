@@ -279,7 +279,11 @@ This document records the engineering decisions, root-cause analyses, code chang
     - Live `CH1..CH16` (`Roll`, `Pitch`, `Throttle`, `Yaw`, `AUX1..AUX12`) pulse-width bars (`850..2150 µs`) with `min`/`mid`/`max` ticks and red threshold markers, plus interactive Mock TX bench sliders/buttons when in `[Mock]` mode.
     - Resolved Active Flight Mode banner (`armed_latched` pre-arm transition gate on `CH3 <= rc_throttle_mincheck_us` & `LQ >= arm_min_link_quality` + hysteretic Schmitt trigger on `rc_mission_channel`) and Betaflight-style switch range cards with live yellow cursor needles (`ARM` on `CH5/AUX1`, `Manual Rate / PosHold ↔ Offboard/RL / Autonomous Mission` on `CH7/AUX3`, and `Throttle Mincheck / Land / Launch` zones on `CH3`).
     - Inline switch/endpoint/rate/deadband editor (`rc_*` group) with `Apply RC Changes to FC RAM` and `Save to Flash & Reboot FC`.
-- **Outcome**: **Verified via adversarial review (`PASS`), unit tests, and live USB shell verification (`stream rc on`, `stream rcstats on`, `param list rc`, `param set`/`reset` on Flash #9)**.
+  - **UI Layout & No-RX Standby Polish (`rc_tab.rs`)**:
+    - Replaced `Layout::right_to_left` single-row headers in `draw_mode_range_card` (which collided with mode titles in fullscreen and expanded `min_rect.left()` leftward over the left column in windowed mode) with a clipped Row 1 (`title` + right-pinned status badge) + dedicated truncated Row 2 (`channel_desc • now = ...`).
+    - Replaced variable-width nested `horizontal` rows in `draw_channel_bar_row` with a single `allocate_exact_size` split (`CH_LABEL_W = 144 px`, `CH_VAL_W = 62 px`) + `draw_channel_scale_header` (`988 / 1500 / 2011` axis ticks) so all 16 channel bars and reference ticks align to the exact pixel.
+    - Fitted/clipped mode-zone pill labels (`full_lbl` fallback to `short_lbl`), enforced `full_width_card` across both columns with responsive 2-column (`>= 940 px`) / stacked (`< 940 px`) scrolling and adaptive 2-or-4-column `rc_quick_map_grid` (`>= 650 px`), and gated active highlights/cursors/bars on `has_rx` (`○ NO RX` / `— µs` / `"NO RX"` standby before RC frames arrive).
+- **Outcome**: **Verified via adversarial review (`PASS`), headless `egui` layout & pairwise text non-overlap unit tests (`820×620`, `1180×720`, `1920×1080` across USB no-RX standby & Mock FC), `arm_latch_mirrors_firmware_arm_state_machine` unit test, and live USB shell verification (`stream rc on`, `stream rcstats on`, `param list rc`, `param set`/`reset` on Flash #9)**.
 
 ---
 
