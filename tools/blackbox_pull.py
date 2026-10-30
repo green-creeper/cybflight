@@ -36,9 +36,15 @@ CRC_RE = re.compile(rb"^CRC ([0-9a-f]{8})\s*$")
 
 
 def find_port() -> str:
-    candidates = sorted(glob.glob("/dev/ttyACM*")) + sorted(glob.glob("/dev/tty.usbmodem*"))
+    # Prefer /dev/cu.usbmodem* on macOS (callout device never blocks on DCD)
+    candidates = (
+        sorted(glob.glob("/dev/cu.usbmodem*"))
+        + sorted(glob.glob("/dev/ttyACM*"))
+    )
     if not candidates:
-        sys.exit("no /dev/ttyACM* device found — is the FC plugged in? (use --port)")
+        candidates = sorted(glob.glob("/dev/tty.usbmodem*"))
+    if not candidates:
+        sys.exit("no /dev/cu.usbmodem* or /dev/ttyACM* device found — is the FC plugged in? (use --port)")
     if len(candidates) > 1:
         print(f"note: multiple CDC devices, using {candidates[0]} (override with --port)")
     return candidates[0]
@@ -49,7 +55,10 @@ def open_port(port: str):
         import serial  # pyserial
     except ImportError:
         sys.exit("pyserial not installed: pip install pyserial")
-    return serial.Serial(port, 115200, timeout=0.5)
+    ser = serial.Serial(port, 115200, timeout=0.5)
+    ser.dtr = True
+    ser.rts = True
+    return ser
 
 
 def read_line(ser, deadline_s: float = 5.0) -> bytes:

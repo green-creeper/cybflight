@@ -4,6 +4,10 @@ use crate::backend::mock_fc::MockFcBackend;
 use crate::backend::usb_serial::UsbSerialConnection;
 use crate::backend::{ConnectionMode, ParamTable};
 
+const CLI_MAX_LINES: usize = 6000;
+const CLI_TRIM_BATCH: usize = 1000;
+const CLI_ROW_H: f32 = 16.5;
+
 pub struct CliTabState {
     pub input_line: String,
     pub log_lines: Vec<String>,
@@ -18,7 +22,7 @@ impl Default for CliTabState {
             input_line: String::new(),
             log_lines: vec![
                 "Cybflight Ground Station Interactive Shell.".to_string(),
-                "Type `help`, `version`, `health`, `param diff`, `postmortem show`, or `reboot --dfu`.".to_string(),
+                "Type `help`, `version`, `health`, `param list`, `param diff`, `postmortem show`, or `reboot --dfu`.".to_string(),
             ],
             show_stream_lines: false,
             history: Vec::new(),
@@ -30,8 +34,8 @@ impl Default for CliTabState {
 impl CliTabState {
     pub fn push_line(&mut self, line: String) {
         self.log_lines.push(line);
-        if self.log_lines.len() > 1500 {
-            self.log_lines.drain(0..300);
+        if self.log_lines.len() > CLI_MAX_LINES {
+            self.log_lines.drain(0..CLI_TRIM_BATCH);
         }
     }
 }
@@ -54,6 +58,7 @@ pub fn show_cli_tab(
             "eskf",
             "resetcause",
             "postmortem show",
+            "param list",
             "param diff",
             "param list build",
             "stream off",
@@ -67,6 +72,11 @@ pub fn show_cli_tab(
         if ui.button("Clear").clicked() {
             state.log_lines.clear();
         }
+        ui.label(
+            RichText::new(format!("({} lines)", state.log_lines.len()))
+                .small()
+                .weak(),
+        );
     });
 
     ui.separator();
@@ -80,19 +90,38 @@ pub fn show_cli_tab(
                 .id_salt("cli_scroll_area")
                 .stick_to_bottom(true)
                 .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    for line in &state.log_lines {
+                .show_rows(ui, CLI_ROW_H, state.log_lines.len(), |ui, row_range| {
+                    for idx in row_range {
+                        let line = &state.log_lines[idx];
                         let col = if line.starts_with("> ") {
                             Color32::from_rgb(255, 195, 75)
                         } else if line.contains("ERR")
                             || line.contains("refused")
+                            || line.contains("rejected")
                             || line.contains("FAILED")
                         {
                             Color32::from_rgb(255, 100, 90)
+                        } else if line.starts_with('[') && line.contains(']') {
+                            Color32::from_rgb(115, 200, 255)
                         } else {
                             Color32::from_rgb(205, 220, 232)
                         };
-                        ui.colored_label(col, egui::RichText::new(line).monospace());
+                        let row_w = ui.available_width().max(80.0);
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(row_w, CLI_ROW_H),
+                            egui::Layout::left_to_right(egui::Align::Center),
+                            |ui| {
+                                let resp = ui.add(
+                                    egui::Label::new(
+                                        egui::RichText::new(line).monospace().color(col),
+                                    )
+                                    .truncate(),
+                                );
+                                if line.len() > 90 {
+                                    resp.on_hover_text(line);
+                                }
+                            },
+                        );
                     }
                 });
         });
@@ -104,7 +133,7 @@ pub fn show_cli_tab(
         let resp = ui.add(
             egui::TextEdit::singleline(&mut state.input_line)
                 .font(egui::TextStyle::Monospace)
-                .hint_text("Enter shell command (e.g. `param get mass_kg`, `motor 1 10`, `reboot --dfu`)...")
+                .hint_text("Enter shell command (e.g. `param get mass`, `param list`, `motor 1 10`, `reboot --dfu`)...")
                 .desired_width(ui.available_width() - 90.0),
         );
 
@@ -132,7 +161,11 @@ fn dispatch_cli(
 ) {
     match mode {
         ConnectionMode::UsbSerial { .. } => {
-            state.push_line(format!("> {cmd}"));
+            if cmd == "param list" {
+                param_table.begin_fc_sync(true, false);
+            } else if cmd.starts_with("param list ") {
+                param_table.begin_fc_sync(false, false);
+            }
             if let Some(conn) = usb_conn {
                 conn.send_command(cmd);
             }

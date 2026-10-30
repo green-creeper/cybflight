@@ -30,9 +30,15 @@ import time
 
 
 def find_port() -> str:
-    candidates = sorted(glob.glob("/dev/ttyACM*")) + sorted(glob.glob("/dev/tty.usbmodem*"))
+    # Prefer /dev/cu.usbmodem* on macOS (callout device never blocks on DCD)
+    candidates = (
+        sorted(glob.glob("/dev/cu.usbmodem*"))
+        + sorted(glob.glob("/dev/ttyACM*"))
+    )
     if not candidates:
-        sys.exit("no /dev/ttyACM* device found — is the FC plugged in? (use --port)")
+        candidates = sorted(glob.glob("/dev/tty.usbmodem*"))
+    if not candidates:
+        sys.exit("no /dev/cu.usbmodem* or /dev/ttyACM* device found — is the FC plugged in? (use --port)")
     if len(candidates) > 1:
         print(f"note: multiple CDC devices, using {candidates[0]} (override with --port)")
     return candidates[0]
@@ -41,19 +47,87 @@ def find_port() -> str:
 def shell_command(port: str, command: str, settle_s: float = 1.5) -> str:
     try:
         import serial  # pyserial
+
+        with serial.Serial(port, 115200, timeout=0.2) as ser:
+            ser.dtr = True
+            ser.rts = True
+            ser.reset_input_buffer()
+            ser.write(b"\nstream off\n")
+            t_drain = time.monotonic() + 0.12
+            while time.monotonic() < t_drain:
+                if not ser.read(4096):
+                    break
+            ser.write((command + "\n").encode())
+            hard_deadline = time.monotonic() + max(settle_s, 5.0)
+            idle_deadline = time.monotonic() + settle_s
+            out = bytearray()
+            cmd_bytes = command.encode()
+            while time.monotonic() < hard_deadline and time.monotonic() < idle_deadline:
+                chunk = ser.read(4096)
+                if chunk:
+                    out.extend(chunk)
+                    if cmd_bytes in out and out.endswith(b"> "):
+                        break
+                    idle_deadline = time.monotonic() + 0.3
+            return out.decode(errors="replace")
     except ImportError:
-        sys.exit("pyserial not installed: pip install pyserial")
-    with serial.Serial(port, 115200, timeout=0.2) as ser:
-        ser.reset_input_buffer()
-        ser.write((command + "\n").encode())
-        deadline = time.monotonic() + settle_s
+        pass
+
+    # Zero-dependency POSIX fallback (macOS / Linux) when pyserial is not installed
+    import fcntl
+    import select
+    import struct
+    import termios
+    import tty
+
+    tiocmbis = 0x8004746C if sys.platform == "darwin" else 0x5416
+    fd = os.open(port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+    try:
+        try:
+            tty.setraw(fd, when=termios.TCSANOW)
+            attrs = termios.tcgetattr(fd)
+            attrs[2] |= termios.CLOCAL | termios.CREAD
+            attrs[4] = termios.B115200
+            attrs[5] = termios.B115200
+            termios.tcsetattr(fd, termios.TCSANOW, attrs)
+        except termios.error:
+            pass
+        try:
+            fcntl.ioctl(fd, tiocmbis, struct.pack("I", 0x002 | 0x004))
+        except OSError:
+            pass
+
+        # Drain connect banner / turn off streams first
+        os.write(fd, b"\nstream off\n")
+        t_drain = time.monotonic() + 0.12
+        while time.monotonic() < t_drain:
+            r, _, _ = select.select([fd], [], [], 0.03)
+            if r:
+                try:
+                    os.read(fd, 4096)
+                except OSError:
+                    break
+
+        os.write(fd, (command + "\n").encode())
+        hard_deadline = time.monotonic() + max(settle_s, 5.0)
+        idle_deadline = time.monotonic() + settle_s
         out = bytearray()
-        while time.monotonic() < deadline:
-            chunk = ser.read(4096)
-            if chunk:
-                out.extend(chunk)
-                deadline = time.monotonic() + 0.3
+        cmd_bytes = command.encode()
+        while time.monotonic() < hard_deadline and time.monotonic() < idle_deadline:
+            r, _, _ = select.select([fd], [], [], 0.1)
+            if r:
+                try:
+                    chunk = os.read(fd, 4096)
+                except BlockingIOError:
+                    continue
+                if chunk:
+                    out.extend(chunk)
+                    if cmd_bytes in out and out.endswith(b"> "):
+                        break
+                    idle_deadline = time.monotonic() + 0.3
         return out.decode(errors="replace")
+    finally:
+        os.close(fd)
 
 
 def parse_diff_yaml(raw: str) -> tuple[str | None, dict[str, str]]:

@@ -20,6 +20,7 @@ use crate::sensors::{
     BARO_1, BARO_2, DSHOT_TELEMETRY, GPS_FIX, IMU_1, IMU_1_DECIM, IMU_2, MAG_EXT, MAG_INT,
     POWER_STATUS, RC_INPUT, RC_LINK_STATUS, VEHICLE_ATTITUDE, VICON_POSE,
 };
+use crate::shell::BufferedUsbWriter;
 use crate::shell::SHELL_OUT;
 use crate::shell::ShellLine;
 use crate::shell::WriteBuf;
@@ -652,6 +653,7 @@ async fn shell_loop<'d>(class: &mut CdcAcmClass<'d, UsbDriver<'d>>) {
     let mut line_buf = [0u8; 96];
     let mut line_len = 0usize;
     let mut rx_buf = [0u8; 64];
+    let mut prev_was_cr = false;
 
     let mut banner_buf = [0u8; 224];
     let mut w = WriteBuf::new(&mut banner_buf);
@@ -683,9 +685,26 @@ async fn shell_loop<'d>(class: &mut CdcAcmClass<'d, UsbDriver<'d>>) {
             Either::First(Err(_)) => return,
 
             Either::First(Ok(n)) => {
+                // Coalesce contiguous printable echo bytes within a single USB
+                // OUT packet (`n <= 64`) so automated commands (`cybflight-gs`,
+                // `param_sync.py`) don't burn one 1-ms USB frame per character.
+                let mut echo_buf = [0u8; 64];
+                let mut echo_len = 0usize;
                 for &b in &rx_buf[..n] {
+                    if b == b'\n' && prev_was_cr {
+                        prev_was_cr = false;
+                        continue;
+                    }
+                    prev_was_cr = b == b'\r';
+
                     match b {
                         b'\r' | b'\n' => {
+                            if echo_len > 0 {
+                                if write_all(class, &echo_buf[..echo_len]).await.is_err() {
+                                    return;
+                                }
+                                echo_len = 0;
+                            }
                             if write_all(class, b"\r\n").await.is_err() {
                                 return;
                             }
@@ -702,6 +721,12 @@ async fn shell_loop<'d>(class: &mut CdcAcmClass<'d, UsbDriver<'d>>) {
                         }
                         // DEL or backspace
                         0x7f | 0x08 => {
+                            if echo_len > 0 {
+                                if write_all(class, &echo_buf[..echo_len]).await.is_err() {
+                                    return;
+                                }
+                                echo_len = 0;
+                            }
                             if line_len > 0 {
                                 line_len -= 1;
                                 if write_all(class, b"\x08 \x08").await.is_err() {
@@ -710,6 +735,12 @@ async fn shell_loop<'d>(class: &mut CdcAcmClass<'d, UsbDriver<'d>>) {
                             }
                         }
                         b'\t' => {
+                            if echo_len > 0 {
+                                if write_all(class, &echo_buf[..echo_len]).await.is_err() {
+                                    return;
+                                }
+                                echo_len = 0;
+                            }
                             if crate::shell::complete::tab_complete(
                                 class,
                                 &mut line_buf,
@@ -726,13 +757,15 @@ async fn shell_loop<'d>(class: &mut CdcAcmClass<'d, UsbDriver<'d>>) {
                             if line_len < line_buf.len() {
                                 line_buf[line_len] = b;
                                 line_len += 1;
-                                if write_all(class, &[b]).await.is_err() {
-                                    return;
-                                }
+                                echo_buf[echo_len] = b;
+                                echo_len += 1;
                             }
                         }
                         _ => {}
                     }
+                }
+                if echo_len > 0 && write_all(class, &echo_buf[..echo_len]).await.is_err() {
+                    return;
                 }
             }
 
@@ -2383,6 +2416,7 @@ async fn dispatch_param<'d>(
                 .filter(|s| !s.is_empty());
 
             let mut shown = 0u32;
+            let mut out = BufferedUsbWriter::new(class);
 
             // ── Build facts ──
             // Compile-time selections are not registry parameters — they are
@@ -2392,12 +2426,12 @@ async fn dispatch_param<'d>(
             // is, and until now the only way to see them was to guess from
             // the firmware you believed you flashed.
             if filter.is_none_or(|f| ParamName::path_matches("build", f)) {
-                write_all(class, b"[build]  (compile-time, read-only)\r\n").await?;
+                out.push(b"[build]  (compile-time, read-only)\r\n").await?;
                 for (k, v) in build_facts_iter() {
-                    let mut buf = [0u8; 96];
+                    let mut buf = [0u8; 160];
                     let mut w = WriteBuf::new(&mut buf);
                     write!(w, "  {k:30} = {v}\r\n").ok();
-                    write_all(class, w.as_slice()).await?;
+                    out.push(w.as_slice()).await?;
                     shown += 1;
                 }
             }
@@ -2410,6 +2444,9 @@ async fn dispatch_param<'d>(
             let params = crate::params::get();
             let mut prev_path: Option<ParamName> = None;
             for idx in 0..PARAM_COUNT {
+                if (idx & 0x1F) == 0x1F {
+                    embassy_futures::yield_now().await;
+                }
                 let (Some(name), Some(val), Some(path)) = (
                     ParamName::of::<FirmwareConfig>(idx),
                     params.param_get(idx),
@@ -2423,7 +2460,7 @@ async fn dispatch_param<'d>(
                     continue;
                 }
                 if prev_path.as_ref().map(ParamName::as_str) != Some(path.as_str()) {
-                    let mut buf = [0u8; 64];
+                    let mut buf = [0u8; 96];
                     let mut w = WriteBuf::new(&mut buf);
                     let shown_path = if path.as_str().is_empty() {
                         "(root)"
@@ -2431,12 +2468,12 @@ async fn dispatch_param<'d>(
                         path.as_str()
                     };
                     write!(w, "[{shown_path}]\r\n").ok();
-                    write_all(class, w.as_slice()).await?;
+                    out.push(w.as_slice()).await?;
                     prev_path = Some(path);
                 }
 
                 let meta = FirmwareConfig::param_meta(idx);
-                let mut buf = [0u8; 96];
+                let mut buf = [0u8; 160];
                 let mut w = WriteBuf::new(&mut buf);
                 write!(w, "  {:30} = {}", name.as_str(), val).ok();
                 if !meta.unit.is_empty() {
@@ -2449,12 +2486,12 @@ async fn dispatch_param<'d>(
                     write!(w, " (reboot)").ok();
                 }
                 write!(w, "\r\n").ok();
-                write_all(class, w.as_slice()).await?;
+                out.push(w.as_slice()).await?;
                 shown += 1;
             }
 
             if shown == 0 {
-                let mut buf = [0u8; 96];
+                let mut buf = [0u8; 128];
                 let mut w = WriteBuf::new(&mut buf);
                 write!(
                     w,
@@ -2462,8 +2499,8 @@ async fn dispatch_param<'d>(
                     filter.unwrap_or("")
                 )
                 .ok();
-                write_all(class, w.as_slice()).await?;
-                write_all(class, b"  build\r\n").await?;
+                out.push(w.as_slice()).await?;
+                out.push(b"  build\r\n").await?;
                 let mut prev: Option<ParamName> = None;
                 for idx in 0..PARAM_COUNT {
                     let Some(path) = ParamName::path_of::<FirmwareConfig>(idx) else {
@@ -2472,18 +2509,19 @@ async fn dispatch_param<'d>(
                     if prev.as_ref().map(ParamName::as_str) == Some(path.as_str()) {
                         continue;
                     }
-                    let mut buf = [0u8; 64];
+                    let mut buf = [0u8; 96];
                     let mut w = WriteBuf::new(&mut buf);
                     write!(w, "  {}\r\n", path.as_str()).ok();
-                    write_all(class, w.as_slice()).await?;
+                    out.push(w.as_slice()).await?;
                     prev = Some(path);
                 }
             } else {
                 let mut buf = [0u8; 64];
                 let mut w = WriteBuf::new(&mut buf);
                 write!(w, "({shown} shown)\r\n").ok();
-                write_all(class, w.as_slice()).await?;
+                out.push(w.as_slice()).await?;
             }
+            out.finish().await?;
         }
         // Overrides relative to the baked (vehicle-YAML) defaults.
         // `param diff --yaml` prints them as a `tuning:`-section snippet,
@@ -2493,16 +2531,20 @@ async fn dispatch_param<'d>(
             let yaml = parts.next() == Some("--yaml");
             let params = crate::params::get();
             let baked = crate::vehicle::default_params();
+            let mut out = BufferedUsbWriter::new(class);
             if yaml {
                 // Identity handshake for the host-side merge tool: the
                 // vehicle this firmware was baked for.
                 let mut buf = [0u8; 64];
                 let mut w = WriteBuf::new(&mut buf);
                 write!(w, "# vehicle: {}\r\n", crate::vehicle::BAKED_VEHICLE).ok();
-                write_all(class, w.as_slice()).await?;
+                out.push(w.as_slice()).await?;
             }
             let mut count = 0u32;
             for idx in 0..PARAM_COUNT {
+                if (idx & 0x1F) == 0x1F {
+                    embassy_futures::yield_now().await;
+                }
                 let (Some(cur), Some(bak)) = (params.param_get(idx), baked.param_get(idx)) else {
                     continue;
                 };
@@ -2513,18 +2555,20 @@ async fn dispatch_param<'d>(
                 let Some(name) = ParamName::of::<FirmwareConfig>(idx) else {
                     continue;
                 };
-                let mut buf = [0u8; 96];
+                let mut buf = [0u8; 160];
                 let mut w = WriteBuf::new(&mut buf);
                 if yaml {
                     write!(w, "  {}: {}\r\n", name.as_str(), cur).ok();
                 } else {
                     write!(w, "  {:28} = {}  (baked {})\r\n", name.as_str(), cur, bak).ok();
                 }
-                write_all(class, w.as_slice()).await?;
+                out.push(w.as_slice()).await?;
             }
             if count == 0 {
-                write_all(class, b"  (no overrides - matches baked defaults)\r\n").await?;
+                out.push(b"  (no overrides - matches baked defaults)\r\n")
+                    .await?;
             }
+            out.finish().await?;
         }
         // Revert one parameter (or everything) to the baked defaults.
         // In-memory only, like `set` - follow with `param save --prune` to

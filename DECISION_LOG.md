@@ -257,17 +257,42 @@ This document records the engineering decisions, root-cause analyses, code chang
 
 ---
 
-## Final Live Hardware & 65-Second Multi-Stream Stress Verification (`Flash #8 / 67b57a5`)
+### Issue 22: FC Parameter Read Failure (`332` Lines) — USB CDC Bulk Packet Coalescing & Host Flow-Control
+- **Observed Symptom**: Reconnecting the drone in `cybflight-gs` (and running `param_sync.py`) failed to reliably read all `318` runtime parameters (`+ 14` `[build]` facts = `332` shown) from the FC; `Refresh from FC` left the status banner stuck on `"Requested 'param list' from USB FC..."` and bulk command bursts stalled or disconnected.
+- **Root Cause**:
+  1. **Unpaced Host Burst Writes Overflowing macOS `TTYHOG` (`1024 B`) + Instant Write-Timeout Disconnect**: `cybflight-gs` sent startup stream-enable commands + `param list` back-to-back with `\r\n` without waiting for FC prompt completion (`>60` queued commands overflowed macOS's `1024 B` TTY ring `t_outq` and silently dropped trailing `"param list"`), while any transient `20 ms` `TimedOut` on `port.write_all` immediately emitted `SerialEvent::Disconnected`.
+  2. **1-Packet-Per-Line `param list` & 1-Packet-Per-Char Echo on STM32**: `dispatch_param("list")` invoked `write_all` 361 separate times with `<64 B` lines (terminating host USB bulk IN URBs on every line), `shell_loop` echoed 1 USB packet per input character (`~52 ms`/command), and `\r\n` caused duplicate blank prompt dispatches across packet boundaries.
+  3. **Missing `(N shown)` Footer State, Split UTF-8 Chunk Decoding, & Unvirtualized 318-Row UI**: `ParamTable` initialized all `318` entries with `fc_value = yaml_value` (showing `"Synced"` even when offline), `parse_shell_line` ignored `(332 shown)`, `usb_serial.rs` ran `String::from_utf8_lossy` per raw read chunk (corrupting `[kg·m²]` across chunk boundaries), and `params_tab.rs` laid out all 318 rows (~2,500 widgets) every 16 ms frame.
+- **What Was Done**:
+  - **Firmware (`crates/cybflight/src/shell/mod.rs`, `crates/cybflight/src/usb_serial.rs`)**: Added `BufferedUsbWriter` (`[u8; 256]`) packing full 64-byte USB Full-Speed bulk packets with exact ZLP boundary handling, widened `param list`/`diff` line buffers to `[u8; 160]` with `yield_now().await` every 32 params, coalesced per-packet printable echo bytes into `echo_buf: [u8; 64]`, and tracked `prev_was_cr` across USB packets.
+  - **Ground Station & Host Tooling (`crates/cybflight_gs/src/backend/usb_serial.rs`, `backend/mod.rs`, `ui/params_tab.rs`, `ui/cli_tab.rs`, `app.rs`, `tools/param_sync.py`, `tools/blackbox_pull.py`)**: Staged USB connect (`stream off` → `version` → `param list` before starting streams), paused/resumed active `BTreeSet<String>` streams around mid-session `param list`, added `CommandSyncState` (verifying command echo before accepting post-dispatch `> `) for 1-in-flight command pacing, framed lines on raw `Vec<u8>` with `Ok(0)` POSIX EOF disconnect detection, added `fc_synced` + `(N shown)` summary + O(1) `HashMap` lookup + `floats_differ` (`1e-8`-safe) + FC refusal banners, virtualized `params_tab.rs` & `cli_tab.rs` via `ScrollArea::show_rows`, auto-connected to Cybflight USB ports on startup, and added a zero-dependency POSIX `termios` fallback to `tools/param_sync.py`.
+- **Outcome**: **Verified via unit tests, adversarial review (`PASS`), and live hardware stress test on Flash #9 (`/dev/cu.usbmodem0011`)** — initial connect reads all **`318 / 318` parameters + `14` `[build]` facts (`332 shown`) in `368.7 ms`**, mid-stream stress test (`60` rapid `param get` + `param list` during 5 concurrent 50 Hz telemetry streams) completes **`318 / 318` (`378` updates) in `2.02 s`** with `0` dropped bytes, and `python3 tools/param_sync.py --vehicle goku_f745 --dry-run` exits `0`.
 
-| Subsystem / Check | Normal Boot (`Boot 5`) | Post-Warm `reboot` (`Boot 6`, `t = 4–6 s`) | Post-65 s Multi-Stream Stress (`Boot 6`, `t = 111.8 s`) | Status |
+---
+
+### Issue 23: Online RC Receiver & Flight Modes Configurator Tab (`🎮 Receiver & Modes`)
+- **User Request**: Add a dedicated Ground Station tab to test the RC transmitter online, visualize all axes/channels in real time, and inspect/configure which flight modes and safety gates are mapped to each switch.
+- **What Was Done**:
+  - Extended `TelemetrySnapshot` & `parse_shell_line` (`crates/cybflight_gs/src/backend/mod.rs`) and `MockFcBackend` (`mock_fc.rs`) to stream and parse `RcInput` (`CH1..CH16` µs, channel count, frame counter, smoothed Hz, freshness) and `RcLinkStatus` (`RSSI` dBm, `LQ` %, `SNR` dB, `RF` mode).
+  - Created `crates/cybflight_gs/src/ui/rc_tab.rs` (`🎮 Receiver & Modes` in `app.rs`, auto-toggling `stream rc on` / `stream rc off` on tab enter/leave):
+    - Mode 2 / Mode 1 dual 2D stick gimbals driven by `cybflight_core::rc::rc_mapping::{ChannelCalibration, StickEndpoints}` with live FLU body-rate (`°/s`, thrust `N`) or velocity (`m/s`) setpoint readouts.
+    - Live `CH1..CH16` (`Roll`, `Pitch`, `Throttle`, `Yaw`, `AUX1..AUX12`) pulse-width bars (`850..2150 µs`) with `min`/`mid`/`max` ticks and red threshold markers, plus interactive Mock TX bench sliders/buttons when in `[Mock]` mode.
+    - Resolved Active Flight Mode banner (`armed_latched` pre-arm transition gate on `CH3 <= rc_throttle_mincheck_us` & `LQ >= arm_min_link_quality` + hysteretic Schmitt trigger on `rc_mission_channel`) and Betaflight-style switch range cards with live yellow cursor needles (`ARM` on `CH5/AUX1`, `Manual Rate / PosHold ↔ Offboard/RL / Autonomous Mission` on `CH7/AUX3`, and `Throttle Mincheck / Land / Launch` zones on `CH3`).
+    - Inline switch/endpoint/rate/deadband editor (`rc_*` group) with `Apply RC Changes to FC RAM` and `Save to Flash & Reboot FC`.
+- **Outcome**: **Verified via adversarial review (`PASS`), unit tests, and live USB shell verification (`stream rc on`, `stream rcstats on`, `param list rc`, `param set`/`reset` on Flash #9)**.
+
+---
+
+## Final Live Hardware & Stress Verification (`Flash #8 / 67b57a5` + `Flash #9`)
+
+| Subsystem / Check | Normal Boot (`Flash #9`, `Boot 3`) | Post-Warm `reboot` (`Boot 6`, `t = 4–6 s`) | Stress Verification (`65 s` Multi-Stream & `60`-Cmd + `param list`) | Status |
 |---|---|---|---|---|
-| **Reset Cause & Postmortem** | `0x98000000 Software`, `0` faults | `0x98000000 Software`, `0` faults | `0x98000000 Software`, `11,677` streamed lines, **`0` `IWDG` resets / `0` faults** | **PASS** |
-| **Hands-Free Software DFU** | `fc_shell.py --dfu` → `0483:df11` | Verified hands-free across Flashes #7 & #8 | Ready (`RTC_BKP0R` + `PWR_CR1.DBP`) | **PASS** |
-| **8 kHz IMU (`MPU-6000`, `SPI4` `13.5 MHz`, `P8`)** | **`8,000.3 Hz (+0.00%)`**, `41.09 °C` | **`7,999.4 Hz (-0.01%)`**, lost since boot: `2` | **`7,998.8 Hz (-0.01%)`**, `99.991%` delivery over `111.8 s` | **PASS** |
-| **Startup Gyro Calibration (`GyroStartupCal`)** | `bias = [+0.0066, +0.0157, -0.0554] rad/s` | `bias = [+0.0058, +0.0153, -0.0539] rad/s` | Stationary `gyro_rad_s = [-0.0028, +0.0022, -0.0000]` | **PASS** |
+| **Reset Cause & Postmortem** | `0x98000000 Software`, `0` faults | `0x98000000 Software`, `0` faults | `0x98000000 Software`, **`0` `IWDG` resets / `0` faults** | **PASS** |
+| **Hands-Free Software DFU** | `fc_shell.py --dfu` → `0483:df11` | Verified hands-free across Flashes #7–#9 | `469,016 B` flashed & booted cleanly | **PASS** |
+| **8 kHz IMU (`MPU-6000`, `SPI4` `13.5 MHz`, `P8`)** | **`8,000.8 Hz (+0.01%)`**, `bias=[+0.0070, +0.0148, -0.0541]` | **`7,999.4 Hz (-0.01%)`**, lost since boot: `2` | **`7,998.8 Hz (-0.01%)`**, `99.991%` delivery over `111.8 s` | **PASS** |
 | **2 kHz INDI Inner Loop (`P10`, `DWT` unlocked)** | `45,707` iters, `avg 213.0 µs`, `max 401.8 µs` | `8,628` iters, `avg 218.7 µs`, `max 357.4 µs` | `211,534` iters, `avg 30.3 µs`, `max 410.3 µs` (`< 500 µs` budget) | **PASS** |
-| **Barometer (`SPL06`, `I2C1` `0x76`)** | `101,371.07 Pa` → `101,371.55 Pa, 37.78 °C` | `101,370.12 Pa` → `101,369.71 Pa, 38.37 °C` | **`101,369.81 Pa, 39.30 °C`** (before & after `imurate`) | **PASS** |
-| **External Compass (`QMC5883L`, `I2C1` `0x0D`)** | `[-27.73, 10.67, 42.27] uT`, **`27.6 °C`** | `[-28.00, 11.20, 42.10] uT`, **`27.5 °C`** | **`[-27.00, 10.73, 41.50] uT`**, **`27.6 °C`** | **PASS** |
-| **GPS (`Flywoo GM10 V3` u-blox M10, `USART6`)** | `baud=230400`, **`mean=99,957 µs (10.00 Hz)`** | `baud=230400`, **`mean=100,130 µs (9.98 Hz)`** | `baud=230400`, **`mean=100,038 µs (9.99 Hz)`** | **PASS** |
-| **Attitude (`att`) & Yaw Drift** | `q = [-0.0562, -0.0472, +0.0160, +0.9973]` | `q = [-0.0674, -0.0595, -0.0004, +0.9959]` | `Δz = -0.0012` over `68.1 s` (**`0.002 deg/s`** stationary drift) | **PASS** |
-| **Power (`ADC3`), DShot600 (`TIM3+TIM1`), Params** | `0.02V` (USB), `DshotTelem` live, `param diff` clean | `faults=0x0000`, `GyroCalibrating` cleared | All `332` params match baked `vehicles/goku_f745.yaml` (`0` `.f64` opcodes) | **PASS** |
+| **Barometer (`SPL06`, `I2C1` `0x76`)** | **`101,001.91 Pa, 35.08 °C`** | `101,370.12 Pa` → `101,369.71 Pa, 38.37 °C` | **`101,369.81 Pa, 39.30 °C`** (before & after `imurate`) | **PASS** |
+| **External Compass (`QMC5883L`, `I2C1` `0x0D`)** | **`[9.67, 0.50, 45.00] uT, 24.9 °C`** | `[-28.00, 11.20, 42.10] uT`, **`27.5 °C`** | **`[-27.00, 10.73, 41.50] uT`**, **`27.6 °C`** | **PASS** |
+| **GPS (`Flywoo GM10 V3` u-blox M10, `USART6`)** | **`3D Fix (`16` SVs, `h_acc=675 mm`) @ `10.00 Hz` (`99,955 µs`)** | `baud=230400`, **`mean=100,130 µs (9.98 Hz)`** | `baud=230400`, **`mean=100,038 µs (9.99 Hz)`** | **PASS** |
+| **Full FC Parameter Sync (`318` params + `14` build)** | **`318 / 318` (`332 shown`) in `368.7 ms`** | `param_sync.py --dry-run` `exit 0` | **`60× param get` + `param list` mid-stream: `318 / 318` in `2.02 s`** | **PASS** |
+| **RC Stream & Switch Config (`rc` + `rcstats`)** | `21` `rc_*` params (`CH5` Arm, `CH7` Mode) | `stream rc on` + `stream rcstats on` verified | `param set`/`reset` round-trip verified live (`0` overrides left) | **PASS** |

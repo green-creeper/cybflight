@@ -2,7 +2,7 @@ pub mod flasher;
 pub mod mock_fc;
 pub mod usb_serial;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
 use cybflight_core::param_registry::{ParamGroup, ParamMeta, ParamName, ParamValue};
@@ -29,6 +29,16 @@ pub struct DiscoveredPort {
     pub port_name: String,
     pub label: String,
     pub is_cybflight: bool,
+}
+
+/// Summary emitted when a `param list` dump finishes (`(N shown)` footer).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ParamSyncSummary {
+    pub params_synced_total: usize,
+    pub params_updated_pass: usize,
+    pub total_params: usize,
+    pub build_facts: usize,
+    pub shown_footer: usize,
 }
 
 /// Real-time telemetry snapshot shared between the active backend and the UI.
@@ -73,6 +83,26 @@ pub struct TelemetrySnapshot {
     pub eskf_summary: String,
     /// Compile-time `[build]` facts reported by `param list`.
     pub build_facts: BTreeMap<String, String>,
+    /// Latest 16 RC channel pulse widths in microseconds (`[CH1..CH16]`, AETR order).
+    pub rc_channels_us: [u16; 16],
+    /// Number of active channels reported in the latest `RcInput` frame (`0` = none received yet).
+    pub rc_channel_count: u8,
+    /// Total `RcInput` frames parsed since connection.
+    pub rc_frame_count: u64,
+    /// Smoothed RC frame rate in Hz.
+    pub rc_rate_hz: f32,
+    /// Host timestamp when the latest `RcInput` frame arrived.
+    pub rc_last_rx: Option<std::time::Instant>,
+    /// Latest RC uplink RSSI in dBm (e.g. `-48`).
+    pub rc_rssi_dbm: i16,
+    /// Latest RC link quality `[0..100]%`.
+    pub rc_lq_pct: u8,
+    /// Latest RC SNR in dB.
+    pub rc_snr_db: i8,
+    /// Latest CRSF/GHST RF mode index.
+    pub rc_rf_mode: u8,
+    /// Host timestamp when the latest `RcLinkStatus` frame arrived.
+    pub rc_link_last_rx: Option<std::time::Instant>,
     /// Packet/line counter from the active backend.
     pub rx_line_count: u64,
 }
@@ -101,6 +131,19 @@ impl Default for TelemetrySnapshot {
             gps_alt_m: 0.0,
             eskf_summary: String::new(),
             build_facts: BTreeMap::new(),
+            rc_channels_us: [
+                1500, 1500, 988, 1500, 988, 988, 988, 988, 1500, 1500, 1500, 1500, 1500, 1500,
+                1500, 1500,
+            ],
+            rc_channel_count: 0,
+            rc_frame_count: 0,
+            rc_rate_hz: 0.0,
+            rc_last_rx: None,
+            rc_rssi_dbm: -120,
+            rc_lq_pct: 0,
+            rc_snr_db: 0,
+            rc_rf_mode: 0,
+            rc_link_last_rx: None,
             rx_line_count: 0,
         }
     }
@@ -156,19 +199,28 @@ pub struct ParamEntry {
     pub fc_value: f32,
     /// Value configured in the selected `vehicles/<name>.yaml`.
     pub yaml_value: f32,
+    /// True once this parameter's value has been read from the active FC / Mock FC.
+    pub fc_synced: bool,
     /// True if this parameter belongs to `airframe:` (structural) rather than `tuning:`.
     pub is_airframe_structural: bool,
+}
+
+#[inline]
+pub fn floats_differ(a: f32, b: f32) -> bool {
+    let diff = (a - b).abs();
+    let scale = a.abs().max(b.abs());
+    diff > (1e-5 * scale).max(1e-11)
 }
 
 impl ParamEntry {
     /// True if the UI edit value differs from the value currently in FC RAM.
     pub fn is_dirty_ram(&self) -> bool {
-        (self.edit_value - self.fc_value).abs() > 1e-5
+        floats_differ(self.edit_value, self.fc_value)
     }
 
     /// True if the FC value differs from the loaded `vehicles/<name>.yaml`.
     pub fn differs_from_yaml(&self) -> bool {
-        (self.fc_value - self.yaml_value).abs() > 1e-5
+        floats_differ(self.fc_value, self.yaml_value)
     }
 }
 
@@ -176,9 +228,15 @@ impl ParamEntry {
 #[derive(Debug, Clone)]
 pub struct ParamTable {
     pub entries: Vec<ParamEntry>,
+    name_to_pos: HashMap<String, usize>,
     pub groups: Vec<String>,
     pub vehicle_name: String,
     pub vehicle_config_summary: String,
+    pub sync_in_progress: bool,
+    pub overwrite_edits_on_sync: bool,
+    pub synced_in_current_pass: usize,
+    pending_sync_event: Option<ParamSyncSummary>,
+    pending_fc_notice: Option<(String, bool)>,
 }
 
 impl ParamTable {
@@ -227,6 +285,7 @@ impl ParamTable {
         scaffold: &FirmwareConfig,
     ) -> Self {
         let mut entries = Vec::with_capacity(PARAM_COUNT);
+        let mut name_to_pos = HashMap::with_capacity(PARAM_COUNT);
         let mut groups = Vec::new();
 
         for idx in 0..PARAM_COUNT {
@@ -300,6 +359,8 @@ impl ParamTable {
                     | "m3_torque"
             );
 
+            let pos = entries.len();
+            name_to_pos.insert(name.clone(), pos);
             entries.push(ParamEntry {
                 idx,
                 name,
@@ -310,25 +371,112 @@ impl ParamTable {
                 edit_value: yaml_value,
                 fc_value: yaml_value,
                 yaml_value,
+                fc_synced: false,
                 is_airframe_structural,
             });
         }
 
         Self {
             entries,
+            name_to_pos,
             groups,
             vehicle_name: vehicle_name.to_string(),
             vehicle_config_summary,
+            sync_in_progress: false,
+            overwrite_edits_on_sync: false,
+            synced_in_current_pass: 0,
+            pending_sync_event: None,
+            pending_fc_notice: None,
         }
     }
 
+    /// Marks the start of a `param list` refresh from a physical USB FC.
+    pub fn begin_fc_sync(&mut self, reset_all_flags: bool, overwrite_edits: bool) {
+        if reset_all_flags {
+            for entry in &mut self.entries {
+                entry.fc_synced = false;
+            }
+        }
+        self.sync_in_progress = true;
+        self.overwrite_edits_on_sync = overwrite_edits;
+        self.synced_in_current_pass = 0;
+        self.pending_sync_event = None;
+    }
+
+    /// Clears FC-synced badges when disconnecting from hardware.
+    pub fn clear_fc_sync_state(&mut self) {
+        for entry in &mut self.entries {
+            entry.fc_synced = false;
+        }
+        self.sync_in_progress = false;
+        self.overwrite_edits_on_sync = false;
+        self.synced_in_current_pass = 0;
+        self.pending_sync_event = None;
+        self.pending_fc_notice = None;
+    }
+
+    /// Finalizes a `param list` pass when the `(N shown)` footer arrives.
+    pub fn finish_fc_sync(&mut self, shown_footer: usize, build_facts: usize) {
+        let params_synced_total = self.fc_synced_count();
+        let summary = ParamSyncSummary {
+            params_synced_total,
+            params_updated_pass: self.synced_in_current_pass,
+            total_params: self.entries.len(),
+            build_facts,
+            shown_footer,
+        };
+        self.sync_in_progress = false;
+        self.overwrite_edits_on_sync = false;
+        self.pending_sync_event = Some(summary);
+    }
+
+    pub fn take_sync_event(&mut self) -> Option<ParamSyncSummary> {
+        self.pending_sync_event.take()
+    }
+
+    pub fn push_fc_notice(&mut self, msg: String, ok: bool) {
+        self.pending_fc_notice = Some((msg, ok));
+    }
+
+    pub fn take_fc_notice(&mut self) -> Option<(String, bool)> {
+        self.pending_fc_notice.take()
+    }
+
+    pub fn fc_synced_count(&self) -> usize {
+        self.entries.iter().filter(|e| e.fc_synced).count()
+    }
+
+    /// Look up the current UI/FC value of a parameter by registry key in O(1).
+    pub fn get_value(&self, name: &str, fallback: f32) -> f32 {
+        self.name_to_pos
+            .get(name)
+            .and_then(|&pos| self.entries.get(pos))
+            .map(|e| e.edit_value)
+            .unwrap_or(fallback)
+    }
+
+    /// Set a parameter's `edit_value` by registry key in O(1).
+    pub fn set_edit_value(&mut self, name: &str, value: f32) -> bool {
+        if let Some(&pos) = self.name_to_pos.get(name)
+            && let Some(entry) = self.entries.get_mut(pos)
+        {
+            entry.edit_value = value.clamp(entry.meta.min, entry.meta.max);
+            return true;
+        }
+        false
+    }
+
     pub fn update_from_fc_param(&mut self, name: &str, value: f32) -> bool {
-        if let Some(entry) = self.entries.iter_mut().find(|e| e.name == name) {
-            let was_clean = !entry.is_dirty_ram();
+        if let Some(&pos) = self.name_to_pos.get(name)
+            && let Some(entry) = self.entries.get_mut(pos)
+        {
+            let should_update_edit = self.overwrite_edits_on_sync || !entry.is_dirty_ram();
             entry.fc_value = value;
-            if was_clean {
+            if should_update_edit {
                 entry.edit_value = value;
             }
+            entry.fc_synced = true;
+            self.synced_in_current_pass += 1;
             return true;
         }
         false
@@ -343,8 +491,10 @@ impl ParamTable {
                 if was_clean {
                     entry.edit_value = v;
                 }
+                entry.fc_synced = true;
             }
         }
+        self.sync_in_progress = false;
     }
 
     pub fn dirty_entries(&self) -> Vec<(String, f32)> {
@@ -387,7 +537,7 @@ impl ParamTable {
             if entry.is_airframe_structural {
                 continue;
             }
-            if (entry.fc_value - entry.yaml_value).abs() > 1e-5 {
+            if entry.differs_from_yaml() {
                 let k = serde_yaml::Value::String(entry.name.clone());
                 let v = match entry.kind {
                     ParamKind::U8 | ParamKind::U16 | ParamKind::U32 | ParamKind::Bool => {
@@ -396,9 +546,14 @@ impl ParamTable {
                         ))
                     }
                     ParamKind::F32 => {
-                        // Round to 6 significant decimal digits to avoid f32 noise like 0.012000001
-                        let rounded = (entry.fc_value as f64 * 1e6).round() / 1e6;
-                        serde_yaml::Value::Number(serde_yaml::Number::from(rounded))
+                        // Use Ryū shortest-round-trip f32 formatting so neither `0.0120000001`
+                        // f64-cast noise nor zeroing of tiny `1e-8` values occurs.
+                        let exact = entry
+                            .fc_value
+                            .to_string()
+                            .parse::<f64>()
+                            .unwrap_or(entry.fc_value as f64);
+                        serde_yaml::Value::Number(serde_yaml::Number::from(exact))
                     }
                 };
                 tuning_map.insert(k, v);
@@ -474,7 +629,7 @@ pub fn parse_shell_line(
     params: &mut ParamTable,
     in_build_section: &mut bool,
 ) -> bool {
-    let line = raw_line.trim_start_matches('>').trim();
+    let line = raw_line.trim_start_matches(['>', ' ']).trim();
     if line.is_empty() {
         return false;
     }
@@ -590,19 +745,109 @@ pub fn parse_shell_line(
         return true;
     }
 
-    // 6. ESKF[...] summary line
+    // 6. RcInput(timestamp=12345, channels=[1500,1500,988,1500,...], count=16)
+    if let Some(rest) = line.strip_prefix("RcInput(") {
+        if let Some(ch_idx) = rest.find("channels=[") {
+            let after = &rest[ch_idx + "channels=[".len()..];
+            if let Some(end) = after.find(']') {
+                let mut parsed_n = 0usize;
+                for tok in after[..end].split(',') {
+                    if parsed_n >= 16 {
+                        break;
+                    }
+                    if let Ok(v) = tok.trim().parse::<u16>() {
+                        telem.rc_channels_us[parsed_n] = v;
+                        parsed_n += 1;
+                    }
+                }
+                let reported_cnt = extract_f32_after(rest, "count=")
+                    .map(|v| v as u8)
+                    .unwrap_or(parsed_n as u8);
+                telem.rc_channel_count = reported_cnt.max(parsed_n as u8).min(16);
+                let now = std::time::Instant::now();
+                if let Some(prev) = telem.rc_last_rx {
+                    let dt = now.duration_since(prev).as_secs_f32();
+                    if (0.001..1.0).contains(&dt) {
+                        let inst_hz = 1.0 / dt;
+                        telem.rc_rate_hz = if telem.rc_rate_hz <= 0.1 {
+                            inst_hz
+                        } else {
+                            0.85 * telem.rc_rate_hz + 0.15 * inst_hz
+                        };
+                    }
+                }
+                telem.rc_last_rx = Some(now);
+                telem.rc_frame_count += 1;
+                return true;
+            }
+        }
+    }
+
+    // 7. RcLinkStatus(timestamp=12345, rssi=-48dBm, lq=100%, snr=9dB, rf_mode=2)
+    if let Some(rest) = line.strip_prefix("RcLinkStatus(") {
+        if let Some(rssi) = extract_f32_after(rest, "rssi=") {
+            telem.rc_rssi_dbm = rssi as i16;
+        }
+        if let Some(lq) = extract_f32_after(rest, "lq=") {
+            telem.rc_lq_pct = lq.clamp(0.0, 100.0) as u8;
+        }
+        if let Some(snr) = extract_f32_after(rest, "snr=") {
+            telem.rc_snr_db = snr as i8;
+        }
+        if let Some(rf) = extract_f32_after(rest, "rf_mode=") {
+            telem.rc_rf_mode = rf.max(0.0) as u8;
+        }
+        telem.rc_link_last_rx = Some(std::time::Instant::now());
+        return true;
+    }
+
+    // 8. ESKF[...] summary line
     if line.starts_with("ESKF[") {
         telem.eskf_summary = line.to_string();
         return true;
     }
 
-    // 7. Section header from `param list`: `[build]  (compile-time, read-only)` or `[airframe.body]`
-    if line.starts_with('[') {
-        *in_build_section = line.starts_with("[build]");
+    // 9. Section header from `param list`: `[build]  (compile-time, read-only)`, `[(root)]`, `[airframe.body]`
+    if let Some(sec_name) = param_section_header_name(line) {
+        *in_build_section = sec_name == "build";
+        if !params.sync_in_progress {
+            params.sync_in_progress = true;
+            params.synced_in_current_pass = 0;
+        }
         return false;
     }
 
-    // 8. Parameter or build-fact line: `  key = value [unit] (reboot)` or `key = value (was old)`
+    // 10. Completion footer from `param list`: `(332 shown)` or `no group matched ...`
+    if let Some(num_str) = line.strip_prefix('(').and_then(|s| s.strip_suffix(" shown)"))
+        && let Ok(shown_n) = num_str.parse::<usize>()
+    {
+        *in_build_section = false;
+        params.finish_fc_sync(shown_n, telem.build_facts.len());
+        return false;
+    }
+    if line.starts_with("no group matched ") {
+        *in_build_section = false;
+        params.finish_fc_sync(0, telem.build_facts.len());
+        params.push_fc_notice(line.to_string(), false);
+        return false;
+    }
+
+    // 11. Surface explicit FC refusal / rejection / save status notices to UI banners
+    if line.starts_with("refused:")
+        || line.starts_with("rejected:")
+        || line.starts_with("error:")
+        || line.starts_with("unknown param")
+        || line == "invalid number"
+    {
+        params.push_fc_notice(line.to_string(), false);
+        return false;
+    }
+    if line == "params saved to flash" || line.starts_with("store pruned to ") {
+        params.push_fc_notice(format!("✓ {line}"), true);
+        return false;
+    }
+
+    // 12. Parameter or build-fact line: `  key = value [unit] (reboot)` or `key = value (was old)`
     if let Some((lhs, rhs)) = line.split_once('=') {
         let key = lhs.trim();
         if !key.is_empty() && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
@@ -614,13 +859,41 @@ pub fn parse_shell_line(
                 return false;
             }
             let val_token = rhs_trimmed.split_ascii_whitespace().next().unwrap_or("");
-            if let Ok(v) = val_token.parse::<f32>() {
+            let parsed_val = val_token.parse::<f32>().ok().or_else(|| match val_token {
+                "true" => Some(1.0),
+                "false" => Some(0.0),
+                _ => None,
+            });
+            if let Some(v) = parsed_val {
                 params.update_from_fc_param(key, v);
             }
         }
     }
 
     false
+}
+
+fn param_section_header_name(line: &str) -> Option<&str> {
+    let rest_after_open = line.strip_prefix('[')?;
+    let close_idx = rest_after_open.find(']')?;
+    let inner = &rest_after_open[..close_idx];
+    let tail = rest_after_open[close_idx + 1..].trim();
+    if !tail.is_empty() && tail != "(compile-time, read-only)" {
+        return None;
+    }
+    if inner == "(root)" {
+        return Some(inner);
+    }
+    let mut chars = inner.chars();
+    let first = chars.next()?;
+    if !(first.is_ascii_lowercase() || first == '_') {
+        return None;
+    }
+    if chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '.') {
+        Some(inner)
+    } else {
+        None
+    }
 }
 
 fn extract_f32_after(s: &str, key: &str) -> Option<f32> {
@@ -660,11 +933,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_attitude_imu_dshot_and_param_lines() {
+    fn parses_attitude_imu_dshot_param_lines_and_sync_footer() {
         let root = find_workspace_root();
         let mut telem = TelemetrySnapshot::default();
         let mut params = ParamTable::from_vehicle_yaml(&root, "goku_f745");
         let mut in_build = false;
+
+        assert_eq!(params.fc_synced_count(), 0);
 
         let is_stream = parse_shell_line(
             "VehicleAttitude(timestamp=1500.0000, orientation=Quaternion(x=0.1305,y=0.0000,z=0.0000,w=0.9914))",
@@ -685,6 +960,7 @@ mod tests {
         assert!((telem.accel_m_s2[2] - 9.81).abs() < 1e-4);
         assert!((telem.imu_temp_c - 34.5).abs() < 1e-4);
 
+        params.begin_fc_sync(true, true);
         parse_shell_line(
             "[build]  (compile-time, read-only)",
             &mut telem,
@@ -702,6 +978,10 @@ mod tests {
             Some("flywoof745")
         );
 
+        // Simulate user having an unsaved edit before clicking Refresh from FC
+        let mass_pos = params.entries.iter().position(|e| e.name == "mass").unwrap();
+        params.entries[mass_pos].edit_value = 0.999;
+
         parse_shell_line("[airframe.body]", &mut telem, &mut params, &mut in_build);
         parse_shell_line(
             "  mass                           = 0.0722 [kg] (reboot)",
@@ -709,7 +989,193 @@ mod tests {
             &mut params,
             &mut in_build,
         );
-        let mass_entry = params.entries.iter().find(|e| e.name == "mass").unwrap();
+        parse_shell_line("(2 shown)", &mut telem, &mut params, &mut in_build);
+
+        let mass_entry = &params.entries[mass_pos];
+        assert!(mass_entry.fc_synced);
         assert!((mass_entry.fc_value - 0.0722).abs() < 1e-5);
+        assert!((mass_entry.edit_value - 0.0722).abs() < 1e-5);
+
+        let summary = params.take_sync_event().expect("expected sync summary");
+        assert_eq!(summary.params_synced_total, 1);
+        assert_eq!(summary.build_facts, 1);
+        assert_eq!(summary.shown_footer, 2);
+
+        let is_rc = parse_shell_line(
+            "RcInput(timestamp=2200, channels=[1502,1498,992,1500,1995,988,1810,1500], count=8)",
+            &mut telem,
+            &mut params,
+            &mut in_build,
+        );
+        assert!(is_rc);
+        assert_eq!(telem.rc_channel_count, 8);
+        assert_eq!(telem.rc_channels_us[0], 1502);
+        assert_eq!(telem.rc_channels_us[2], 992);
+        assert_eq!(telem.rc_channels_us[4], 1995);
+        assert_eq!(telem.rc_channels_us[6], 1810);
+
+        let is_link = parse_shell_line(
+            "RcLinkStatus(timestamp=2205, rssi=-52dBm, lq=99%, snr=8dB, rf_mode=2)",
+            &mut telem,
+            &mut params,
+            &mut in_build,
+        );
+        assert!(is_link);
+        assert_eq!(telem.rc_rssi_dbm, -52);
+        assert_eq!(telem.rc_lq_pct, 99);
+        assert_eq!(telem.rc_snr_db, 8);
+        assert_eq!(telem.rc_rf_mode, 2);
+    }
+
+    #[test]
+    fn ignores_fleetstate_brackets_finishes_unknown_group_and_preserves_tiny_floats() {
+        let root = find_workspace_root();
+        let mut telem = TelemetrySnapshot::default();
+        let mut params = ParamTable::from_vehicle_yaml(&root, "goku_f745");
+        let mut in_build = false;
+
+        // `fleetstate` lines like `[0] <no data>` must NOT flip `sync_in_progress` on
+        parse_shell_line("[0] <no data>", &mut telem, &mut params, &mut in_build);
+        assert!(!params.sync_in_progress);
+
+        // `param list unknown` -> `no group matched ...` must cleanly finish sync + emit notice
+        params.begin_fc_sync(false, false);
+        assert!(params.sync_in_progress);
+        parse_shell_line(
+            "no group matched 'bogus' (groups: build, rc, ...)",
+            &mut telem,
+            &mut params,
+            &mut in_build,
+        );
+        assert!(!params.sync_in_progress);
+        let (_, ok) = params.take_fc_notice().expect("expected error notice");
+        assert!(!ok);
+
+        // Refusal line surfaces red notice
+        parse_shell_line(
+            "refused: disarm before modifying params",
+            &mut telem,
+            &mut params,
+            &mut in_build,
+        );
+        let (msg, ok2) = params.take_fc_notice().expect("expected refusal notice");
+        assert!(!ok2);
+        assert!(msg.starts_with("refused:"));
+
+        // Tiny floats (`1e-8`) are detected by `floats_differ` and round-trip without zeroing
+        assert!(floats_differ(1e-8, 0.0));
+        assert!(floats_differ(1e-8, 2e-8));
+        assert!(!floats_differ(1e-8, 1e-8));
+    }
+
+    #[test]
+    #[ignore]
+    fn live_usb_param_list_full_and_stress() {
+        use crate::backend::usb_serial::{SerialEvent, UsbSerialConnection, discover_serial_ports};
+        use std::time::{Duration, Instant};
+
+        let ports = discover_serial_ports();
+        let port_name = ports
+            .iter()
+            .find(|p| p.is_cybflight)
+            .map(|p| p.port_name.clone())
+            .expect("No Cybflight USB port found");
+
+        let root = find_workspace_root();
+        let mut telem = TelemetrySnapshot::default();
+        let mut params = ParamTable::from_vehicle_yaml(&root, "goku_f745");
+        params.begin_fc_sync(true, true);
+        let mut in_build = false;
+
+        let t0 = Instant::now();
+        let mut conn = UsbSerialConnection::connect(&port_name, true).expect("connect failed");
+        let mut initial_summary = None;
+
+        while t0.elapsed() < Duration::from_millis(2000) {
+            for ev in conn.poll_events() {
+                match ev {
+                    SerialEvent::Line(l) => {
+                        let _ = parse_shell_line(&l, &mut telem, &mut params, &mut in_build);
+                    }
+                    SerialEvent::Error(e) => panic!("Phase 1 serial error: {e}"),
+                    SerialEvent::Disconnected(p) => panic!("Phase 1 unexpected disconnect: {p}"),
+                    SerialEvent::Connected(_) => {}
+                }
+            }
+            if let Some(sum) = params.take_sync_event() {
+                println!(
+                    "Initial connect param sync finished in {:?}: {sum:?}",
+                    t0.elapsed()
+                );
+                initial_summary = Some(sum);
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+
+        let sum1 = initial_summary.expect("Initial param sync did not complete");
+        assert_eq!(sum1.params_synced_total, PARAM_COUNT);
+        assert!(sum1.build_facts >= 14);
+
+        // Let telemetry streams run for 200ms, then trigger mid-stream Refresh + bulk commands
+        let t_stream = Instant::now();
+        while t_stream.elapsed() < Duration::from_millis(200) {
+            for ev in conn.poll_events() {
+                if let SerialEvent::Line(l) = ev {
+                    let _ = parse_shell_line(&l, &mut telem, &mut params, &mut in_build);
+                }
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(telem.rx_line_count > 340, "Expected active telemetry streams");
+
+        // Now stress-test mid-stream Refresh + 60 rapid parameter reads
+        params.begin_fc_sync(true, true);
+        for _ in 0..60 {
+            conn.send_command("param get mass");
+        }
+        conn.send_command("param list");
+
+        let t1 = Instant::now();
+        let mut refresh_summary = None;
+        let mut p2_non_stream = Vec::new();
+        while t1.elapsed() < Duration::from_millis(3000) {
+            for ev in conn.poll_events() {
+                match ev {
+                    SerialEvent::Line(l) => {
+                        if !parse_shell_line(&l, &mut telem, &mut params, &mut in_build) {
+                            p2_non_stream.push(l);
+                        }
+                    }
+                    SerialEvent::Error(e) => panic!("Phase 2 serial error: {e}"),
+                    SerialEvent::Disconnected(p) => panic!("Phase 2 unexpected disconnect: {p}"),
+                    SerialEvent::Connected(_) => {}
+                }
+            }
+            if let Some(sum) = params.take_sync_event() {
+                println!(
+                    "Mid-stream stress param sync finished in {:?}: {sum:?}",
+                    t1.elapsed()
+                );
+                refresh_summary = Some(sum);
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+
+        if refresh_summary.is_none() {
+            println!(
+                "Phase 2 timeout! synced_count={} p2_non_stream_len={} first10={:?} last15={:?}",
+                params.fc_synced_count(),
+                p2_non_stream.len(),
+                &p2_non_stream[..p2_non_stream.len().min(10)],
+                &p2_non_stream[p2_non_stream.len().saturating_sub(15)..]
+            );
+        }
+
+        let sum2 = refresh_summary.expect("Mid-stream param sync did not complete");
+        assert_eq!(sum2.params_synced_total, PARAM_COUNT);
+
+        conn.disconnect();
     }
 }

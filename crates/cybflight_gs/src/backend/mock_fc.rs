@@ -26,6 +26,10 @@ pub struct MockFcBackend {
     pub bench_motors_active: bool,
     /// True when a spring-return gently pulls Roll/Pitch back toward 0° when not dragging.
     pub spring_return: bool,
+    /// Simulated 16-channel RC receiver output (`[CH1..CH16]` in µs, AETR order).
+    pub mock_rc_channels: [u16; 16],
+    pub mock_rc_lq: u8,
+    pub mock_rc_rssi_dbm: i16,
     mahony: Mahony<f32>,
     allocator: LinearAllocator<4>,
     last_tick: Instant,
@@ -46,6 +50,8 @@ impl MockFcBackend {
         let allocator =
             LinearAllocator::new(MotorEffectiveness::from_motors(&config.airframe.motors));
         let mahony = Mahony::with_gains(Vector3::from_element(4.0), Vector3::from_element(0.3));
+        let rc_min = config.rc.min_us;
+        let rc_mid = config.rc.mid_us;
 
         Self {
             vehicle_name: vehicle_name.to_string(),
@@ -56,6 +62,12 @@ impl MockFcBackend {
             current_rate_rad_s: Vector3::zeros(),
             bench_motors_active: true,
             spring_return: false,
+            mock_rc_channels: [
+                rc_mid, rc_mid, rc_min, rc_mid, rc_min, rc_min, rc_min, rc_min, rc_mid, rc_mid,
+                rc_mid, rc_mid, rc_mid, rc_mid, rc_mid, rc_mid,
+            ],
+            mock_rc_lq: 100,
+            mock_rc_rssi_dbm: -48,
             mahony,
             allocator,
             last_tick: Instant::now(),
@@ -208,6 +220,14 @@ impl MockFcBackend {
             telem.motor_throttle = [0.0; 4];
             telem.motor_erpm = [0; 4];
         }
+
+        telem.rc_channels_us = self.mock_rc_channels;
+        telem.rc_channel_count = 16;
+        telem.rc_rate_hz = 150.0;
+        telem.rc_lq_pct = self.mock_rc_lq;
+        telem.rc_rssi_dbm = self.mock_rc_rssi_dbm;
+        telem.rc_snr_db = 9;
+        telem.rc_rf_mode = 2;
     }
 
     /// Execute a shell command against the in-process Mock FC and append output to `cli_log`.
@@ -305,6 +325,25 @@ impl MockFcBackend {
                 } else {
                     out.push(format!("unknown parameter: {name}"));
                 }
+            }
+            ["param", "list"] | ["param", "list", _] => {
+                let filter = parts.get(2).copied().unwrap_or("");
+                param_table.sync_from_config(&self.config);
+                let mut shown = 0usize;
+                for entry in &param_table.entries {
+                    if !filter.is_empty()
+                        && !entry.group_path.contains(filter)
+                        && !entry.name.contains(filter)
+                    {
+                        continue;
+                    }
+                    out.push(format!(
+                        "  {:30} = {} [{}]",
+                        entry.name, entry.fc_value, entry.meta.unit
+                    ));
+                    shown += 1;
+                }
+                out.push(format!("({shown} shown)"));
             }
             ["param", "diff"] => {
                 let mut count = 0;

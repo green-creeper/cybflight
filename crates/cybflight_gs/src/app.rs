@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use egui::{Color32, RichText};
 
@@ -14,11 +14,13 @@ use crate::ui::cli_tab::{CliTabState, show_cli_tab};
 use crate::ui::drone_3d::Drone3DScene;
 use crate::ui::flasher_tab::{FlasherTabState, show_flasher_tab};
 use crate::ui::params_tab::{ParamsTabState, show_params_tab};
+use crate::ui::rc_tab::{RcTabState, show_rc_tab};
 use crate::ui::setup_tab::show_setup_tab;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActiveTab {
     Setup,
+    Receiver,
     Parameters,
     Flasher,
     Cli,
@@ -29,7 +31,7 @@ pub struct CybflightGsApp {
     pub vehicles: Vec<String>,
     pub selected_vehicle: String,
     pub ports: Vec<DiscoveredPort>,
-    /// Selected port target (`"MOCK"` or `/dev/tty.usbmodem...`).
+    /// Selected port target (`"MOCK"` or `/dev/cu.usbmodem...`).
     pub selected_port_target: String,
     pub mode: ConnectionMode,
     pub usb_conn: Option<UsbSerialConnection>,
@@ -39,11 +41,13 @@ pub struct CybflightGsApp {
     pub in_build_section: bool,
     pub active_tab: ActiveTab,
     pub scene_3d: Drone3DScene,
+    pub rc_ui: RcTabState,
     pub params_ui: ParamsTabState,
     pub flasher_ui: FlasherTabState,
     pub flasher_worker: FlasherWorker,
     pub cli_ui: CliTabState,
     pub status_message: String,
+    last_port_scan: Instant,
 }
 
 impl CybflightGsApp {
@@ -60,7 +64,6 @@ impl CybflightGsApp {
         };
 
         let ports = discover_serial_ports();
-        // Default to a real Cybflight USB port if one is plugged in; otherwise Mock mode for testing
         let default_target =
             if !start_mock && let Some(cyb_port) = ports.iter().find(|p| p.is_cybflight) {
                 cyb_port.port_name.clone()
@@ -68,7 +71,7 @@ impl CybflightGsApp {
                 "MOCK".to_string()
             };
 
-        let param_table = ParamTable::from_vehicle_yaml(&workspace_root, &selected_vehicle);
+        let mut param_table = ParamTable::from_vehicle_yaml(&workspace_root, &selected_vehicle);
         let mock_fc = MockFcBackend::from_vehicle_yaml(&workspace_root, &selected_vehicle);
         let mut flasher_worker = FlasherWorker::default();
         flasher_worker.refresh_dfu_status();
@@ -77,6 +80,7 @@ impl CybflightGsApp {
         flasher_ui.selected_vehicle = selected_vehicle.clone();
 
         let mode = if default_target == "MOCK" {
+            param_table.sync_from_config(&mock_fc.config);
             ConnectionMode::MockFc {
                 vehicle_name: selected_vehicle.clone(),
             }
@@ -84,12 +88,12 @@ impl CybflightGsApp {
             ConnectionMode::Disconnected
         };
 
-        Self {
+        let mut app = Self {
             workspace_root,
             vehicles,
             selected_vehicle,
             ports,
-            selected_port_target: default_target,
+            selected_port_target: default_target.clone(),
             mode,
             usb_conn: None,
             mock_fc,
@@ -98,12 +102,21 @@ impl CybflightGsApp {
             in_build_section: false,
             active_tab: ActiveTab::Setup,
             scene_3d: Drone3DScene::new(),
+            rc_ui: RcTabState::default(),
             params_ui: ParamsTabState::default(),
             flasher_ui,
             flasher_worker,
             cli_ui: CliTabState::default(),
             status_message: "Ready".to_string(),
+            last_port_scan: Instant::now(),
+        };
+
+        // Auto-connect immediately when a real Cybflight FC USB port is plugged in at startup.
+        if default_target != "MOCK" {
+            app.connect_selected();
         }
+
+        app
     }
 
     fn reload_vehicle(&mut self, vehicle: &str) {
@@ -111,10 +124,48 @@ impl CybflightGsApp {
         self.flasher_ui.selected_vehicle = vehicle.to_string();
         self.param_table = ParamTable::from_vehicle_yaml(&self.workspace_root, vehicle);
         self.mock_fc = MockFcBackend::from_vehicle_yaml(&self.workspace_root, vehicle);
-        if matches!(self.mode, ConnectionMode::MockFc { .. }) {
-            self.mode = ConnectionMode::MockFc {
-                vehicle_name: vehicle.to_string(),
-            };
+        match &self.mode {
+            ConnectionMode::MockFc { .. } => {
+                self.param_table.sync_from_config(&self.mock_fc.config);
+                self.mode = ConnectionMode::MockFc {
+                    vehicle_name: vehicle.to_string(),
+                };
+            }
+            ConnectionMode::UsbSerial { .. } => {
+                if let Some(conn) = &self.usb_conn {
+                    self.param_table.begin_fc_sync(true, true);
+                    conn.send_command("param list");
+                }
+            }
+            ConnectionMode::Disconnected => {}
+        }
+    }
+
+    fn rescan_ports(&mut self) {
+        let prev_ports: std::collections::HashSet<String> =
+            self.ports.iter().map(|p| p.port_name.clone()).collect();
+        self.ports = discover_serial_ports();
+        self.last_port_scan = Instant::now();
+        if matches!(self.mode, ConnectionMode::Disconnected) {
+            let newly_plugged_cyb = self
+                .ports
+                .iter()
+                .find(|p| p.is_cybflight && !prev_ports.contains(&p.port_name));
+            let selected_missing = self.selected_port_target != "MOCK"
+                && !self
+                    .ports
+                    .iter()
+                    .any(|p| p.port_name == self.selected_port_target);
+            if let Some(cyb) = newly_plugged_cyb {
+                self.selected_port_target = cyb.port_name.clone();
+            } else if selected_missing {
+                self.selected_port_target = self
+                    .ports
+                    .iter()
+                    .find(|p| p.is_cybflight)
+                    .map(|p| p.port_name.clone())
+                    .unwrap_or_else(|| "MOCK".to_string());
+            }
         }
     }
 
@@ -122,6 +173,8 @@ impl CybflightGsApp {
         if let Some(mut existing) = self.usb_conn.take() {
             existing.disconnect();
         }
+        self.rc_ui.armed_latched = false;
+        self.rc_ui.mission_schmitt_latched = false;
         if self.selected_port_target == "MOCK" {
             self.mock_fc =
                 MockFcBackend::from_vehicle_yaml(&self.workspace_root, &self.selected_vehicle);
@@ -129,20 +182,39 @@ impl CybflightGsApp {
             self.mode = ConnectionMode::MockFc {
                 vehicle_name: self.selected_vehicle.clone(),
             };
-            self.status_message = format!("Connected to Mock FC ({})", self.selected_vehicle);
+            let msg = format!(
+                "Connected to Mock FC ({}) — {} parameters loaded.",
+                self.selected_vehicle,
+                self.param_table.entries.len()
+            );
+            self.status_message = msg.clone();
+            self.params_ui.status_banner = Some((msg, true));
         } else {
+            self.telem.build_facts.clear();
+            self.in_build_section = false;
+            self.param_table.begin_fc_sync(true, true);
             match UsbSerialConnection::connect(&self.selected_port_target, true) {
                 Ok(conn) => {
                     self.mode = ConnectionMode::UsbSerial {
                         port_name: self.selected_port_target.clone(),
                     };
-                    self.status_message =
-                        format!("Connected to USB FC on {}", self.selected_port_target);
+                    let msg = format!(
+                        "Connected to USB FC on {} — reading {} parameters...",
+                        self.selected_port_target,
+                        self.param_table.entries.len()
+                    );
+                    self.status_message = msg.clone();
+                    self.params_ui.status_banner = Some((msg, true));
+                    if self.active_tab == ActiveTab::Receiver || self.rc_ui.keep_rc_stream_in_bg {
+                        conn.send_command("stream rc on");
+                    }
                     self.usb_conn = Some(conn);
                 }
                 Err(e) => {
+                    self.param_table.clear_fc_sync_state();
                     self.mode = ConnectionMode::Disconnected;
                     self.status_message = e.clone();
+                    self.params_ui.status_banner = Some((e.clone(), false));
                     self.cli_ui.push_line(format!("ERR: {e}"));
                 }
             }
@@ -153,6 +225,9 @@ impl CybflightGsApp {
         if let Some(mut conn) = self.usb_conn.take() {
             conn.disconnect();
         }
+        self.rc_ui.armed_latched = false;
+        self.rc_ui.mission_schmitt_latched = false;
+        self.param_table.clear_fc_sync_state();
         self.mode = ConnectionMode::Disconnected;
         self.status_message = "Disconnected".to_string();
     }
@@ -188,12 +263,39 @@ impl CybflightGsApp {
                         }
                         SerialEvent::Error(e) => {
                             self.cli_ui.push_line(format!("ERR: {e}"));
+                            self.params_ui.status_banner = Some((e.clone(), false));
                             self.status_message = e;
                         }
                     }
                 }
+                if let Some(sum) = self.param_table.take_sync_event() {
+                    let msg = if sum.params_synced_total == sum.total_params {
+                        format!(
+                            "✓ Read {}/{} parameters (+ {} build facts) from USB FC.",
+                            sum.params_synced_total, sum.total_params, sum.build_facts
+                        )
+                    } else {
+                        format!(
+                            "✓ Read {} parameter(s) from USB FC ({}/{} total synced, {} shown).",
+                            sum.params_updated_pass,
+                            sum.params_synced_total,
+                            sum.total_params,
+                            sum.shown_footer
+                        )
+                    };
+                    self.params_ui.status_banner = Some((msg.clone(), true));
+                    self.status_message = msg;
+                }
+                if let Some((notice_msg, ok)) = self.param_table.take_fc_notice() {
+                    self.params_ui.status_banner = Some((notice_msg.clone(), ok));
+                    if self.active_tab == ActiveTab::Receiver || !ok {
+                        self.rc_ui.status_banner = Some((notice_msg.clone(), ok));
+                    }
+                    self.status_message = notice_msg;
+                }
                 if lost_conn {
                     self.usb_conn = None;
+                    self.param_table.clear_fc_sync_state();
                     self.mode = ConnectionMode::Disconnected;
                     self.status_message = "USB Serial Disconnected".to_string();
                 }
@@ -201,7 +303,11 @@ impl CybflightGsApp {
             ConnectionMode::MockFc { .. } => {
                 self.mock_fc.step(&mut self.telem);
             }
-            ConnectionMode::Disconnected => {}
+            ConnectionMode::Disconnected => {
+                if self.last_port_scan.elapsed() >= Duration::from_millis(1500) {
+                    self.rescan_ports();
+                }
+            }
         }
     }
 }
@@ -261,11 +367,8 @@ impl eframe::App for CybflightGsApp {
                     .on_hover_text("Rescan USB serial ports and DFU devices")
                     .clicked()
                 {
-                    self.ports = discover_serial_ports();
+                    self.rescan_ports();
                     self.flasher_worker.refresh_dfu_status();
-                    if let Some(cyb) = self.ports.iter().find(|p| p.is_cybflight) {
-                        self.selected_port_target = cyb.port_name.clone();
-                    }
                 }
 
                 // Connect / Disconnect Button
@@ -313,10 +416,12 @@ impl eframe::App for CybflightGsApp {
                 // Connection Status Badge
                 match &self.mode {
                     ConnectionMode::UsbSerial { port_name } => {
+                        let synced = self.param_table.fc_synced_count();
+                        let total = self.param_table.entries.len();
                         ui.colored_label(
                             Color32::from_rgb(85, 235, 145),
                             format!(
-                                "● USB LIVE ({port_name}) | {:.2}V | RX: {}",
+                                "● USB LIVE ({port_name}) | {:.2}V | Params: {synced}/{total} | RX: {}",
                                 self.telem.battery_v, self.telem.rx_line_count
                             ),
                         );
@@ -337,9 +442,11 @@ impl eframe::App for CybflightGsApp {
             ui.separator();
 
             // Tab Navigation Strip
+            let prev_tab = self.active_tab;
             ui.horizontal(|ui| {
                 let tabs = [
                     (ActiveTab::Setup, "✦ Setup & 3D Attitude"),
+                    (ActiveTab::Receiver, "🎮 Receiver & Modes"),
                     (ActiveTab::Parameters, "⚙ Parameters & Tuning"),
                     (ActiveTab::Flasher, "⚡ Firmware Flasher (DFU)"),
                     (ActiveTab::Cli, ">_ CLI Shell"),
@@ -360,6 +467,17 @@ impl eframe::App for CybflightGsApp {
                     ui.add_space(8.0);
                 }
             });
+            if self.active_tab != prev_tab
+                && matches!(self.mode, ConnectionMode::UsbSerial { .. })
+                && let Some(conn) = &self.usb_conn
+            {
+                if self.active_tab == ActiveTab::Receiver {
+                    conn.send_command("stream rc on");
+                    conn.send_command("stream rcstats on");
+                } else if prev_tab == ActiveTab::Receiver && !self.rc_ui.keep_rc_stream_in_bg {
+                    conn.send_command("stream rc off");
+                }
+            }
             ui.add_space(2.0);
         });
 
@@ -378,6 +496,7 @@ impl eframe::App for CybflightGsApp {
         });
 
         // Main Central Panel
+        let mut connect_requested = false;
         egui::CentralPanel::default().show(ctx, |ui| {
             let motor_positions: [[f32; 2]; 4] =
                 std::array::from_fn(|i| self.mock_fc.config.airframe.motors[i].position_m);
@@ -394,8 +513,19 @@ impl eframe::App for CybflightGsApp {
                         &motor_positions,
                     );
                 }
+                ActiveTab::Receiver => {
+                    show_rc_tab(
+                        ui,
+                        &mut self.rc_ui,
+                        &self.telem,
+                        &mut self.param_table,
+                        &self.mode,
+                        &self.usb_conn,
+                        &mut self.mock_fc,
+                    );
+                }
                 ActiveTab::Parameters => {
-                    show_params_tab(
+                    connect_requested = show_params_tab(
                         ui,
                         &mut self.params_ui,
                         &mut self.param_table,
@@ -429,9 +559,21 @@ impl eframe::App for CybflightGsApp {
             }
         });
 
-        // Keep 60 FPS repaint when connected or flashing
+        if connect_requested {
+            self.rescan_ports();
+            if self.selected_port_target == "MOCK"
+                && let Some(cyb) = self.ports.iter().find(|p| p.is_cybflight)
+            {
+                self.selected_port_target = cyb.port_name.clone();
+            }
+            self.connect_selected();
+        }
+
+        // Keep 60 FPS repaint when connected or flashing; 1 Hz while disconnected for USB hotplug detection
         if !matches!(self.mode, ConnectionMode::Disconnected) || self.flasher_worker.is_running {
             ctx.request_repaint_after(Duration::from_millis(16));
+        } else {
+            ctx.request_repaint_after(Duration::from_millis(1000));
         }
     }
 }

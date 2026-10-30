@@ -57,6 +57,57 @@ pub async fn write_all<'d>(
     Ok(())
 }
 
+/// Coalesces many small shell lines (such as `param list` and `param diff`)
+/// into full 64-byte USB Full-Speed bulk packets instead of emitting one short
+/// packet per line (which terminates each host URB early and throttles large
+/// dumps to ~1 line per 1 ms USB SOF frame).
+pub struct BufferedUsbWriter<'a, 'd, D: Driver<'d>> {
+    class: &'a mut CdcAcmClass<'d, D>,
+    buf: [u8; 256],
+    pos: usize,
+    sent_exact_64: bool,
+}
+
+impl<'a, 'd, D: Driver<'d>> BufferedUsbWriter<'a, 'd, D> {
+    pub fn new(class: &'a mut CdcAcmClass<'d, D>) -> Self {
+        Self {
+            class,
+            buf: [0u8; 256],
+            pos: 0,
+            sent_exact_64: false,
+        }
+    }
+
+    pub async fn push(&mut self, data: &[u8]) -> Result<(), EndpointError> {
+        let mut rem = data;
+        while !rem.is_empty() {
+            let space = self.buf.len() - self.pos;
+            let take = rem.len().min(space);
+            self.buf[self.pos..self.pos + take].copy_from_slice(&rem[..take]);
+            self.pos += take;
+            rem = &rem[take..];
+            if self.pos == self.buf.len() {
+                for chunk in self.buf.chunks_exact(64) {
+                    self.class.write_packet(chunk).await?;
+                }
+                self.pos = 0;
+                self.sent_exact_64 = true;
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn finish(self) -> Result<(), EndpointError> {
+        if self.pos > 0 {
+            write_all(self.class, &self.buf[..self.pos]).await
+        } else if self.sent_exact_64 {
+            self.class.write_packet(&[]).await
+        } else {
+            Ok(())
+        }
+    }
+}
+
 pub struct ShellLine {
     buf: [u8; 256],
     len: usize,
