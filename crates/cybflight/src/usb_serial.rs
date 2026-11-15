@@ -2367,8 +2367,6 @@ fn build_facts_iter() -> impl Iterator<Item = (&'static str, &'static str)> {
     };
     const RC_PROTOCOL: &str = if cfg!(feature = "rx_crsf") {
         "crsf"
-    } else if cfg!(feature = "rx_ghst") {
-        "ghst"
     } else {
         "<none>"
     };

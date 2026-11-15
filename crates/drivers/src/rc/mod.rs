@@ -1,5 +1,4 @@
 pub mod crsf;
-pub mod ghst;
 pub mod mavlink_rc;
 
 /// Maximum number of RC channels supported.
@@ -38,7 +37,7 @@ pub struct LinkStatistics {
     pub tx_power_dbm: i8,
 }
 
-/// CRC8-DVB-S2 (polynomial 0xD5), used by both CRSF and GHST.
+/// CRC8-DVB-S2 (polynomial 0xD5), used by CRSF.
 pub fn crc8_dvb_s2(mut crc: u8, byte: u8) -> u8 {
     crc ^= byte;
     for _ in 0..8 {

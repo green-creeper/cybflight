@@ -72,7 +72,7 @@ pub const PRIMARY_GYRO_ODR_HZ: f32 = 3200.0;
 // PORT MAPPING TABLE — single source of truth for UART role assignments.
 //
 // Role        Port    Pins              Notes
-// SerialRx    USART6  PC6 TX / PC7 RX   CRSF/GHST receiver (AP/BF: RCIN)
+// SerialRx    USART6  PC6 TX / PC7 RX   CRSF receiver (AP/BF: RCIN)
 // GPS         USART3  PD8 TX / PD9 RX   u-blox / UM982
 // ESP bridge  USART1  PA9 TX / PA10 RX  WiFi/companion link, DMA
 // defmt log   UART5   PB6 TX            (UART8 is the on-board Bluetooth)

@@ -9,7 +9,7 @@
 //!   - M2 (Front-Right CCW): `PB1`  `TIM3_CH4` AF2 (`DMA1_CH2`, req 5)
 //!   - M3 (Rear-Left CCW):  `PE9`  `TIM1_CH1` AF1 (`DMA2_CH1`, req 6)
 //!   - M4 (Front-Left CW):  `PE11` `TIM1_CH2` AF1 (`DMA2_CH2`, req 6)
-//! - SerialRx (ELRS CRSF / GHST) via `bsp::PORT_SERIAL_RX` (default `USART2`, `PD5/PD6`).
+//! - SerialRx (ELRS CRSF / MAVLink) via `bsp::PORT_SERIAL_RX` (default `USART2`, `PD5/PD6`).
 //! - Offboard / ESP Bridge DMA UART via `bsp::PORT_ESP_BRIDGE` (default `USART1`, `PA9/PA10` @ 460800 baud).
 //! - GPS via `bsp::PORT_GPS` (default `USART6`, `PC6/PC7`).
 //! - Battery VBAT (`PC3`, `ADC3_IN13`) & Current (`PC2`, `ADC3_IN12`).
@@ -333,40 +333,6 @@ pub async fn init(
             _ => {
                 defmt::error!("Multi-UART RC BufferedUart init failed on one or more ports");
             }
-        }
-    }
-
-    #[cfg(all(feature = "rx_ghst", not(feature = "rx_crsf")))]
-    {
-        static TX_BUF: StaticCell<[u8; 256]> = StaticCell::new();
-        static RX_BUF: StaticCell<[u8; 256]> = StaticCell::new();
-        let tx_buf = &mut TX_BUF.init([0u8; 256])[..];
-        let rx_buf = &mut RX_BUF.init([0u8; 256])[..];
-        let mut rc_uart_cfg = hal::usart::Config::default();
-        rc_uart_cfg.baudrate = 420_000;
-        rc_uart_cfg.rx_pull = hal::gpio::Pull::Up;
-
-        match bsp::PORT_SERIAL_RX {
-            bsp::SerialPortId::Usart2 => {
-                match hal::usart::BufferedUart::new_half_duplex(
-                    board.serial.usart2,
-                    board.serial.usart2_tx,
-                    SerialIrqs,
-                    tx_buf,
-                    rx_buf,
-                    rc_uart_cfg,
-                    hal::usart::HalfDuplexReadback::NoReadback,
-                ) {
-                    Ok(uart) => {
-                        defmt::info!("GHST USART2 half-duplex init OK (T2=PD5)");
-                        ctrl_spawner
-                            .spawn(crate::sensors::rc::ghst_runner::ghst_task(uart))
-                            .unwrap_or_else(|e| defmt::error!("Failed to spawn GHST task: {}", e));
-                    }
-                    Err(e) => defmt::error!("GHST USART2 init failed: {}", e),
-                }
-            }
-            _ => defmt::warn!("GHST: PORT_SERIAL_RX is not a supported SerialRx port on this board"),
         }
     }
 

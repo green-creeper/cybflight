@@ -99,7 +99,7 @@ pub struct TelemetrySnapshot {
     pub rc_lq_pct: u8,
     /// Latest RC SNR in dB.
     pub rc_snr_db: i8,
-    /// Latest CRSF/GHST RF mode index.
+    /// Latest RC RF mode index.
     pub rc_rf_mode: u8,
     /// Host timestamp when the latest `RcLinkStatus` frame arrived.
     pub rc_link_last_rx: Option<std::time::Instant>,

@@ -11,7 +11,7 @@ The reference configurations select SAKURAH7, CRSF, the primary ICM42688P IMU, t
 | u-blox F9 RTK / `sakura_ublox_f9` | Integrated outdoor route with CI build coverage; verify receiver model, firmware, and saved configuration on hardware |
 | FOXEERH743, MICOAIR743V2 | Experimental BSPs; not recently flight-validated |
 | Secondary IMU, barometers, magnetometers | Retained drivers; disabled in the SAKURA reference setup |
-| GHST, alternate controllers/IMU rates | Experimental paths requiring integration validation |
+| Alternate controllers/IMU rates | Experimental paths requiring integration validation |
 
 Experimental source is retained where it is isolated and useful. Its existence does not establish working integration. To maintain another board, start from `experimental/vehicles`, create a configuration under `vehicles`, and document wiring, clocks, sensor orientation, actuator mapping, and repeatable bench/flight results.
 

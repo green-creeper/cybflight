@@ -1050,7 +1050,7 @@ mod vehicle_bake {
             "board_micoair743v2",
             "board_flywoof745",
         ];
-        const RX: &[&str] = &["rx_crsf", "rx_ghst"];
+        const RX: &[&str] = &["rx_crsf"];
         const OUTER: &[&str] = &["outer_mpc", "outer_geometric", "outer_rate"];
         const POS: &[&str] = &["est_pos_mocap", "est_pos_gps"];
 

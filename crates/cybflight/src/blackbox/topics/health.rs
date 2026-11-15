@@ -75,7 +75,7 @@ pub const SCHEMA: &[u8] = br#"{
     { "title": "last_att_update_ns", "type": "integer", "description": "Wall-clock time of last accepted att update, ns since boot. 0 = never." },
     { "title": "indi_step_max_us",   "type": "integer", "description": "Longest INDI iteration (compute, decimation gate to motor publish) since the previous /health record, us. 0 = no iteration ran in the window." },
     { "title": "indi_period_max_us", "type": "integer", "description": "Longest gap between INDI iteration starts since the previous /health record, us. Compare against the nominal control period (IMU ODR / indi_ctrl_div); an excess is a missed deadline." },
-    { "title": "rc_link_quality",    "type": ["integer", "null"], "description": "Latest CRSF/GHST link quality, percent [0..100]. null = no link-statistics frame since boot." },
+    { "title": "rc_link_quality",    "type": ["integer", "null"], "description": "Latest RC link quality, percent [0..100]. null = no link-statistics frame since boot." },
     { "title": "rc_rssi_dbm",        "type": ["integer", "null"], "description": "Latest uplink RSSI, dBm (negative). null = never heard." },
     { "title": "rc_link_age_ms",     "type": ["integer", "null"], "description": "Age of that link-statistics frame at record time, ms. Growing while quality holds steady = frames stopped arriving. null = never heard." }
   ]

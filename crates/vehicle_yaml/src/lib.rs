@@ -211,8 +211,7 @@ pub struct BuildYaml {
     /// Flight-controller PCB: `sakurah743` | `foxeerh743` | `micoair743v2`.
     #[serde(default)]
     pub board: Option<String>,
-    /// RC receiver protocol (implies wiring): `crsf` (2-wire full-duplex)
-    /// | `ghst` (1-wire half-duplex).
+    /// RC receiver protocol: `crsf` (2-wire full-duplex; auto-detects CRSF / ELRS MAVLink on supported boards).
     #[serde(default)]
     pub rc_protocol: Option<String>,
     /// Outer-loop controller: `mpc` | `cascade` | `rate`.
@@ -283,7 +282,7 @@ impl BuildYaml {
             &self.board,
             &["sakurah743", "foxeerh743", "micoair743v2", "flywoof745"],
         )?;
-        check("rc_protocol", &self.rc_protocol, &["crsf", "ghst"])?;
+        check("rc_protocol", &self.rc_protocol, &["crsf"])?;
         check(
             "outer_loop",
             &self.outer_loop,
@@ -788,6 +787,10 @@ tuning:
         let yaml = format!("build:\n  board: pixhawk\n{MINIMAL}");
         let err = load("test", &yaml).unwrap_err();
         assert!(err.contains("build.board"), "{err}");
+
+        let bad_rc = format!("build:\n  rc_protocol: ghst\n{MINIMAL}");
+        let rc_err = load("test", &bad_rc).unwrap_err();
+        assert!(rc_err.contains("build.rc_protocol"), "{rc_err}");
     }
 
     #[test]

@@ -12,7 +12,7 @@ crash, exit, or directly command a disarm. Downstream consumers detect
 the silence and act accordingly.
 
 This is the same pattern used by the RC radio: when the link drops, the
-CRSF/GHST driver simply stops publishing `RC_INPUT`. The failsafe task
+RC driver simply stops publishing `RC_INPUT`. The failsafe task
 detects the silence and disarms. Every layer of the autopilot follows
 this pattern.
 

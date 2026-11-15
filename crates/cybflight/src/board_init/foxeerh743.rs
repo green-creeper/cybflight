@@ -193,110 +193,67 @@ pub async fn init(
         }
     }
 
-    static TX_BUF: StaticCell<[u8; 128]> = StaticCell::new();
-    static RX_BUF: StaticCell<[u8; 128]> = StaticCell::new();
-    let tx_buf = &mut TX_BUF.init([0u8; 128])[..];
-    let rx_buf = &mut RX_BUF.init([0u8; 128])[..];
-    let mut rc_uart_cfg = hal::usart::Config::default();
-    rc_uart_cfg.baudrate = 420_000;
-
     // --- SerialRx: bsp::PORT_SERIAL_RX selects the UART. ---
     // To move SerialRx to USART1: change PORT_SERIAL_RX in bsp/foxeerh743/src/lib.rs.
     // LLVM eliminates the dead match arms since PORT_SERIAL_RX is a compile-time constant.
     #[cfg(feature = "rx_crsf")]
-    match bsp::PORT_SERIAL_RX {
-        bsp::SerialPortId::Usart2 => {
-            match hal::usart::BufferedUart::new(
-                board.serial.usart2,
-                board.serial.usart2_rx,
-                board.serial.usart2_tx,
-                tx_buf,
-                rx_buf,
-                SerialIrqs,
-                rc_uart_cfg,
-            ) {
-                Ok(uart) => {
-                    defmt::info!("CRSF USART2 init OK (T2=PA2, R2=PA3)");
-                    // CRSF parser on ctrl_spawner (P10) — arm-switch edge
-                    // detection lives inside the parser, so this keeps
-                    // emergency-disarm response sub-5 ms even while the
-                    // thread executor is blocked by a planner solve.
-                    ctrl_spawner
-                        .spawn(crate::sensors::rc::crsf_runner::crsf_task(uart))
-                        .unwrap_or_else(|e| defmt::error!("Failed to spawn CRSF task: {}", e));
-                }
-                Err(e) => defmt::error!("CRSF USART2 init failed: {}", e),
-            }
-        }
-        bsp::SerialPortId::Usart1 => {
-            match hal::usart::BufferedUart::new(
-                board.serial.usart1,
-                board.serial.usart1_rx,
-                board.serial.usart1_tx,
-                tx_buf,
-                rx_buf,
-                SerialIrqs,
-                rc_uart_cfg,
-            ) {
-                Ok(uart) => {
-                    defmt::info!("CRSF USART1 init OK (T1=PA9, R1=PA10)");
-                    // CRSF parser on ctrl_spawner (P10) — arm-switch edge
-                    // detection lives inside the parser, so this keeps
-                    // emergency-disarm response sub-5 ms even while the
-                    // thread executor is blocked by a planner solve.
-                    ctrl_spawner
-                        .spawn(crate::sensors::rc::crsf_runner::crsf_task(uart))
-                        .unwrap_or_else(|e| defmt::error!("Failed to spawn CRSF task: {}", e));
-                }
-                Err(e) => defmt::error!("CRSF USART1 init failed: {}", e),
-            }
-        }
-        _ => defmt::warn!("CRSF: PORT_SERIAL_RX is not a supported SerialRx port on this board"),
-    }
+    {
+        static TX_BUF: StaticCell<[u8; 128]> = StaticCell::new();
+        static RX_BUF: StaticCell<[u8; 128]> = StaticCell::new();
+        let tx_buf = &mut TX_BUF.init([0u8; 128])[..];
+        let rx_buf = &mut RX_BUF.init([0u8; 128])[..];
+        let mut rc_uart_cfg = hal::usart::Config::default();
+        rc_uart_cfg.baudrate = 420_000;
 
-    #[cfg(feature = "rx_ghst")]
-    match bsp::PORT_SERIAL_RX {
-        bsp::SerialPortId::Usart2 => {
-            match hal::usart::BufferedUart::new_half_duplex(
-                board.serial.usart2,
-                board.serial.usart2_tx,
-                SerialIrqs,
-                tx_buf,
-                rx_buf,
-                rc_uart_cfg,
-                hal::usart::HalfDuplexReadback::NoReadback,
-            ) {
-                Ok(uart) => {
-                    defmt::info!("GHST USART2 half-duplex init OK (T2 pad = PA2)");
-                    // GHST parser on ctrl_spawner — see CRSF rationale.
-                    ctrl_spawner
-                        .spawn(crate::sensors::rc::ghst_runner::ghst_task(uart))
-                        .unwrap_or_else(|e| defmt::error!("Failed to spawn GHST task: {}", e));
+        match bsp::PORT_SERIAL_RX {
+            bsp::SerialPortId::Usart2 => {
+                match hal::usart::BufferedUart::new(
+                    board.serial.usart2,
+                    board.serial.usart2_rx,
+                    board.serial.usart2_tx,
+                    tx_buf,
+                    rx_buf,
+                    SerialIrqs,
+                    rc_uart_cfg,
+                ) {
+                    Ok(uart) => {
+                        defmt::info!("CRSF USART2 init OK (T2=PA2, R2=PA3)");
+                        // CRSF parser on ctrl_spawner (P10) — arm-switch edge
+                        // detection lives inside the parser, so this keeps
+                        // emergency-disarm response sub-5 ms even while the
+                        // thread executor is blocked by a planner solve.
+                        ctrl_spawner
+                            .spawn(crate::sensors::rc::crsf_runner::crsf_task(uart))
+                            .unwrap_or_else(|e| defmt::error!("Failed to spawn CRSF task: {}", e));
+                    }
+                    Err(e) => defmt::error!("CRSF USART2 init failed: {}", e),
                 }
-                Err(e) => defmt::error!("GHST USART2 init failed: {}", e),
             }
-        }
-        bsp::SerialPortId::Usart1 => {
-            match hal::usart::BufferedUart::new_half_duplex(
-                board.serial.usart1,
-                board.serial.usart1_tx,
-                SerialIrqs,
-                tx_buf,
-                rx_buf,
-                rc_uart_cfg,
-                hal::usart::HalfDuplexReadback::NoReadback,
-            ) {
-                Ok(uart) => {
-                    defmt::info!("GHST USART1 half-duplex init OK (T1 pad = PA9)");
-                    // GHST parser on ctrl_spawner — see CRSF rationale.
-                    ctrl_spawner
-                        .spawn(crate::sensors::rc::ghst_runner::ghst_task(uart))
-                        .unwrap_or_else(|e| defmt::error!("Failed to spawn GHST task: {}", e));
+            bsp::SerialPortId::Usart1 => {
+                match hal::usart::BufferedUart::new(
+                    board.serial.usart1,
+                    board.serial.usart1_rx,
+                    board.serial.usart1_tx,
+                    tx_buf,
+                    rx_buf,
+                    SerialIrqs,
+                    rc_uart_cfg,
+                ) {
+                    Ok(uart) => {
+                        defmt::info!("CRSF USART1 init OK (T1=PA9, R1=PA10)");
+                        // CRSF parser on ctrl_spawner (P10) — arm-switch edge
+                        // detection lives inside the parser, so this keeps
+                        // emergency-disarm response sub-5 ms even while the
+                        // thread executor is blocked by a planner solve.
+                        ctrl_spawner
+                            .spawn(crate::sensors::rc::crsf_runner::crsf_task(uart))
+                            .unwrap_or_else(|e| defmt::error!("Failed to spawn CRSF task: {}", e));
+                    }
+                    Err(e) => defmt::error!("CRSF USART1 init failed: {}", e),
                 }
-                Err(e) => defmt::error!("GHST USART1 init failed: {}", e),
             }
+            _ => defmt::warn!("CRSF: PORT_SERIAL_RX is not a supported SerialRx port on this board"),
         }
-        _ => defmt::warn!("GHST: PORT_SERIAL_RX is not a supported SerialRx port on this board"),
     }
 
     // --- GPS: bsp::PORT_GPS selects the UART. ---

@@ -15,7 +15,6 @@ board_foxeerh743 = ["dep:bsp-foxeerh743"]
 board_micoair743v2 = ["dep:bsp-micoair743v2"]
 board_flywoof745 = ["dep:bsp-flywoof745"]
 rx_crsf = []
-rx_ghst = []
 # Enable UART-based defmt logging. Disable for production to eliminate all
 # blocking UART overhead and free USART2 (the peripheral is still consumed
 # and dropped at init, but no bytes are ever transmitted).

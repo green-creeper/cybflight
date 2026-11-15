@@ -201,7 +201,7 @@ pub async fn init(
         Err(e) => defmt::error!("IMU1 (BMI270) init failed: {}", e),
     }
 
-    // --- SerialRx (CRSF/GHST): bsp::PORT_SERIAL_RX selects the UART (USART6). ---
+    // --- SerialRx (CRSF): bsp::PORT_SERIAL_RX selects the UART (USART6). ---
     #[cfg(feature = "rx_crsf")]
     match bsp::PORT_SERIAL_RX {
         bsp::SerialPortId::Usart6 => {
@@ -230,36 +230,6 @@ pub async fn init(
             }
         }
         _ => defmt::warn!("CRSF: PORT_SERIAL_RX is not a supported SerialRx port on this board"),
-    }
-
-    #[cfg(feature = "rx_ghst")]
-    match bsp::PORT_SERIAL_RX {
-        bsp::SerialPortId::Usart6 => {
-            static TX_BUF: StaticCell<[u8; 128]> = StaticCell::new();
-            static RX_BUF: StaticCell<[u8; 128]> = StaticCell::new();
-            let tx_buf = &mut TX_BUF.init([0u8; 128])[..];
-            let rx_buf = &mut RX_BUF.init([0u8; 128])[..];
-            let mut uart_config = hal::usart::Config::default();
-            uart_config.baudrate = 420_000;
-            match hal::usart::BufferedUart::new_half_duplex(
-                board.serial.usart6,
-                board.serial.usart6_tx,
-                SerialIrqs,
-                tx_buf,
-                rx_buf,
-                uart_config,
-                hal::usart::HalfDuplexReadback::NoReadback,
-            ) {
-                Ok(uart) => {
-                    defmt::info!("GHST USART6 half-duplex init OK");
-                    ctrl_spawner
-                        .spawn(crate::sensors::rc::ghst_runner::ghst_task(uart))
-                        .unwrap_or_else(|e| defmt::error!("Failed to spawn GHST task: {}", e));
-                }
-                Err(e) => defmt::error!("GHST USART6 init failed: {}", e),
-            }
-        }
-        _ => defmt::warn!("GHST: PORT_SERIAL_RX is not a supported SerialRx port on this board"),
     }
 
     // --- GPS: bsp::PORT_GPS selects the UART (USART3). Gated on est_pos_gps. ---

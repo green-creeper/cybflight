@@ -1,4 +1,4 @@
-//! RC receiver sensor tasks for CRSF and GHST protocols.
+//! RC receiver sensor tasks for CRSF and MAVLink protocols.
 //!
 //! Each task reads frames from the UART, publishes RC channel data and link
 //! statistics to the pub/sub channels, and sends telemetry in the inter-frame gaps.
@@ -27,7 +27,7 @@ pub static RC_VALID_FRAMES: AtomicU32 = AtomicU32::new(0);
 pub static RC_LINK_FRAMES: AtomicU32 = AtomicU32::new(0);
 /// Currently locked UART index (`0..5` into `RC_DIAG_PORT_NAMES`, or `0xFF` = none).
 pub static RC_LOCKED_PORT: AtomicU8 = AtomicU8::new(0xFF);
-/// Locked RC protocol (`0` = none, `1` = CRSF, `2` = MAVLink, `3` = GHST).
+/// Locked RC protocol (`0` = none, `1` = CRSF, `2` = MAVLink).
 pub static RC_LOCKED_PROTO: AtomicU8 = AtomicU8::new(0);
 /// Locked UART baudrate in bps (`0` when unlocked).
 pub static RC_LOCKED_BAUD: AtomicU32 = AtomicU32::new(0);
@@ -41,7 +41,6 @@ pub fn rc_diag_proto_name(code: u8) -> &'static str {
     match code {
         1 => "CRSF",
         2 => "MAVLink",
-        3 => "GHST",
         _ => "none",
     }
 }
@@ -76,7 +75,7 @@ pub static LATEST_BLOCK_REASON: BlockingMutex<
 pub static LATEST_RC_INPUT: BlockingMutex<CriticalSectionRawMutex, RefCell<Option<msgs::RcInput>>> =
     BlockingMutex::new(RefCell::new(None));
 
-/// Most recent CRSF/GHST link statistics, same caching rationale as
+/// Most recent RC link statistics, same caching rationale as
 /// `LATEST_RC_INPUT`.
 pub static LATEST_RC_LINK_STATUS: BlockingMutex<
     CriticalSectionRawMutex,
@@ -572,179 +571,6 @@ pub mod crsf_runner {
     #[embassy_executor::task]
     pub async fn crsf_task(uart: RcUart) {
         let mut runner = CrsfRunner::new(uart);
-        runner.run().await;
-    }
-}
-
-// ---------------------------------------------------------------------------
-// GHST
-// ---------------------------------------------------------------------------
-
-#[cfg(feature = "rx_ghst")]
-pub mod ghst_runner {
-    use super::*;
-    use cybflight_drivers::rc::ghst::{Ghst, GhstEvent};
-    use embassy_time::{Duration, Timer, with_timeout};
-
-    /// GHST runner: reads frames, publishes channels/link stats, sends telemetry.
-    pub struct GhstRunner {
-        ghst: Ghst<RcUart>,
-        telemetry_idx: u8,
-    }
-
-    /// Time to wait for the first GHST frame before warning about pin assignment.
-    const FIRST_FRAME_TIMEOUT: Duration = Duration::from_secs(3);
-    /// Time to wait for subsequent frames before warning about signal loss.
-    const FRAME_TIMEOUT: Duration = Duration::from_secs(1);
-
-    impl GhstRunner {
-        pub fn new(uart: RcUart) -> Self {
-            Self {
-                ghst: Ghst::new(uart),
-                telemetry_idx: 0,
-            }
-        }
-
-        pub async fn run(&mut self) -> ! {
-            let mut arm = ArmStateMachine::new();
-            RC_LOCKED_PROTO.store(3, Ordering::Relaxed);
-            RC_LOCKED_BAUD.store(420_000, Ordering::Relaxed);
-            RC_SCAN_STATE.store(1, Ordering::Relaxed);
-
-            let mut frame_count: u32 = 0;
-            let mut err_count: u32 = 0;
-            let mut timeout_count: u32 = 0;
-            let mut got_first_frame = false;
-
-            defmt::info!(
-                "GHST: waiting for first frame (timeout {}s)...",
-                FIRST_FRAME_TIMEOUT.as_secs()
-            );
-
-            loop {
-                let timeout = if got_first_frame {
-                    FRAME_TIMEOUT
-                } else {
-                    FIRST_FRAME_TIMEOUT
-                };
-
-                match with_timeout(timeout, self.ghst.read_frame()).await {
-                    Err(_elapsed) => {
-                        timeout_count = timeout_count.wrapping_add(1);
-                        if !got_first_frame {
-                            defmt::error!(
-                                "GHST: NO DATA after {}s — check wiring! \
-                                 Verify RC receiver is connected to the correct UART TX pin \
-                                 (half-duplex). (timeouts={})",
-                                FIRST_FRAME_TIMEOUT.as_secs(),
-                                timeout_count,
-                            );
-                        } else {
-                            defmt::warn!(
-                                "GHST: frame timeout ({}s no data, timeouts={}, frames={}, errs={})",
-                                FRAME_TIMEOUT.as_secs(),
-                                timeout_count,
-                                frame_count,
-                                err_count,
-                            );
-                        }
-                        continue;
-                    }
-                    Ok(Err(e)) => {
-                        err_count = err_count.wrapping_add(1);
-                        defmt::warn!("GHST read error: {} (total errs={})", e, err_count);
-                        Timer::after_millis(2).await;
-                        continue;
-                    }
-                    Ok(Ok(event)) => {
-                        if !got_first_frame {
-                            got_first_frame = true;
-                            defmt::info!("GHST: first frame received OK");
-                        }
-                        frame_count = frame_count.wrapping_add(1);
-                        let now = Instant::now();
-                        match event {
-                            GhstEvent::RcChannels(rc) => {
-                                if frame_count % 500 == 1 {
-                                    defmt::info!(
-                                        "GHST ch[0..4]=[{},{},{},{}] frames={} errs={} timeouts={}",
-                                        rc.channels[0],
-                                        rc.channels[1],
-                                        rc.channels[2],
-                                        rc.channels[3],
-                                        frame_count,
-                                        err_count,
-                                        timeout_count,
-                                    );
-                                }
-
-                                RC_SCAN_STATE.store(2, Ordering::Relaxed);
-                                RC_VALID_FRAMES.fetch_add(1, Ordering::Relaxed);
-                                publish_rc_channels(&mut arm, now, rc.channels, rc.channel_count);
-
-                                // Guard delay: GHST requires 1ms minimum gap after
-                                // the last received byte before transmitting telemetry
-                                // on the half-duplex bus (BF: GHST_RX_TO_TELEMETRY_MIN_US).
-                                Timer::after_micros(1000).await;
-                                self.send_telemetry().await;
-                            }
-                            GhstEvent::RssiFrame(stats) => {
-                                RC_SCAN_STATE.store(2, Ordering::Relaxed);
-                                RC_LINK_FRAMES.fetch_add(1, Ordering::Relaxed);
-                                defmt::debug!(
-                                    "GHST link: rssi={}dBm lq={}% rf_mode={}",
-                                    stats.rssi_dbm,
-                                    stats.link_quality,
-                                    stats.rf_mode,
-                                );
-                                publish_rc_link(
-                                    &mut arm,
-                                    now,
-                                    stats.rssi_dbm,
-                                    stats.link_quality,
-                                    stats.snr,
-                                    stats.rf_mode,
-                                );
-                            }
-                            GhstEvent::Other { frame_type } => {
-                                defmt::debug!("GHST unknown frame type={:#x}", frame_type);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        /// Send the next scheduled telemetry frame.
-        /// Round-robin: pack → magbaro
-        ///
-        // TODO: expand telemetry schedule once more sensor channels exist:
-        //   - battery: subscribe to BATTERY channel, send real values in write_pack()
-        //   - GPS: subscribe to GPS channel, send write_gps_primary() / write_gps_secondary()
-        //   - baro/mag: subscribe to BARO + VEHICLE_ATTITUDE channels, send real
-        //     yaw/alt/vario in write_magbaro()
-        async fn send_telemetry(&mut self) {
-            match self.telemetry_idx % 2 {
-                0 => {
-                    // Battery pack status — placeholder values until battery system exists
-                    if let Err(e) = self.ghst.write_pack(0, 0, 0, false).await {
-                        defmt::warn!("GHST telemetry pack error: {}", e);
-                    }
-                }
-                _ => {
-                    // Magbaro — placeholder values
-                    if let Err(e) = self.ghst.write_magbaro(0, 0, 0, 0).await {
-                        defmt::warn!("GHST telemetry magbaro error: {}", e);
-                    }
-                }
-            }
-            self.telemetry_idx = self.telemetry_idx.wrapping_add(1);
-        }
-    }
-
-    #[embassy_executor::task]
-    pub async fn ghst_task(uart: RcUart) {
-        let mut runner = GhstRunner::new(uart);
         runner.run().await;
     }
 }

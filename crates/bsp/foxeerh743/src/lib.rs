@@ -54,7 +54,7 @@ pub type DshotDmaM4 = hal::peripherals::DMA1_CH3;
 // LLVM elides dead arms because the discriminants are compile-time consts.
 //
 // Role        Port    Pins              Notes
-// SerialRx    USART2  PA2 TX / PA3 RX   CRSF/GHST receiver
+// SerialRx    USART2  PA2 TX / PA3 RX   CRSF receiver
 // GPS         UART4   PA0 TX / PA1 RX   u-blox (M8/M9/F9P)
 // ESP bridge  USART6  PC6 TX / PC7 RX   WiFi/companion link, DMA
 // =====================================================================

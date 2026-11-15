@@ -241,10 +241,6 @@ check-all:
     # is exactly why it needs a compile check of its own.
     cargo check -p cybflight --no-default-features \
         --features board_sakurah743,est_pos_mocap,rx_crsf,defmt_uart,outer_mpc,plan_online
-    # GHST receivers. A whole parser and telemetry path that no vehicle
-    # YAML currently selects.
-    cargo check -p cybflight --no-default-features \
-        --features board_sakurah743,est_pos_mocap,rx_ghst,defmt_uart,outer_mpc
     # Raw-sensor downlink branches in the ESP bridge.
     cargo check -p cybflight --no-default-features \
         --features board_sakurah743,est_pos_mocap,rx_crsf,defmt_uart,outer_mpc,dev_telem

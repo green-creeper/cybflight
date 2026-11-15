@@ -260,7 +260,7 @@ pub struct RcSettings {
 }
 
 impl RcMapper {
-    /// Create a mapper with AETR channel order (typical for CRSF/GHST).
+    /// Create a mapper with AETR channel order (typical for CRSF/ELRS).
     /// Channels: 0=Roll, 1=Pitch, 2=Throttle, 3=Yaw.
     /// Yaw is inverted: stick-left (low PWM) → positive yaw (CCW in FLU).
     pub fn aetr(settings: RcSettings) -> Self {

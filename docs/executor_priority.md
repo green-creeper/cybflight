@@ -13,7 +13,7 @@ Priority   Executor / Handler          Tasks
 --------   -------------------------   ----------------------------------
 P0–P5      HAL-managed interrupts      DMA completion, SPI, I2C, EXTI
 P6         InterruptExecutor (CRS)     DShot motor output
-Thread     Thread executor (main)      IMU, CRSF/GHST, USB, LED, IWDG feed
+Thread     Thread executor (main)      IMU, CRSF, USB, LED, IWDG feed
 ```
 
 - **P0–P5**: Hardware interrupt handlers managed by embassy-stm32. These must

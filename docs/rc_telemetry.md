@@ -7,13 +7,14 @@ integration once additional sensor subsystems come online.
 
 ## How Telemetry Works
 
-Both CRSF and GHST are half-duplex protocols. The receiver sends frames on a
-fixed schedule (~4ms cycle for CRSF, similar for GHST). After receiving an RC
-frame the flight controller has a brief window to send one telemetry frame back
-before the next receiver packet arrives.
+CRSF is a half-duplex UART protocol where the receiver sends frames on a fixed
+schedule (~4ms cycle). After receiving an RC frame, the flight controller has a
+brief inter-frame window to send one telemetry frame back before the next
+receiver packet arrives. (For ExpressLRS MAVLink Link Mode on multi-UART boards,
+the runner instead sends a 1 Hz MAVLink v2 `HEARTBEAT` (`#0`) handshake.)
 
-The runner tasks (`CrsfRunner`, `GhstRunner`) use a round-robin index to cycle
-through telemetry slots, sending one frame type per received RC packet.
+The CRSF runner (`CrsfRunner` / `multi_rc_runner`) uses a round-robin index to
+cycle through telemetry slots, sending one frame type per received RC packet.
 
 ## Current State
 
@@ -24,13 +25,6 @@ through telemetry slots, sending one frame type per received RC packet.
 | 0 | Heartbeat | Fixed (always sent) |
 | 1 | Attitude (pitch/roll/yaw) | `VEHICLE_ATTITUDE` channel |
 | 2 | Flight mode | Hardcoded `"ACRO"` |
-
-### GHST
-
-| Slot | Frame | Data Source |
-|------|-------|-------------|
-| 0 | Pack (battery) | Placeholder zeros |
-| 1 | Magbaro (yaw/alt/vario) | Placeholder zeros |
 
 ## Planned Integration
 
@@ -51,18 +45,6 @@ round-robin schedule should also be expanded to include the new frame types.
 
 The driver also supports `write_vario()` and `write_device_info()` which can be
 added to the schedule if the transmitter/receiver benefits from them.
-
-### GHST Target Schedule
-
-| Slot | Frame | Required Channel |
-|------|-------|------------------|
-| 0 | Pack (`write_pack`) | `BATTERY` |
-| 1 | GPS primary (`write_gps_primary`) | `GPS` |
-| 2 | GPS secondary (`write_gps_secondary`) | `GPS` |
-| 3 | Magbaro (`write_magbaro`) | `VEHICLE_ATTITUDE` + `BARO` |
-
-Note: GHST has no dedicated attitude frame. Yaw (heading) is sent via the
-magbaro frame; pitch and roll are not available in the GHST protocol.
 
 ## Integration Steps
 
@@ -92,9 +74,3 @@ Available telemetry write methods in the drivers:
 - `write_baro_altitude(alt_packed, vario_packed)`
 - `write_vario(vspeed_cm_s)`
 - `write_device_info(...)`
-
-**GHST** (`cybflight_drivers::rc::ghst::Ghst`):
-- `write_pack(voltage_10mv, current_10ma, mah_10, armed)`
-- `write_gps_primary(lat, lon, alt_m)`
-- `write_gps_secondary(speed, course, sats, dist_home, dir_home, flags)`
-- `write_magbaro(yaw_decideg, alt_m, vario_cm_s, flags)`
