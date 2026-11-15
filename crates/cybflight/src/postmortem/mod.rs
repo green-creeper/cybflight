@@ -65,3 +65,16 @@ pub mod recovery;
 // paths (recovery, shell `postmortem show`, blackbox bracket) still work.
 pub use crate::reset_cause;
 pub mod task;
+
+/// Record a lightweight boot-stage marker (`1..9`) into BKPSRAM `uptime_ms`
+/// before steady-state `postmortem_task` ticks overwrite it with real uptime.
+///
+/// Marked `#[inline(never)]` so async callers do not grow their `Future` state
+/// machines with a 2 KiB stack slot.
+#[inline(never)]
+pub fn mark_boot_stage(stage: u32) {
+    bkpsram::with_record_mut(|r| {
+        r.header.uptime_ms = stage;
+        record::finalize(r);
+    });
+}

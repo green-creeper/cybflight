@@ -79,6 +79,9 @@ pub struct RpmNotchBank<const NU: usize, const NH: usize> {
     /// `[motor][harmonic]`. Crossfade weight in `[0, 1]`. 0 = passthrough,
     /// 1 = full notch. Same value applies on every axis.
     weights: [[f32; NH]; NU],
+    /// `[motor][harmonic]`. Last programmed biquad cutoff frequency (Hz) so
+    /// steady-state / idle updates avoid redundant trig recomputations.
+    cutoff_hz: [[f32; NH]; NU],
     min_hz: f32,
     max_hz: f32,
     fade_range_hz: f32,
@@ -121,6 +124,7 @@ impl<const NU: usize, const NH: usize> RpmNotchBank<NU, NH> {
                 core::array::from_fn(|_| core::array::from_fn(|_| make()))
             }),
             weights: [[0.0; NH]; NU],
+            cutoff_hz: [[min_hz; NH]; NU],
             min_hz,
             max_hz,
             fade_range_hz,
@@ -160,14 +164,18 @@ impl<const NU: usize, const NH: usize> RpmNotchBank<NU, NH> {
                 0.0
             };
             self.weights[self.motor_idx][self.harm_idx] = weight;
-            for axis in 0..N_AXES {
-                // set_cutoff_frequency_hz can only fail on Nyquist violation;
-                // we already clamped to 0.48·sample, so this is infallible
-                // in practice. Discard the Result rather than unwrap to
-                // guarantee no panic path if a future config change widens
-                // the clamp.
-                let _ = self.notches[axis][self.motor_idx][self.harm_idx]
-                    .set_cutoff_frequency_hz(f_clamped);
+            let prev_cutoff = self.cutoff_hz[self.motor_idx][self.harm_idx];
+            if libm::fabsf(f_clamped - prev_cutoff) >= 0.25 {
+                for axis in 0..N_AXES {
+                    // set_cutoff_frequency_hz can only fail on Nyquist violation;
+                    // we already clamped to 0.48·sample, so this is infallible
+                    // in practice. Discard the Result rather than unwrap to
+                    // guarantee no panic path if a future config change widens
+                    // the clamp.
+                    let _ = self.notches[axis][self.motor_idx][self.harm_idx]
+                        .set_cutoff_frequency_hz(f_clamped);
+                }
+                self.cutoff_hz[self.motor_idx][self.harm_idx] = f_clamped;
             }
             // advance cursor (harmonic-major within motor)
             self.harm_idx += 1;
@@ -206,14 +214,19 @@ impl<const NU: usize, const NH: usize> RpmNotchBank<NU, NH> {
     /// Per the safety protocol: this never disarms or skips publishing on
     /// its own — the caller decides the policy.
     pub fn reset(&mut self) {
-        for axis in 0..N_AXES {
-            for motor in 0..NU {
-                for harm in 0..NH {
+        for motor in 0..NU {
+            for harm in 0..NH {
+                let restore_min = self.cutoff_hz[motor][harm] != self.min_hz;
+                for axis in 0..N_AXES {
+                    if restore_min {
+                        let _ = self.notches[axis][motor][harm].set_cutoff_frequency_hz(self.min_hz);
+                    }
                     let _ = self.notches[axis][motor][harm].reset(0.0);
                 }
             }
         }
         self.weights = [[0.0; NH]; NU];
+        self.cutoff_hz = [[self.min_hz; NH]; NU];
         self.motor_idx = 0;
         self.harm_idx = 0;
     }
@@ -503,5 +516,48 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn repeated_idle_then_active_reset_and_reengage() {
+        let mut bank = RpmNotchBank::<4, 3>::new(SAMPLE_HZ, Q, MIN_HZ, FADE_HZ);
+        let idle = [0.0; 4];
+        for _ in 0..32 {
+            bank.update(&idle);
+        }
+        for m in 0..4 {
+            for h in 0..3 {
+                assert_eq!(bank.weight(m, h), 0.0);
+            }
+        }
+
+        let active = [250.0; 4];
+        let on_resp = rms_response(&mut bank, 250.0, &active, 4000, 2000);
+        let mut ref_bank = RpmNotchBank::<4, 3>::new(SAMPLE_HZ, Q, MIN_HZ, FADE_HZ);
+        let off_resp = rms_response(&mut ref_bank, 250.0, &[800.0; 4], 4000, 2000);
+        assert!(
+            on_resp < 0.3 * off_resp,
+            "expected strong attenuation after idle cache skip: on={on_resp} off={off_resp}"
+        );
+
+        bank.reset();
+        for m in 0..4 {
+            for h in 0..3 {
+                assert_eq!(bank.weight(m, h), 0.0);
+            }
+        }
+        let passthrough = bank.apply(0, 1.25);
+        assert!(
+            libm::fabsf(passthrough - 1.25) < 1e-6,
+            "expected unity passthrough right after reset, got {passthrough}"
+        );
+
+        let reengaged = rms_response(&mut bank, 300.0, &[300.0; 4], 4000, 2000);
+        let mut ref_bank2 = RpmNotchBank::<4, 3>::new(SAMPLE_HZ, Q, MIN_HZ, FADE_HZ);
+        let off_resp2 = rms_response(&mut ref_bank2, 300.0, &[800.0; 4], 4000, 2000);
+        assert!(
+            reengaged < 0.3 * off_resp2,
+            "expected strong attenuation after reset & re-engagement: on={reengaged} off={off_resp2}"
+        );
     }
 }

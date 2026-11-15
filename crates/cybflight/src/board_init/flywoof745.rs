@@ -94,17 +94,17 @@ pub async fn init(
     let imu_spawner = {
         use hal::interrupt::{self, InterruptExt, Priority};
         // NVIC priority tiers (lower number = higher urgency):
-        // P0: PVD | P4: DMA | P6: DShot | P7: IMU EXTI | P8: IMU task | P10: Ctrl | P12: slow IRQs
+        // P0: PVD | P4: DMA | P5: USART/I2C | P6: DShot | P7: IMU EXTI | P8: IMU task | P10: Ctrl | P12: USB OTG_FS
         interrupt::EXTI1.set_priority(Priority::P7);
         interrupt::OTG_FS.set_priority(Priority::P12);
-        interrupt::USART1.set_priority(Priority::P12);
-        interrupt::USART2.set_priority(Priority::P12);
-        interrupt::USART3.set_priority(Priority::P12);
-        interrupt::UART4.set_priority(Priority::P12);
-        interrupt::UART5.set_priority(Priority::P12);
-        interrupt::USART6.set_priority(Priority::P12);
-        interrupt::I2C1_EV.set_priority(Priority::P12);
-        interrupt::I2C1_ER.set_priority(Priority::P12);
+        interrupt::USART1.set_priority(Priority::P5);
+        interrupt::USART2.set_priority(Priority::P5);
+        interrupt::USART3.set_priority(Priority::P5);
+        interrupt::UART4.set_priority(Priority::P5);
+        interrupt::UART5.set_priority(Priority::P5);
+        interrupt::USART6.set_priority(Priority::P5);
+        interrupt::I2C1_EV.set_priority(Priority::P5);
+        interrupt::I2C1_ER.set_priority(Priority::P5);
 
         interrupt::CAN2_RX1.set_priority(Priority::P8);
         EXECUTOR_IMU.start(interrupt::CAN2_RX1)
@@ -125,6 +125,8 @@ pub async fn init(
             board.usb.dm,
         ))
         .unwrap();
+    #[cfg(feature = "postmortem")]
+    crate::postmortem::mark_boot_stage(2);
 
     // Wait for power to stabilize before touching SPI devices.
     Timer::after_millis(100).await;
@@ -277,6 +279,8 @@ pub async fn init(
         }
     }
     crate::watchdog::feed();
+    #[cfg(feature = "postmortem")]
+    crate::postmortem::mark_boot_stage(3);
 
     let _ = &ctrl_spawner;
 
@@ -407,6 +411,8 @@ pub async fn init(
             }
         }
     }
+    #[cfg(feature = "postmortem")]
+    crate::postmortem::mark_boot_stage(4);
 
     // --- I2C1 shared bus (PB6 SCL, PB7 SDA): SPL06 baro (0x76) + QMC5883L mag (0x0D) ---
     // Per docs/sensor_bus_sharing.md: initialize ALL devices on a shared I2C bus
@@ -567,6 +573,8 @@ pub async fn init(
         }
     }
     crate::watchdog::feed();
+    #[cfg(feature = "postmortem")]
+    crate::postmortem::mark_boot_stage(5);
 
     // --- Offboard / ESP bridge (`PORT_ESP_BRIDGE`, default USART1 PA9/PA10 @ 460800 baud) ---
     // When `rx_crsf` is active, USART1 is time-sliced/monitored inside `multi_rc_task`.
@@ -688,6 +696,8 @@ pub async fn init(
         .spawn(power_task(power_mon))
         .unwrap_or_else(|_| defmt::error!("Failed to spawn power task"));
     crate::watchdog::feed();
+    #[cfg(feature = "postmortem")]
+    crate::postmortem::mark_boot_stage(6);
 }
 
 #[cfg(all(feature = "est_pos_gps", not(feature = "gps_unicore")))]

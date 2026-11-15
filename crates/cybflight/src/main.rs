@@ -201,6 +201,8 @@ async fn main(spawner: embassy_executor::Spawner) {
     //     starves for fresh gyro/accel data.
     //   * Everything else (LED, USB, RC, mag, baro, GPS, ESP bridge)
     //     on `spawner` (thread).
+    #[cfg(feature = "postmortem")]
+    cybflight::postmortem::mark_boot_stage(1);
     cybflight::board_init::init(&spawner, &ctrl_spawner, &high_spawner, board).await;
     cybflight::watchdog::restore_timeout();
 
@@ -273,6 +275,8 @@ async fn main(spawner: embassy_executor::Spawner) {
     ctrl_spawner
         .spawn(cybflight::control::indi_task::indi_task())
         .unwrap_or_else(|_| defmt::panic!("failed to spawn INDI task"));
+    #[cfg(feature = "postmortem")]
+    cybflight::postmortem::mark_boot_stage(7);
 
     // ── Outer loop controllers (thread executor) ────────────────────
     // Cascade position→attitude→geometric controller (100 Hz).
@@ -345,5 +349,7 @@ async fn main(spawner: embassy_executor::Spawner) {
         .spawn(cybflight::usb_serial::estimator_stream_task())
         .unwrap_or_else(|_| defmt::panic!("failed to spawn estimator stream task"));
 
+    #[cfg(feature = "postmortem")]
+    cybflight::postmortem::mark_boot_stage(8);
     defmt::info!("all init done");
 }

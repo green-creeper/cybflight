@@ -228,7 +228,10 @@ tuning:
   rpm_est_tau_d: 0
 
   # ── rpm_notch — gyro/accel notch bank ──
-  rpm_notch_en: 1
+  # Disabled on 2 kHz (`indi_ctrl_div: 4`) F745: 2S 14,800 KV harmonics exceed
+  # the 960 Hz ceiling while uncached DF1 trig updates starve the thread
+  # executor; relies on 8 kHz IMU gyro (175 Hz) and accel (20 Hz) biquads.
+  rpm_notch_en: 0
   rpm_notch_q: 5
   rpm_notch_min_hz: 100
   rpm_notch_fade_hz: 50
