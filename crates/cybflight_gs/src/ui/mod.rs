@@ -4,3 +4,4 @@ pub mod flasher_tab;
 pub mod params_tab;
 pub mod rc_tab;
 pub mod setup_tab;
+pub mod widgets;

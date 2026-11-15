@@ -1657,7 +1657,6 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "cybflight-core",
- "cybflight-sim",
  "eframe",
  "egui",
  "nalgebra",

@@ -33,8 +33,6 @@ pub struct MockFcBackend {
     mahony: Mahony<f32>,
     allocator: LinearAllocator<4>,
     last_tick: Instant,
-    sim_time_ms: f64,
-    cli_log: Vec<String>,
 }
 
 impl MockFcBackend {
@@ -71,10 +69,6 @@ impl MockFcBackend {
             mahony,
             allocator,
             last_tick: Instant::now(),
-            sim_time_ms: 0.0,
-            cli_log: vec![format!(
-                "Mock FC booted with vehicle '{vehicle_name}' (Mahony SO(3) + LinearAllocator active)"
-            )],
         }
     }
 
@@ -119,8 +113,6 @@ impl MockFcBackend {
     }
 
     pub fn step_fixed_dt(&mut self, dt: f32, telem: &mut TelemetrySnapshot) {
-        self.sim_time_ms += (dt as f64) * 1000.0;
-
         if self.spring_return {
             self.target_euler_deg[0] *= (1.0 - 4.0 * dt).max(0.0);
             self.target_euler_deg[1] *= (1.0 - 4.0 * dt).max(0.0);
@@ -163,7 +155,6 @@ impl MockFcBackend {
         );
 
         let q_est: UnitQuaternion<f32> = self.mahony.orientation();
-        telem.timestamp_ms = self.sim_time_ms;
         telem.set_quaternion(q_est);
         telem.accel_m_s2 = [accel_body.x, accel_body.y, accel_body.z];
         telem.gyro_rad_s = [gyro_body.x, gyro_body.y, gyro_body.z];
@@ -230,7 +221,7 @@ impl MockFcBackend {
         telem.rc_rf_mode = 2;
     }
 
-    /// Execute a shell command against the in-process Mock FC and append output to `cli_log`.
+    /// Execute a shell command against the in-process Mock FC and return output lines.
     pub fn execute_shell_command(
         &mut self,
         raw_cmd: &str,
@@ -365,7 +356,6 @@ impl MockFcBackend {
             }
         }
 
-        self.cli_log.extend(out.clone());
         out
     }
 }

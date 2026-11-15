@@ -3,6 +3,7 @@ use egui::{Color32, Key, RichText};
 use crate::backend::mock_fc::MockFcBackend;
 use crate::backend::usb_serial::UsbSerialConnection;
 use crate::backend::{ConnectionMode, ParamTable};
+use crate::ui::widgets;
 
 const CLI_MAX_LINES: usize = 6000;
 const CLI_TRIM_BATCH: usize = 1000;
@@ -48,9 +49,15 @@ pub fn show_cli_tab(
     mock_fc: &mut MockFcBackend,
     param_table: &mut ParamTable,
 ) {
+    let is_connected = !matches!(mode, ConnectionMode::Disconnected);
+
     // Quick Diagnostic Command Bar
     ui.horizontal_wrapped(|ui| {
-        ui.label(RichText::new("Quick Commands:").strong());
+        ui.label(
+            RichText::new("Quick Commands:")
+                .strong()
+                .color(widgets::TEXT_PRIMARY),
+        );
         for quick in [
             "help",
             "version",
@@ -63,7 +70,10 @@ pub fn show_cli_tab(
             "param list build",
             "stream off",
         ] {
-            if ui.button(quick).clicked() {
+            if ui
+                .add_enabled(is_connected, egui::Button::new(quick))
+                .clicked()
+            {
                 dispatch_cli(quick, state, mode, usb_conn, mock_fc, param_table);
             }
         }
@@ -75,7 +85,7 @@ pub fn show_cli_tab(
         ui.label(
             RichText::new(format!("({} lines)", state.log_lines.len()))
                 .small()
-                .weak(),
+                .color(widgets::TEXT_MUTED),
         );
     });
 
@@ -83,7 +93,8 @@ pub fn show_cli_tab(
 
     let avail_h = (ui.available_height() - 42.0).max(160.0);
     egui::Frame::canvas(ui.style())
-        .fill(Color32::from_rgb(12, 15, 19))
+        .fill(widgets::BG_INSET)
+        .stroke(egui::Stroke::new(1.0, widgets::BORDER_SUBTLE))
         .show(ui, |ui| {
             ui.set_height(avail_h);
             egui::ScrollArea::vertical()
@@ -100,9 +111,9 @@ pub fn show_cli_tab(
                             || line.contains("rejected")
                             || line.contains("FAILED")
                         {
-                            Color32::from_rgb(255, 100, 90)
+                            widgets::ERR_RED
                         } else if line.starts_with('[') && line.contains(']') {
-                            Color32::from_rgb(115, 200, 255)
+                            widgets::INFO_BLUE
                         } else {
                             Color32::from_rgb(205, 220, 232)
                         };
@@ -129,26 +140,76 @@ pub fn show_cli_tab(
     ui.add_space(4.0);
 
     ui.horizontal(|ui| {
-        ui.monospace(RichText::new(">").strong().color(Color32::from_rgb(255, 180, 60)));
-        let resp = ui.add(
+        ui.monospace(RichText::new(">").strong().color(widgets::WARN_AMBER));
+        let hint = if is_connected {
+            "Enter shell command (e.g. `param get mass`, `param list`, `motor 1 10`, `reboot --dfu`)..."
+        } else {
+            "Connect USB flight controller to run shell commands..."
+        };
+        let resp = ui.add_enabled(
+            is_connected,
             egui::TextEdit::singleline(&mut state.input_line)
                 .font(egui::TextStyle::Monospace)
-                .hint_text("Enter shell command (e.g. `param get mass`, `param list`, `motor 1 10`, `reboot --dfu`)...")
-                .desired_width(ui.available_width() - 90.0),
+                .hint_text(hint)
+                .desired_width((ui.available_width() - 90.0).max(120.0)),
         );
 
-        let enter_pressed = resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-        let send_clicked = ui.button("Send ⏎").clicked();
+        let mut navigated_history = false;
+        if is_connected && resp.has_focus() && !state.history.is_empty() {
+            let up = ui.input(|i| i.key_pressed(Key::ArrowUp));
+            let down = ui.input(|i| i.key_pressed(Key::ArrowDown));
+            if up {
+                navigate_cli_history(state, true);
+                navigated_history = true;
+            } else if down {
+                navigate_cli_history(state, false);
+                navigated_history = true;
+            }
+        }
+        if resp.changed() && !navigated_history {
+            state.history_idx = None;
+        }
 
-        if (enter_pressed || send_clicked) && !state.input_line.trim().is_empty() {
+        let enter_pressed = resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+        let send_clicked = ui
+            .add_enabled(is_connected, egui::Button::new("Send"))
+            .clicked();
+
+        if is_connected && (enter_pressed || send_clicked) && !state.input_line.trim().is_empty() {
             let cmd = state.input_line.trim().to_string();
-            state.history.push(cmd.clone());
+            if state.history.last().map(String::as_str) != Some(cmd.as_str()) {
+                state.history.push(cmd.clone());
+            }
             state.history_idx = None;
             state.input_line.clear();
             dispatch_cli(&cmd, state, mode, usb_conn, mock_fc, param_table);
             resp.request_focus();
         }
     });
+}
+
+pub fn navigate_cli_history(state: &mut CliTabState, up: bool) {
+    if state.history.is_empty() {
+        state.history_idx = None;
+        return;
+    }
+    if up {
+        let next_idx = match state.history_idx {
+            None => state.history.len() - 1,
+            Some(idx) => idx.saturating_sub(1),
+        };
+        state.history_idx = Some(next_idx);
+        state.input_line = state.history[next_idx].clone();
+    } else if let Some(idx) = state.history_idx {
+        if idx + 1 < state.history.len() {
+            let next_idx = idx + 1;
+            state.history_idx = Some(next_idx);
+            state.input_line = state.history[next_idx].clone();
+        } else {
+            state.history_idx = None;
+            state.input_line.clear();
+        }
+    }
 }
 
 fn dispatch_cli(
@@ -170,11 +231,64 @@ fn dispatch_cli(
                 conn.send_command(cmd);
             }
         }
-        _ => {
+        ConnectionMode::MockFc { .. } => {
             let out = mock_fc.execute_shell_command(cmd, param_table);
             for line in out {
                 state.push_line(line);
             }
         }
+        ConnectionMode::Disconnected => {
+            state.push_line(
+                "[INFO] Disconnected — connect a USB flight controller or Mock FC first."
+                    .to_string(),
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cli_history_navigation_steps_up_down_and_clears_past_latest() {
+        let mut st = CliTabState {
+            history: vec![
+                "version".to_string(),
+                "health".to_string(),
+                "param diff".to_string(),
+            ],
+            ..Default::default()
+        };
+
+        navigate_cli_history(&mut st, true);
+        assert_eq!(st.history_idx, Some(2));
+        assert_eq!(st.input_line, "param diff");
+
+        navigate_cli_history(&mut st, true);
+        assert_eq!(st.history_idx, Some(1));
+        assert_eq!(st.input_line, "health");
+
+        navigate_cli_history(&mut st, true);
+        assert_eq!(st.history_idx, Some(0));
+        assert_eq!(st.input_line, "version");
+
+        // Clamps at oldest entry
+        navigate_cli_history(&mut st, true);
+        assert_eq!(st.history_idx, Some(0));
+        assert_eq!(st.input_line, "version");
+
+        // Steps forward and clears past newest
+        navigate_cli_history(&mut st, false);
+        assert_eq!(st.history_idx, Some(1));
+        assert_eq!(st.input_line, "health");
+
+        navigate_cli_history(&mut st, false);
+        assert_eq!(st.history_idx, Some(2));
+        assert_eq!(st.input_line, "param diff");
+
+        navigate_cli_history(&mut st, false);
+        assert_eq!(st.history_idx, None);
+        assert!(st.input_line.is_empty());
     }
 }

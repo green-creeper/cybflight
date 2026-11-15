@@ -137,7 +137,7 @@ impl Drone3DScene {
             Some((Pos2::new(sx, sy), depth))
         };
 
-        // 1. Paint subtle ground reference grid at Z = -0.04 m
+        // 1. Paint subtle ground reference grid at Z = -0.04 m + FWD chevron on +X edge
         let grid_z = -0.042_f32;
         let grid_color = Color32::from_rgba_unmultiplied(60, 75, 95, 70);
         for i in -4..=4 {
@@ -153,6 +153,28 @@ impl Drone3DScene {
                 project(Vector3::new(offset, 0.10, grid_z)),
             ) {
                 painter.line_segment([p0, p1], Stroke::new(1.0, grid_color));
+            }
+        }
+        let fwd_col = Color32::from_rgba_unmultiplied(235, 110, 95, 190);
+        if let (Some((stem_a, _)), Some((tip, _)), Some((wing_l, _)), Some((wing_r, _))) = (
+            project(Vector3::new(0.088, 0.0, grid_z)),
+            project(Vector3::new(0.118, 0.0, grid_z)),
+            project(Vector3::new(0.104, 0.012, grid_z)),
+            project(Vector3::new(0.104, -0.012, grid_z)),
+        ) {
+            painter.line_segment([stem_a, tip], Stroke::new(1.8, fwd_col));
+            painter.line_segment([wing_l, tip], Stroke::new(1.8, fwd_col));
+            painter.line_segment([wing_r, tip], Stroke::new(1.8, fwd_col));
+            if let Some((lbl_pos, _)) = project(Vector3::new(0.128, 0.0, grid_z)) {
+                draw_3d_label_pill(
+                    &painter,
+                    rect,
+                    lbl_pos,
+                    "FWD (+X)".to_string(),
+                    egui::FontId::monospace(9.5),
+                    Color32::from_rgb(245, 130, 120),
+                    Color32::from_rgba_unmultiplied(235, 92, 92, 130),
+                );
             }
         }
 
@@ -244,19 +266,30 @@ impl Drone3DScene {
                 if let Some((tip, _)) = project(tip_world) {
                     painter.line_segment([orig, tip], Stroke::new(2.2, color));
                     painter.circle_filled(tip, 3.5, color);
-                    painter.text(
-                        tip + Vec2::new(5.0, -5.0),
-                        egui::Align2::LEFT_BOTTOM,
-                        label,
-                        egui::FontId::monospace(11.0),
+                    let away = (tip - orig).normalized();
+                    draw_3d_label_pill(
+                        &painter,
+                        rect,
+                        tip + away * 18.0 + Vec2::new(0.0, -4.0),
+                        label.to_string(),
+                        egui::FontId::monospace(10.5),
                         color,
+                        Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), 110),
                     );
                 }
             }
         }
 
         // 4. Paint M1..M4 motor position markers and live 3D thrust pillars
-        let motor_labels = ["m0 (RR CW)", "m1 (FR CCW)", "m2 (RL CCW)", "m3 (FL CW)"];
+        let motor_labels = [
+            "M1 (Rear-Right CW)",
+            "M2 (Front-Right CCW)",
+            "M3 (Rear-Left CCW)",
+            "M4 (Front-Left CW)",
+        ];
+        let body_center_2d = project(q_body_to_world * Vector3::new(0.0, 0.0, 0.012))
+            .map(|(p, _)| p)
+            .unwrap_or(center);
         if self.show_thrust_pillars {
             for i in 0..4 {
                 let [mx, my] = motor_positions_m[i];
@@ -284,12 +317,22 @@ impl Drone3DScene {
                     };
                     painter.line_segment([p_base, p_top], Stroke::new(6.0, bar_color));
                     painter.circle_filled(p_top, 3.5, bar_color);
-                    painter.text(
-                        p_top + Vec2::new(0.0, -6.0),
-                        egui::Align2::CENTER_BOTTOM,
-                        format!("{}\n{:.0}%", motor_labels[i], throttle * 100.0),
-                        egui::FontId::monospace(10.0),
-                        Color32::from_rgb(220, 230, 242),
+
+                    let radial = p_base - body_center_2d;
+                    let dir = if radial.length_sq() > 4.0 {
+                        radial.normalized()
+                    } else {
+                        Vec2::new(0.0, -1.0)
+                    };
+                    let label_anchor = p_top + dir * 32.0 + Vec2::new(0.0, -6.0);
+                    draw_3d_label_pill(
+                        &painter,
+                        rect,
+                        label_anchor,
+                        format!("{}  {:.0}%", motor_labels[i], throttle * 100.0),
+                        egui::FontId::monospace(9.5),
+                        Color32::from_rgb(230, 237, 247),
+                        Color32::from_rgb(54, 63, 79),
                     );
                 }
             }
@@ -318,6 +361,34 @@ impl Drone3DScene {
 
         tilt_delta
     }
+}
+
+fn draw_3d_label_pill(
+    painter: &egui::Painter,
+    bounds: Rect,
+    center_pos: Pos2,
+    text: String,
+    font: egui::FontId,
+    text_color: Color32,
+    border_color: Color32,
+) {
+    let galley = painter.layout_no_wrap(text, font, text_color);
+    let pad = Vec2::new(5.0, 2.5);
+    let pill_size = galley.size() + pad * 2.0;
+    let safe = bounds.shrink(6.0);
+    let min_x = (center_pos.x - pill_size.x * 0.5)
+        .clamp(safe.left(), (safe.right() - pill_size.x).max(safe.left()));
+    let min_y = (center_pos.y - pill_size.y * 0.5)
+        .clamp(safe.top(), (safe.bottom() - pill_size.y).max(safe.top()));
+    let pill_rect = Rect::from_min_size(Pos2::new(min_x, min_y), pill_size);
+    painter.rect(
+        pill_rect,
+        4.0,
+        Color32::from_rgba_unmultiplied(12, 16, 24, 215),
+        Stroke::new(1.0, border_color),
+        egui::StrokeKind::Inside,
+    );
+    painter.galley(pill_rect.min + pad, galley, text_color);
 }
 
 /// Load the multi-part FLYWOO Firefly 2S Nano Baby 20 STL files and colorize each subsystem.

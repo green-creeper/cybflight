@@ -6,12 +6,13 @@ use egui::{Align, Color32, Layout, RichText, Sense, vec2};
 use crate::backend::mock_fc::MockFcBackend;
 use crate::backend::usb_serial::UsbSerialConnection;
 use crate::backend::{ConnectionMode, ParamKind, ParamTable};
+use crate::ui::widgets;
 
-const COL_NAME_W: f32 = 185.0;
-const COL_GROUP_W: f32 = 135.0;
-const COL_VAL_W: f32 = 105.0;
-const COL_BOUNDS_W: f32 = 130.0;
-const COL_STATUS_W: f32 = 120.0;
+const COL_NAME_W: f32 = 178.0;
+const COL_GROUP_W: f32 = 122.0;
+const COL_VAL_W: f32 = 96.0;
+const COL_BAKED_W: f32 = 82.0;
+const COL_BOUNDS_W: f32 = 114.0;
 const COL_ACTIONS_W: f32 = 96.0;
 const ROW_H: f32 = 24.0;
 
@@ -19,6 +20,7 @@ pub struct ParamsTabState {
     pub search_query: String,
     pub selected_group: String,
     pub only_modified: bool,
+    pub confirm_reset_all: bool,
     pub status_banner: Option<(String, bool)>,
 }
 
@@ -28,9 +30,48 @@ impl Default for ParamsTabState {
             search_query: String::new(),
             selected_group: "All".to_string(),
             only_modified: false,
+            confirm_reset_all: false,
             status_banner: None,
         }
     }
+}
+
+/// Sanitize a parameter docstring for crisp single-line table display by stripping
+/// inline Markdown formatting (`` ` `` / `**`) and collapsing newlines/whitespace runs.
+pub fn sanitize_param_doc(doc: &str) -> String {
+    let stripped = doc.replace('`', "").replace("**", "");
+    stripped.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn apply_dirty_params_to_fc(
+    param_table: &mut ParamTable,
+    mode: &ConnectionMode,
+    usb_conn: &Option<UsbSerialConnection>,
+    mock_fc: &mut MockFcBackend,
+) -> usize {
+    let mut applied = 0usize;
+    for entry in &mut param_table.entries {
+        if entry.is_dirty_ram() {
+            let v = entry.edit_value.clamp(entry.meta.min, entry.meta.max);
+            entry.edit_value = v;
+            let cmd = format!("param set {} {}", entry.name, format_param_val(entry.kind, v));
+            if let ConnectionMode::UsbSerial { .. } = mode {
+                if let Some(conn) = usb_conn {
+                    conn.send_command(&cmd);
+                }
+            } else {
+                entry.fc_value = v;
+                entry.fc_synced = true;
+                mock_fc.config.param_set_f32(entry.idx, v);
+            }
+            applied += 1;
+        }
+    }
+    if !matches!(mode, ConnectionMode::UsbSerial { .. }) && applied > 0 {
+        let updated = mock_fc.config.clone();
+        mock_fc.apply_config(updated);
+    }
+    applied
 }
 
 /// Renders the Parameters & Tuning tab.
@@ -58,7 +99,7 @@ pub fn show_params_tab(
     // Top Action Bar
     ui.horizontal_wrapped(|ui| {
         if ui
-            .button("↻ Refresh from FC")
+            .button("Refresh from FC")
             .on_hover_text("Read all parameters from the connected FC (`param list`)")
             .clicked()
         {
@@ -69,7 +110,7 @@ pub fn show_params_tab(
                         conn.send_command("param list");
                         state.status_banner = Some((
                             format!(
-                                "⟳ Reading all {total_params} parameters from USB FC ({port_name})..."
+                                "Reading all {total_params} parameters from USB FC ({port_name})..."
                             ),
                             true,
                         ));
@@ -78,7 +119,7 @@ pub fn show_params_tab(
                 ConnectionMode::MockFc { .. } => {
                     param_table.sync_from_config(&mock_fc.config);
                     state.status_banner = Some((
-                        format!("✓ Refreshed {total_params} parameters from Mock FC."),
+                        format!("[OK] Refreshed {total_params} parameters from Mock FC."),
                         true,
                     ));
                 }
@@ -88,15 +129,16 @@ pub fn show_params_tab(
             }
         }
 
-        let apply_label = format!("⚡ Apply to FC RAM ({})", dirty_list.len());
+        let dirty_count = dirty_list.len();
+        let apply_label = format!("Apply to FC RAM ({dirty_count})");
         if ui
             .add_enabled(
-                !dirty_list.is_empty(),
+                dirty_count > 0,
                 egui::Button::new(RichText::new(apply_label).color(
-                    if dirty_list.is_empty() {
-                        Color32::GRAY
+                    if dirty_count == 0 {
+                        widgets::TEXT_MUTED
                     } else {
-                        Color32::from_rgb(255, 195, 70)
+                        widgets::WARN_AMBER
                     },
                 )),
             )
@@ -110,39 +152,16 @@ pub fn show_params_tab(
                     false,
                 ));
             } else {
-                let mut applied = 0usize;
-                for entry in &mut param_table.entries {
-                    if entry.is_dirty_ram() {
-                        let v = entry.edit_value.clamp(entry.meta.min, entry.meta.max);
-                        entry.edit_value = v;
-                        let cmd = format!(
-                            "param set {} {}",
-                            entry.name,
-                            format_param_val(entry.kind, v)
-                        );
-                        if let ConnectionMode::UsbSerial { .. } = mode {
-                            if let Some(conn) = usb_conn {
-                                conn.send_command(&cmd);
-                            }
-                        } else {
-                            entry.fc_value = v;
-                            entry.fc_synced = true;
-                            mock_fc.config.param_set_f32(entry.idx, v);
-                        }
-                        applied += 1;
-                    }
-                }
+                let applied = apply_dirty_params_to_fc(param_table, mode, usb_conn, mock_fc);
                 if !matches!(mode, ConnectionMode::UsbSerial { .. }) {
-                    let updated = mock_fc.config.clone();
-                    mock_fc.apply_config(updated);
                     state.status_banner = Some((
-                        format!("✓ Applied {applied} parameter change(s) to Mock FC RAM."),
+                        format!("[OK] Applied {applied} parameter change(s) to Mock FC RAM."),
                         true,
                     ));
                 } else {
                     state.status_banner = Some((
                         format!(
-                            "⟳ Sent {applied} `param set` command(s) to USB FC — awaiting confirmation..."
+                            "Sent {applied} `param set` command(s) to USB FC — awaiting confirmation..."
                         ),
                         true,
                     ));
@@ -150,25 +169,60 @@ pub fn show_params_tab(
             }
         }
 
+        let save_btn = if dirty_count > 0 {
+            egui::Button::new(
+                RichText::new(format!("Apply & Save to Flash ({dirty_count})"))
+                    .strong()
+                    .color(widgets::WARN_AMBER),
+            )
+            .fill(Color32::from_rgb(54, 42, 18))
+            .stroke(egui::Stroke::new(1.5, widgets::WARN_AMBER))
+        } else {
+            egui::Button::new("Save to Flash")
+        };
         if ui
-            .button("💾 Save to Flash")
+            .add(save_btn)
             .on_hover_text(
-                "Persist current RAM overrides to STM32 flash (`param save`, disarmed only)",
+                "Applies any pending RAM edits and persists overrides to STM32 flash (`param save`)",
             )
             .clicked()
         {
             match mode {
                 ConnectionMode::UsbSerial { .. } => {
+                    let applied = if dirty_count > 0 {
+                        apply_dirty_params_to_fc(param_table, mode, usb_conn, mock_fc)
+                    } else {
+                        0
+                    };
                     if let Some(conn) = usb_conn {
                         conn.send_command("param save");
-                        state.status_banner =
-                            Some(("Sent `param save` to persist overrides in Flash.".into(), true));
+                        state.status_banner = Some((
+                            if applied > 0 {
+                                format!(
+                                    "Enqueued {applied} `param set` + `param save` to persist overrides in Flash."
+                                )
+                            } else {
+                                "Sent `param save` to persist overrides in Flash.".into()
+                            },
+                            true,
+                        ));
                     }
                 }
                 ConnectionMode::MockFc { .. } => {
+                    let applied = if dirty_count > 0 {
+                        apply_dirty_params_to_fc(param_table, mode, usb_conn, mock_fc)
+                    } else {
+                        0
+                    };
                     let _ = mock_fc.execute_shell_command("param save", param_table);
-                    state.status_banner =
-                        Some(("Saved overrides in Mock FC virtual flash.".into(), true));
+                    state.status_banner = Some((
+                        if applied > 0 {
+                            format!("Applied {applied} change(s) and saved overrides in Mock FC virtual flash.")
+                        } else {
+                            "Saved overrides in Mock FC virtual flash.".into()
+                        },
+                        true,
+                    ));
                 }
                 ConnectionMode::Disconnected => {
                     state.status_banner =
@@ -178,7 +232,7 @@ pub fn show_params_tab(
         }
 
         if ui
-            .button("★ Save & Prune Flash")
+            .button("Save & Prune Flash")
             .on_hover_text(
                 "Compact STM32 flash KV store to hold only keys differing from baked YAML (`param save --prune`)",
             )
@@ -186,6 +240,9 @@ pub fn show_params_tab(
         {
             match mode {
                 ConnectionMode::UsbSerial { .. } => {
+                    if dirty_count > 0 {
+                        let _ = apply_dirty_params_to_fc(param_table, mode, usb_conn, mock_fc);
+                    }
                     if let Some(conn) = usb_conn {
                         conn.send_command("param save --prune");
                         state.status_banner = Some((
@@ -195,6 +252,9 @@ pub fn show_params_tab(
                     }
                 }
                 ConnectionMode::MockFc { .. } => {
+                    if dirty_count > 0 {
+                        let _ = apply_dirty_params_to_fc(param_table, mode, usb_conn, mock_fc);
+                    }
                     let _ = mock_fc.execute_shell_command("param save --prune", param_table);
                     state.status_banner =
                         Some(("Compacted Mock FC virtual flash KV store.".into(), true));
@@ -207,38 +267,25 @@ pub fn show_params_tab(
         }
 
         if ui
-            .button("↺ Reset All to Baked")
+            .button("Reset All to Baked")
             .on_hover_text(
                 "Revert all runtime parameters to the baked vehicle YAML values (`param reset all`)",
             )
             .clicked()
         {
-            match mode {
-                ConnectionMode::UsbSerial { .. } => {
-                    if let Some(conn) = usb_conn {
-                        param_table.begin_fc_sync(true, true);
-                        conn.send_command("param reset all");
-                        conn.send_command("param list");
-                        state.status_banner = Some((
-                            "Sent `param reset all` — re-reading parameters from FC...".into(),
-                            true,
-                        ));
-                    }
-                }
-                ConnectionMode::MockFc { .. } => {
-                    let _ = mock_fc.execute_shell_command("param reset all", param_table);
-                    state.status_banner =
-                        Some(("Reset all parameters to baked vehicle defaults.".into(), true));
-                }
-                ConnectionMode::Disconnected => {
-                    state.status_banner =
-                        Some(("Not connected to FC — connect first to reset FC RAM.".into(), false));
-                }
+            if matches!(mode, ConnectionMode::Disconnected) {
+                state.confirm_reset_all = false;
+                state.status_banner = Some((
+                    "Not connected to FC — connect first to reset FC RAM.".into(),
+                    false,
+                ));
+            } else {
+                state.confirm_reset_all = true;
             }
         }
 
         let sync_label = format!(
-            "⇩ Sync to vehicles/{}.yaml ({yaml_diff_count})",
+            "Sync to vehicles/{}.yaml ({yaml_diff_count})",
             param_table.vehicle_name
         );
         if ui
@@ -266,34 +313,107 @@ pub fn show_params_tab(
 
         // Live FC Read / Sync Progress Pill
         if param_table.sync_in_progress {
-            ui.colored_label(
-                Color32::from_rgb(255, 195, 70),
-                format!(
-                    "⟳ Reading FC: {} / {total_params}",
+            let (bg, brd) = widgets::pill_colors(widgets::WARN_AMBER);
+            widgets::pill_badge(
+                ui,
+                Some((widgets::WARN_AMBER, true)),
+                &format!(
+                    "Reading FC: {} / {total_params}",
                     param_table.synced_in_current_pass
                 ),
+                widgets::WARN_AMBER,
+                bg,
+                brd,
             );
         } else if synced_count == total_params && total_params > 0 {
             let src = match mode {
                 ConnectionMode::MockFc { .. } => "Mock FC",
                 _ => "FC",
             };
-            ui.colored_label(
-                Color32::from_rgb(85, 230, 145),
-                format!("● {src} Synced: {synced_count} / {total_params}"),
+            let (bg, brd) = widgets::pill_colors(widgets::OK_GREEN);
+            widgets::pill_badge(
+                ui,
+                Some((widgets::OK_GREEN, true)),
+                &format!("{src} Synced: {synced_count} / {total_params}"),
+                widgets::OK_GREEN,
+                bg,
+                brd,
             );
         } else if synced_count > 0 {
-            ui.colored_label(
-                Color32::from_rgb(110, 205, 255),
-                format!("● FC Synced: {synced_count} / {total_params}"),
+            let (bg, brd) = widgets::pill_colors(widgets::INFO_BLUE);
+            widgets::pill_badge(
+                ui,
+                Some((widgets::INFO_BLUE, true)),
+                &format!("FC Synced: {synced_count} / {total_params}"),
+                widgets::INFO_BLUE,
+                bg,
+                brd,
             );
         } else {
-            ui.colored_label(
-                Color32::from_rgb(160, 168, 180),
-                format!("○ Offline YAML (0 / {total_params} read from FC)"),
+            let (bg, brd) = widgets::pill_colors(widgets::NEUTRAL_SLATE);
+            widgets::pill_badge(
+                ui,
+                Some((widgets::TEXT_MUTED, false)),
+                &format!("Offline YAML (0 / {total_params} read from FC)"),
+                widgets::TEXT_SECONDARY,
+                bg,
+                brd,
             );
         }
     });
+
+    if state.confirm_reset_all {
+        ui.add_space(4.0);
+        let (bg, brd) = widgets::pill_colors(widgets::ERR_RED);
+        egui::Frame::NONE
+            .fill(bg)
+            .stroke(egui::Stroke::new(1.0, brd))
+            .corner_radius(egui::CornerRadius::same(6))
+            .inner_margin(egui::Margin::symmetric(10, 6))
+            .show(ui, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(
+                        RichText::new(
+                            "[!] Confirm resetting ALL runtime parameters to baked YAML defaults (`param reset all`)?",
+                        )
+                        .strong()
+                        .color(widgets::ERR_RED),
+                    );
+                    if ui
+                        .button(RichText::new("Confirm Reset All").strong().color(widgets::ERR_RED))
+                        .clicked()
+                    {
+                        state.confirm_reset_all = false;
+                        match mode {
+                            ConnectionMode::UsbSerial { .. } => {
+                                if let Some(conn) = usb_conn {
+                                    param_table.begin_fc_sync(true, true);
+                                    conn.send_command("param reset all");
+                                    conn.send_command("param list");
+                                    state.status_banner = Some((
+                                        "Sent `param reset all` — re-reading parameters from FC..."
+                                            .into(),
+                                        true,
+                                    ));
+                                }
+                            }
+                            ConnectionMode::MockFc { .. } => {
+                                let _ =
+                                    mock_fc.execute_shell_command("param reset all", param_table);
+                                state.status_banner = Some((
+                                    "Reset all parameters to baked vehicle defaults.".into(),
+                                    true,
+                                ));
+                            }
+                            ConnectionMode::Disconnected => {}
+                        }
+                    }
+                    if ui.button("Cancel").clicked() {
+                        state.confirm_reset_all = false;
+                    }
+                });
+            });
+    }
 
     if param_table.sync_in_progress {
         let frac = if total_params > 0 {
@@ -301,23 +421,26 @@ pub fn show_params_tab(
         } else {
             0.0
         };
-        ui.add(
-            egui::ProgressBar::new(frac)
-                .desired_height(14.0)
-                .text(format!(
-                    "Reading parameters from FC: {} / {total_params}",
-                    param_table.synced_in_current_pass
-                )),
+        let bar_w = ui.available_width();
+        widgets::progress_bar(
+            ui,
+            frac,
+            widgets::INFO_BLUE,
+            &format!(
+                "Reading parameters from FC: {} / {total_params}",
+                param_table.synced_in_current_pass
+            ),
+            bar_w,
         );
     } else if let Some((msg, ok)) = state.status_banner.clone() {
         let col = if ok {
-            Color32::from_rgb(95, 220, 145)
+            widgets::OK_GREEN
         } else {
-            Color32::from_rgb(255, 100, 90)
+            widgets::ERR_RED
         };
         ui.horizontal(|ui| {
             ui.colored_label(col, msg);
-            if ui.small_button("✖").clicked() {
+            if ui.small_button("Close").clicked() {
                 state.status_banner = None;
             }
         });
@@ -355,7 +478,7 @@ pub fn show_params_tab(
         .collect();
 
     ui.horizontal(|ui| {
-        ui.label("🔍 Search:");
+        ui.label("Search:");
         ui.add(
             egui::TextEdit::singleline(&mut state.search_query)
                 .hint_text(
@@ -448,7 +571,7 @@ pub fn show_params_tab(
 
         // Right Virtualized Parameter Table (renders only visible rows at 60 FPS)
         ui.vertical(|ui| {
-            // Fixed Column Header Strip
+            // Fixed Column Header Strip (exact fixed_col widths match every data row below)
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 8.0;
                 fixed_col(ui, COL_NAME_W, |ui| {
@@ -458,13 +581,13 @@ pub fn show_params_tab(
                     ui.label(RichText::new("Group").strong());
                 });
                 fixed_col(ui, COL_VAL_W, |ui| {
-                    ui.label(RichText::new("Value").strong());
+                    ui.label(RichText::new("Current").strong());
+                });
+                fixed_col(ui, COL_BAKED_W, |ui| {
+                    ui.label(RichText::new("Baked").strong());
                 });
                 fixed_col(ui, COL_BOUNDS_W, |ui| {
-                    ui.label(RichText::new("Unit / Bounds").strong());
-                });
-                fixed_col(ui, COL_STATUS_W, |ui| {
-                    ui.label(RichText::new("Status").strong());
+                    ui.label(RichText::new("Range").strong());
                 });
                 fixed_col(ui, COL_ACTIONS_W, |ui| {
                     ui.label(RichText::new("Actions").strong());
@@ -491,8 +614,15 @@ pub fn show_params_tab(
                             let row_w = ui.available_width();
                             let (row_rect, _) =
                                 ui.allocate_exact_size(vec2(row_w, ROW_H), Sense::hover());
+                            let row_hovered = ui.rect_contains_pointer(row_rect);
 
-                            if row_idx % 2 == 1 {
+                            if row_hovered {
+                                ui.painter().rect_filled(
+                                    row_rect,
+                                    2.0,
+                                    Color32::from_rgba_unmultiplied(255, 255, 255, 16),
+                                );
+                            } else if row_idx % 2 == 1 {
                                 ui.painter().rect_filled(
                                     row_rect,
                                     2.0,
@@ -508,22 +638,44 @@ pub fn show_params_tab(
                             );
                             row_ui.spacing_mut().item_spacing.x = 8.0;
 
-                            // 1. Name
-                            let name_color = if entry.is_dirty_ram() {
-                                Color32::from_rgb(255, 200, 70)
+                            let is_dirty = entry.is_dirty_ram();
+                            let is_modified = is_dirty || entry.differs_from_yaml();
+
+                            // 1. Parameter Name + painted vector status dot
+                            let (dot_col, dot_filled, status_hint) = if is_dirty {
+                                (widgets::WARN_AMBER, true, "Unsaved RAM edit")
                             } else if entry.differs_from_yaml() {
-                                Color32::from_rgb(110, 210, 255)
+                                (widgets::INFO_BLUE, true, "FC RAM differs from Baked YAML")
+                            } else if entry.fc_synced {
+                                (widgets::OK_GREEN, true, "Synced with FC")
                             } else {
-                                Color32::from_rgb(225, 230, 238)
+                                (widgets::TEXT_MUTED, false, "Offline Baked YAML default")
+                            };
+                            let name_color = if is_dirty {
+                                widgets::WARN_AMBER
+                            } else if entry.differs_from_yaml() {
+                                widgets::INFO_BLUE
+                            } else {
+                                widgets::TEXT_PRIMARY
                             };
                             fixed_col(&mut row_ui, COL_NAME_W, |ui| {
+                                ui.spacing_mut().item_spacing.x = 4.0;
+                                widgets::status_dot(ui, dot_col, dot_filled)
+                                    .on_hover_text(status_hint);
                                 ui.add(
                                     egui::Label::new(
                                         RichText::new(&entry.name).monospace().color(name_color),
                                     )
                                     .truncate(),
                                 )
-                                .on_hover_text(&entry.name);
+                                .on_hover_text(format!("{} — {status_hint}", entry.name));
+                                if entry.meta.reboot {
+                                    ui.colored_label(
+                                        widgets::ERR_RED,
+                                        RichText::new("[R]").small().monospace(),
+                                    )
+                                    .on_hover_text("Requires FC reboot to take effect");
+                                }
                             });
 
                             // 2. Group path
@@ -532,14 +684,14 @@ pub fn show_params_tab(
                                     egui::Label::new(
                                         RichText::new(&entry.group_path)
                                             .small()
-                                            .color(Color32::from_rgb(150, 165, 185)),
+                                            .color(widgets::TEXT_SECONDARY),
                                     )
                                     .truncate(),
                                 )
                                 .on_hover_text(&entry.group_path);
                             });
 
-                            // 3. Value Editor
+                            // 3. Current Value Editor
                             let min_v = if entry.meta.min.is_finite() {
                                 entry.meta.min
                             } else {
@@ -592,7 +744,32 @@ pub fn show_params_tab(
                                 }
                             });
 
-                            // 4. Unit & Bounds
+                            // 4. Baked YAML Baseline
+                            let baked_str = format_param_val(entry.kind, entry.yaml_value);
+                            let fc_str = format_param_val(entry.kind, entry.fc_value);
+                            let baked_col = if is_dirty {
+                                widgets::WARN_AMBER
+                            } else if entry.differs_from_yaml() {
+                                widgets::INFO_BLUE
+                            } else {
+                                widgets::TEXT_MUTED
+                            };
+                            fixed_col(&mut row_ui, COL_BAKED_W, |ui| {
+                                ui.add(
+                                    egui::Label::new(
+                                        RichText::new(&baked_str)
+                                            .small()
+                                            .monospace()
+                                            .color(baked_col),
+                                    )
+                                    .truncate(),
+                                )
+                                .on_hover_text(format!(
+                                    "Baked YAML: {baked_str}\nFC RAM: {fc_str}"
+                                ));
+                            });
+
+                            // 5. Unit & Range Bounds
                             let bounds_str = format!(
                                 "{} [{}..{}]",
                                 if entry.meta.unit.is_empty() {
@@ -605,92 +782,71 @@ pub fn show_params_tab(
                             );
                             fixed_col(&mut row_ui, COL_BOUNDS_W, |ui| {
                                 ui.add(
-                                    egui::Label::new(RichText::new(&bounds_str).small().weak())
-                                        .truncate(),
+                                    egui::Label::new(
+                                        RichText::new(&bounds_str)
+                                            .small()
+                                            .color(widgets::TEXT_MUTED),
+                                    )
+                                    .truncate(),
                                 )
                                 .on_hover_text(&bounds_str);
                             });
 
-                            // 5. Status Badges
-                            fixed_col(&mut row_ui, COL_STATUS_W, |ui| {
-                                if entry.is_dirty_ram() {
-                                    ui.colored_label(
-                                        Color32::from_rgb(255, 195, 65),
-                                        RichText::new("● Unsaved").small(),
-                                    );
-                                } else if entry.differs_from_yaml() {
-                                    ui.colored_label(
-                                        Color32::from_rgb(100, 210, 255),
-                                        RichText::new("● FC≠YAML").small(),
-                                    );
-                                } else if entry.fc_synced {
-                                    ui.colored_label(
-                                        Color32::from_rgb(85, 215, 140),
-                                        RichText::new("✓ FC").small(),
-                                    );
-                                } else {
-                                    ui.label(RichText::new("○ YAML").small().weak());
-                                }
-                                if entry.meta.reboot {
-                                    ui.colored_label(
-                                        Color32::from_rgb(240, 120, 95),
-                                        RichText::new("⟳").small(),
-                                    )
-                                    .on_hover_text("Requires FC reboot to take effect");
-                                }
-                            });
-
-                            // 6. Per-row Set / Reset Actions
+                            // 6. Per-row Set / Reset Actions (hidden on clean rows unless hovered)
                             fixed_col(&mut row_ui, COL_ACTIONS_W, |ui| {
-                                if ui
-                                    .add_enabled(
-                                        entry.is_dirty_ram(),
-                                        egui::Button::new("Set").small(),
-                                    )
-                                    .clicked()
-                                {
-                                    let clamped =
-                                        entry.edit_value.clamp(entry.meta.min, entry.meta.max);
-                                    entry.edit_value = clamped;
-                                    single_apply = Some((
-                                        entry_pos,
-                                        entry.idx,
-                                        entry.name.clone(),
-                                        clamped,
-                                        entry.kind,
-                                    ));
-                                }
-                                if ui
-                                    .add_enabled(
-                                        entry.is_dirty_ram() || entry.differs_from_yaml(),
-                                        egui::Button::new("Reset").small(),
-                                    )
-                                    .on_hover_text(format!(
-                                        "Reset to YAML / baked value ({})",
-                                        entry.yaml_value
-                                    ))
-                                    .clicked()
-                                {
-                                    single_reset = Some((
-                                        entry_pos,
-                                        entry.idx,
-                                        entry.name.clone(),
-                                        entry.yaml_value,
-                                    ));
+                                if is_modified || row_hovered {
+                                    if ui
+                                        .add_enabled(is_dirty, egui::Button::new("Set").small())
+                                        .clicked()
+                                    {
+                                        let clamped =
+                                            entry.edit_value.clamp(entry.meta.min, entry.meta.max);
+                                        entry.edit_value = clamped;
+                                        single_apply = Some((
+                                            entry_pos,
+                                            entry.idx,
+                                            entry.name.clone(),
+                                            clamped,
+                                            entry.kind,
+                                        ));
+                                    }
+                                    if ui
+                                        .add_enabled(
+                                            is_modified,
+                                            egui::Button::new("Reset").small(),
+                                        )
+                                        .on_hover_text(format!(
+                                            "Reset to YAML / baked value ({})",
+                                            entry.yaml_value
+                                        ))
+                                        .clicked()
+                                    {
+                                        single_reset = Some((
+                                            entry_pos,
+                                            entry.idx,
+                                            entry.name.clone(),
+                                            entry.yaml_value,
+                                        ));
+                                    }
                                 }
                             });
 
-                            // 7. Description
+                            // 7. Sanitized Single-Line Description (with full clean tooltip)
+                            let clean_doc = sanitize_param_doc(entry.meta.doc);
                             let desc_w = row_ui.available_width().max(60.0);
                             row_ui.allocate_ui_with_layout(
                                 vec2(desc_w, ROW_H),
                                 Layout::left_to_right(Align::Center),
                                 |ui| {
                                     ui.add(
-                                        egui::Label::new(RichText::new(entry.meta.doc).small())
-                                            .truncate(),
+                                        egui::Label::new(
+                                            RichText::new(&clean_doc)
+                                                .small()
+                                                .color(widgets::TEXT_SECONDARY),
+                                        )
+                                        .truncate(),
                                     )
-                                    .on_hover_text(entry.meta.doc);
+                                    .on_hover_text(&clean_doc);
                                 },
                             );
                         }
@@ -713,7 +869,7 @@ pub fn show_params_tab(
                             conn.send_command(&cmd);
                         }
                         state.status_banner = Some((
-                            format!("⟳ Sent `param set {name} {val}` to USB FC..."),
+                            format!("Sent `param set {name} {val}` to USB FC..."),
                             true,
                         ));
                     }
@@ -724,7 +880,7 @@ pub fn show_params_tab(
                         let cfg = mock_fc.config.clone();
                         mock_fc.apply_config(cfg);
                         state.status_banner =
-                            Some((format!("✓ Set `{name} = {val}` on Mock FC."), true));
+                            Some((format!("[OK] Set `{name} = {val}` on Mock FC."), true));
                     }
                 }
             }
@@ -750,7 +906,7 @@ pub fn show_params_tab(
                             conn.send_command(&format!("param reset {name}"));
                         }
                         state.status_banner = Some((
-                            format!("⟳ Sent `param reset {name}` to USB FC..."),
+                            format!("Sent `param reset {name}` to USB FC..."),
                             true,
                         ));
                     }
@@ -762,7 +918,7 @@ pub fn show_params_tab(
                         let cfg = mock_fc.config.clone();
                         mock_fc.apply_config(cfg);
                         state.status_banner =
-                            Some((format!("✓ Reset `{name}` to {yaml_val} on Mock FC."), true));
+                            Some((format!("[OK] Reset `{name}` to {yaml_val} on Mock FC."), true));
                     }
                 }
             }
@@ -773,14 +929,16 @@ pub fn show_params_tab(
 }
 
 fn fixed_col(ui: &mut egui::Ui, width: f32, add_contents: impl FnOnce(&mut egui::Ui)) {
-    ui.allocate_ui_with_layout(
-        vec2(width, ROW_H),
-        Layout::left_to_right(Align::Center),
-        |ui| {
-            ui.set_max_width(width);
-            add_contents(ui);
-        },
+    let (col_rect, _) = ui.allocate_exact_size(vec2(width, ROW_H), Sense::hover());
+    let mut child = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(col_rect)
+            .layout(Layout::left_to_right(Align::Center)),
     );
+    child.set_clip_rect(col_rect.intersect(ui.clip_rect()));
+    child.set_min_width(width);
+    child.set_max_width(width);
+    add_contents(&mut child);
 }
 
 fn format_param_val(kind: ParamKind, v: f32) -> String {
@@ -793,8 +951,26 @@ fn format_param_val(kind: ParamKind, v: f32) -> String {
 
 fn fmt_bound(v: f32) -> String {
     if v.is_infinite() {
-        "∞".to_string()
+        if v.is_sign_negative() {
+            "-inf".to_string()
+        } else {
+            "inf".to_string()
+        }
     } else {
         format!("{v}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_param_doc_collapses_whitespace_and_strips_markdown() {
+        let raw = "  CRSF/ELRS   channel **index**\nfor `arm_switch`.\r\n\tDefault  is  4. ";
+        assert_eq!(
+            sanitize_param_doc(raw),
+            "CRSF/ELRS channel index for arm_switch. Default is 4."
+        );
     }
 }

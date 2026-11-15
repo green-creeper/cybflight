@@ -1,10 +1,11 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::time::Duration;
 
-use egui::{Color32, RichText};
+use egui::RichText;
 
-use crate::backend::ConnectionMode;
 use crate::backend::flasher::FlasherWorker;
-use crate::backend::usb_serial::UsbSerialConnection;
+use crate::backend::{ConnectionMode, TelemetrySnapshot};
+use crate::ui::widgets;
 
 pub struct FlasherTabState {
     pub selected_vehicle: String,
@@ -22,22 +23,53 @@ impl Default for FlasherTabState {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FlasherAction {
+    None,
+    EnterDfu,
+    StartBuildAndFlash {
+        vehicle: String,
+        outer: Option<String>,
+        verify: bool,
+    },
+    StartFlashBin {
+        bin_path: PathBuf,
+    },
+}
+
+pub struct FlasherUiContext<'a> {
+    pub vehicles: &'a [String],
+    pub workspace_root: &'a Path,
+    pub mode: &'a ConnectionMode,
+    pub telem: &'a TelemetrySnapshot,
+    pub pending_dfu_msg: Option<&'a str>,
+}
+
 pub fn show_flasher_tab(
     ui: &mut egui::Ui,
     state: &mut FlasherTabState,
     flasher: &mut FlasherWorker,
-    vehicles: &[String],
-    workspace_root: &Path,
-    mode: &mut ConnectionMode,
-    usb_conn: &mut Option<UsbSerialConnection>,
-) {
-    flasher.poll();
+    ctx: FlasherUiContext<'_>,
+) -> FlasherAction {
+    let FlasherUiContext {
+        vehicles,
+        workspace_root,
+        mode,
+        telem,
+        pending_dfu_msg,
+    } = ctx;
+    // Non-blocking throttled background DFU poll (never runs dfu-util synchronously on UI thread)
+    flasher.maybe_background_dfu_poll(Duration::from_secs(2));
+
+    let mut action = FlasherAction::None;
+    let is_usb = matches!(mode, ConnectionMode::UsbSerial { .. });
+    let workflow_busy = flasher.is_running || pending_dfu_msg.is_some();
 
     egui::Frame::group(ui.style()).show(ui, |ui| {
         ui.label(
             RichText::new("1. Target Vehicle & Build Configuration")
                 .strong()
-                .color(Color32::from_rgb(255, 175, 70)),
+                .color(widgets::WARN_AMBER),
         );
         ui.separator();
 
@@ -74,104 +106,108 @@ pub fn show_flasher_tab(
         ui.label(
             RichText::new("2. STM32 ROM DFU Bootloader & Flash Controls")
                 .strong()
-                .color(Color32::from_rgb(105, 220, 155)),
+                .color(widgets::OK_GREEN),
         );
         ui.separator();
 
         ui.horizontal_wrapped(|ui| {
             let dfu_col = if flasher.dfu_detected {
-                Color32::from_rgb(80, 235, 140)
+                widgets::OK_GREEN
             } else {
-                Color32::from_rgb(245, 175, 80)
+                widgets::WARN_AMBER
             };
-            ui.colored_label(dfu_col, format!("● {}", flasher.dfu_device_info));
+            widgets::status_dot(ui, dfu_col, flasher.dfu_detected);
+            ui.colored_label(dfu_col, &flasher.dfu_device_info);
 
-            if ui.button("🔍 Scan DFU (`0483:df11`)").clicked() {
-                flasher.refresh_dfu_status();
+            if ui
+                .add_enabled(!workflow_busy, egui::Button::new("Scan DFU (0483:df11)"))
+                .clicked()
+            {
+                flasher.request_dfu_scan();
             }
 
-            if matches!(mode, ConnectionMode::UsbSerial { .. })
-                && ui
-                    .button("⚡ Reboot Connected FC into DFU (`reboot --dfu`)")
-                    .on_hover_text(
-                        "Writes 0xDEADBEEF to RTC_BKP0R over USB CDC and jumps the STM32 into ROM DFU 0483:df11 without pressing BOOT",
-                    )
-                    .clicked()
+            let enter_dfu_hover = if is_usb {
+                "Writes 0xDEADBEEF to RTC_BKP0R over USB CDC (reboot --dfu), closes VCP cleanly, and jumps the STM32 into ROM DFU 0483:df11 without pressing BOOT"
+            } else {
+                "Connect a flight controller over USB CDC first, or hold BOOT while powering on to enter 0483:df11 DFU mode"
+            };
+            if ui
+                .add_enabled(
+                    is_usb && !workflow_busy,
+                    egui::Button::new("Enter DFU Bootloader"),
+                )
+                .on_hover_text(enter_dfu_hover)
+                .clicked()
             {
-                if let Some(mut conn) = usb_conn.take() {
-                    conn.send_command("reboot --dfu");
-                    std::thread::sleep(std::time::Duration::from_millis(120));
-                    conn.disconnect();
-                }
-                *mode = ConnectionMode::Disconnected;
-                std::thread::sleep(std::time::Duration::from_millis(600));
-                flasher.refresh_dfu_status();
-                flasher
-                    .log_lines
-                    .push("Sent `reboot --dfu` to FC and closed serial port.".into());
+                action = FlasherAction::EnterDfu;
             }
         });
 
         ui.add_space(6.0);
 
         ui.horizontal_wrapped(|ui| {
-            let can_run = !flasher.is_running;
+            let can_run = !workflow_busy;
             let outer_opt = (state.outer_loop_override != "default")
-                .then_some(state.outer_loop_override.as_str());
+                .then_some(state.outer_loop_override.clone());
 
             if ui
                 .add_enabled(
                     can_run,
-                    egui::Button::new("⚙ Build Firmware + Size Report (`just size`)"),
+                    egui::Button::new("Build Firmware + Size Report (`just size`)"),
                 )
                 .clicked()
             {
-                flasher.start_build(workspace_root, &state.selected_vehicle, outer_opt);
+                flasher.start_build(
+                    workspace_root,
+                    &state.selected_vehicle,
+                    outer_opt.as_deref(),
+                );
             }
 
             if ui
                 .add_enabled(
                     can_run,
                     egui::Button::new(
-                        RichText::new("⚡ Build & Flash via DFU (`just flash`)")
+                        RichText::new("Build & Flash via DFU (`just flash`)")
                             .strong()
-                            .color(Color32::from_rgb(255, 195, 70)),
+                            .color(widgets::WARN_AMBER),
                     ),
                 )
-                .clicked()
-            {
-                flasher.start_build_and_flash(
-                    workspace_root,
-                    &state.selected_vehicle,
-                    outer_opt,
-                    false,
-                );
-            }
-
-            if ui
-                .add_enabled(
-                    can_run,
-                    egui::Button::new("✓ Build, Flash & Verify (`just flash-verify`)"),
+                .on_hover_text(
+                    "One-click Build & Flash: if USB VCP is connected, automatically sends `reboot --dfu`, disconnects VCP, waits non-blockingly for 0483:df11 DFU, flashes, and auto-reconnects USB.",
                 )
                 .clicked()
             {
-                flasher.start_build_and_flash(
-                    workspace_root,
-                    &state.selected_vehicle,
-                    outer_opt,
-                    true,
-                );
+                action = FlasherAction::StartBuildAndFlash {
+                    vehicle: state.selected_vehicle.clone(),
+                    outer: outer_opt.clone(),
+                    verify: false,
+                };
             }
 
             if ui
                 .add_enabled(
                     can_run,
-                    egui::Button::new("⇩ Flash Existing .bin Only (`dfu-util`)"),
+                    egui::Button::new("Build, Flash & Verify (`just flash-verify`)"),
+                )
+                .clicked()
+            {
+                action = FlasherAction::StartBuildAndFlash {
+                    vehicle: state.selected_vehicle.clone(),
+                    outer: outer_opt,
+                    verify: true,
+                };
+            }
+
+            if ui
+                .add_enabled(
+                    can_run,
+                    egui::Button::new("Flash Existing .bin Only (`dfu-util`)"),
                 )
                 .clicked()
             {
                 let bin_path = workspace_root.join(&state.custom_bin_path);
-                flasher.start_dfu_flash_bin(bin_path);
+                action = FlasherAction::StartFlashBin { bin_path };
             }
 
             if !flasher.log_lines.is_empty() && ui.button("Clear Log").clicked() {
@@ -180,11 +216,30 @@ pub fn show_flasher_tab(
         });
 
         ui.add_space(6.0);
-        ui.add(
-            egui::ProgressBar::new(flasher.progress)
-                .show_percentage()
-                .animate(flasher.is_running)
-                .text(&flasher.status_text),
+        let bar_text = pending_dfu_msg.unwrap_or(flasher.status_text.as_str());
+        let bar_frac = if pending_dfu_msg.is_some() {
+            0.08
+        } else {
+            flasher.progress
+        };
+        let bar_col = if flasher.status_text.contains("failed")
+            || flasher.status_text.contains("Timed out")
+            || flasher.status_text.contains("ERR")
+        {
+            widgets::ERR_RED
+        } else if pending_dfu_msg.is_some() {
+            widgets::WARN_AMBER
+        } else if !flasher.is_running && flasher.progress >= 0.99 {
+            widgets::OK_GREEN
+        } else {
+            widgets::INFO_BLUE
+        };
+        widgets::progress_bar(
+            ui,
+            bar_frac,
+            bar_col,
+            bar_text,
+            ui.available_width().max(120.0),
         );
     });
 
@@ -192,18 +247,91 @@ pub fn show_flasher_tab(
 
     // 3. Build & DFU Output Console
     egui::Frame::group(ui.style()).show(ui, |ui| {
-        ui.set_min_height(ui.available_height() - 12.0);
-        ui.label(RichText::new("Build & DFU Flash Output").strong());
+        ui.set_min_height((ui.available_height() - 12.0).max(160.0));
+        ui.label(
+            RichText::new("Build & DFU Flash Output")
+                .strong()
+                .color(widgets::TEXT_PRIMARY),
+        );
         ui.separator();
 
-        egui::ScrollArea::vertical()
-            .id_salt("flasher_log_scroll")
-            .stick_to_bottom(true)
-            .auto_shrink([false, false])
+        egui::Frame::NONE
+            .fill(widgets::BG_INSET)
+            .stroke(egui::Stroke::new(1.0, widgets::BORDER_SUBTLE))
+            .corner_radius(egui::CornerRadius::same(4))
+            .inner_margin(egui::Margin::symmetric(8, 6))
             .show(ui, |ui| {
-                for line in &flasher.log_lines {
-                    ui.monospace(line);
-                }
+                egui::ScrollArea::vertical()
+                    .id_salt("flasher_log_scroll")
+                    .stick_to_bottom(true)
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        if flasher.log_lines.is_empty() {
+                            let board_hint = telem
+                                .build_facts
+                                .get("board")
+                                .or_else(|| telem.build_facts.get("mcu"))
+                                .map(String::as_str)
+                                .unwrap_or("from vehicle YAML");
+                            let cmd_preview = if state.outer_loop_override != "default" {
+                                format!(
+                                    "OUTER_LOOP={} just flash {}",
+                                    state.outer_loop_override, state.selected_vehicle
+                                )
+                            } else {
+                                format!("just flash {}", state.selected_vehicle)
+                            };
+                            ui.monospace(
+                                RichText::new(format!(
+                                    "Target vehicle: {}  |  Board/MCU: {}",
+                                    state.selected_vehicle, board_hint
+                                ))
+                                .color(widgets::TEXT_SECONDARY),
+                            );
+                            ui.monospace(
+                                RichText::new(format!("Command preview: {cmd_preview}"))
+                                    .color(widgets::TEXT_MUTED),
+                            );
+                            ui.monospace(
+                                RichText::new(format!(
+                                    "Binary path: {}",
+                                    workspace_root.join(&state.custom_bin_path).display()
+                                ))
+                                .color(widgets::TEXT_MUTED),
+                            );
+                            if is_usb {
+                                ui.monospace(
+                                    RichText::new(
+                                        "USB CDC connected: Build & Flash will automatically reboot FC into DFU, disconnect VCP, flash, and auto-reconnect.",
+                                    )
+                                    .color(widgets::INFO_BLUE),
+                                );
+                            } else {
+                                ui.monospace(
+                                    RichText::new("Idle — select a build or DFU flash action above.")
+                                        .color(widgets::TEXT_MUTED),
+                                );
+                            }
+                        } else {
+                            for line in &flasher.log_lines {
+                                let col = if line.starts_with("ERR")
+                                    || line.contains("failed")
+                                    || line.contains("error")
+                                {
+                                    widgets::ERR_RED
+                                } else if line.starts_with("===") || line.contains("completed successfully") {
+                                    widgets::OK_GREEN
+                                } else {
+                                    LOG_TEXT_COLOR
+                                };
+                                ui.monospace(RichText::new(line).color(col));
+                            }
+                        }
+                    });
             });
     });
+
+    action
 }
+
+const LOG_TEXT_COLOR: egui::Color32 = egui::Color32::from_rgb(205, 220, 232);

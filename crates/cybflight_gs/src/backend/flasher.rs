@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::mpsc::{self, Receiver};
 use std::thread;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone)]
 pub enum FlashEvent {
@@ -18,6 +19,10 @@ pub struct FlasherWorker {
     pub dfu_detected: bool,
     pub dfu_device_info: String,
     rx: Option<Receiver<FlashEvent>>,
+    dfu_probe_rx: Option<Receiver<(bool, String)>>,
+    pub last_dfu_scan: Option<Instant>,
+    active_run_boots_app: bool,
+    just_finished_bootable_flash: bool,
 }
 
 impl Default for FlasherWorker {
@@ -28,44 +33,83 @@ impl Default for FlasherWorker {
             status_text: "Ready".to_string(),
             log_lines: Vec::new(),
             dfu_detected: false,
-            dfu_device_info: "Not scanned yet".to_string(),
+            dfu_device_info: "Scanning USB bus for 0483:df11 DFU bootloader...".to_string(),
             rx: None,
+            dfu_probe_rx: None,
+            last_dfu_scan: None,
+            active_run_boots_app: false,
+            just_finished_bootable_flash: false,
         }
     }
 }
 
+/// Probe `dfu-util -l` synchronously (call only from background worker threads).
+pub fn check_dfu() -> (bool, String) {
+    match Command::new("dfu-util").arg("-l").output() {
+        Ok(out) => {
+            let text = String::from_utf8_lossy(&out.stdout);
+            let mut found_line = None;
+            for line in text.lines() {
+                if line.contains("0483:df11") && line.contains("alt=0") {
+                    found_line = Some(line.trim().to_string());
+                    break;
+                } else if line.contains("0483:df11") {
+                    found_line = Some(line.trim().to_string());
+                }
+            }
+            if let Some(info) = found_line {
+                (true, format!("STM32 DFU Bootloader Online ({info})"))
+            } else {
+                (
+                    false,
+                    "No 0483:df11 DFU device found (click 'Enter DFU Bootloader' when connected over USB or hold BOOT button)".to_string(),
+                )
+            }
+        }
+        Err(e) => (false, format!("dfu-util not found in PATH: {e}")),
+    }
+}
+
 impl FlasherWorker {
-    /// Probe `dfu-util -l` to check if an STM32 ROM DFU bootloader (`0483:df11`) is on the USB bus.
-    pub fn refresh_dfu_status(&mut self) {
-        match Command::new("dfu-util").arg("-l").output() {
-            Ok(out) => {
-                let text = String::from_utf8_lossy(&out.stdout);
-                let mut found_line = None;
-                for line in text.lines() {
-                    if line.contains("0483:df11") && line.contains("alt=0") {
-                        found_line = Some(line.trim().to_string());
-                        break;
-                    } else if line.contains("0483:df11") {
-                        found_line = Some(line.trim().to_string());
-                    }
-                }
-                if let Some(info) = found_line {
-                    self.dfu_detected = true;
-                    self.dfu_device_info = format!("STM32 DFU Bootloader Online ({info})");
-                } else {
-                    self.dfu_detected = false;
-                    self.dfu_device_info =
-                        "No 0483:df11 DFU device found (click 'Enter DFU' when connected over USB or hold BOOT button)".to_string();
-                }
-            }
-            Err(e) => {
-                self.dfu_detected = false;
-                self.dfu_device_info = format!("dfu-util not found in PATH: {e}");
-            }
+    /// Launch a non-blocking background probe for STM32 DFU (`0483:df11`).
+    pub fn request_dfu_scan(&mut self) {
+        if self.dfu_probe_rx.is_some() {
+            return;
+        }
+        self.last_dfu_scan = Some(Instant::now());
+        let (tx, rx) = mpsc::channel();
+        self.dfu_probe_rx = Some(rx);
+        thread::spawn(move || {
+            let _ = tx.send(check_dfu());
+        });
+    }
+
+    /// Throttled non-blocking DFU check so `dfu_detected` stays fresh without blocking UI frames.
+    pub fn maybe_background_dfu_poll(&mut self, interval: Duration) {
+        if self.is_running || self.dfu_probe_rx.is_some() {
+            return;
+        }
+        let due = self
+            .last_dfu_scan
+            .is_none_or(|t| t.elapsed() >= interval);
+        if due {
+            self.request_dfu_scan();
         }
     }
 
+    pub fn take_bootable_flash_finished(&mut self) -> bool {
+        std::mem::take(&mut self.just_finished_bootable_flash)
+    }
+
     pub fn poll(&mut self) {
+        if let Some(probe_rx) = &self.dfu_probe_rx
+            && let Ok((detected, info)) = probe_rx.try_recv()
+        {
+            self.dfu_detected = detected;
+            self.dfu_device_info = info;
+            self.dfu_probe_rx = None;
+        }
+
         let Some(rx) = &self.rx else {
             return;
         };
@@ -86,17 +130,21 @@ impl FlasherWorker {
                     self.progress = if ok { 1.0 } else { self.progress };
                     self.status_text = summary.clone();
                     self.log_lines.push(format!("=== {summary} ==="));
+                    if ok && self.active_run_boots_app {
+                        self.just_finished_bootable_flash = true;
+                    }
+                    self.active_run_boots_app = false;
                     finished = true;
                 }
             }
         }
         if finished {
             self.rx = None;
-            self.refresh_dfu_status();
+            self.request_dfu_scan();
         }
     }
 
-    /// Run `just build <vehicle>` followed by `just size <vehicle>`.
+    /// Run `just size <vehicle>` (builds release image + reports binary size).
     pub fn start_build(
         &mut self,
         workspace_root: &Path,
@@ -107,6 +155,8 @@ impl FlasherWorker {
             return;
         }
         self.is_running = true;
+        self.active_run_boots_app = false;
+        self.just_finished_bootable_flash = false;
         self.progress = 0.1;
         self.status_text = format!("Building firmware for '{vehicle}'...");
         self.log_lines.push(format!(
@@ -154,6 +204,8 @@ impl FlasherWorker {
         }
         let recipe = if verify { "flash-verify" } else { "flash" };
         self.is_running = true;
+        self.active_run_boots_app = !verify;
+        self.just_finished_bootable_flash = false;
         self.progress = 0.05;
         self.status_text = format!("Running `just {recipe} {vehicle}`...");
         self.log_lines
@@ -191,6 +243,8 @@ impl FlasherWorker {
             return;
         }
         self.is_running = true;
+        self.active_run_boots_app = true;
+        self.just_finished_bootable_flash = false;
         self.progress = 0.05;
         self.status_text = format!("Flashing {} via dfu-util...", bin_path.display());
         self.log_lines.push(format!(

@@ -1,9 +1,12 @@
-use egui::{Color32, RichText, Slider};
+use std::time::Duration;
+
+use egui::{RichText, Slider};
 
 use crate::backend::mock_fc::MockFcBackend;
 use crate::backend::usb_serial::UsbSerialConnection;
 use crate::backend::{ConnectionMode, TelemetrySnapshot};
 use crate::ui::drone_3d::Drone3DScene;
+use crate::ui::widgets;
 
 pub fn show_setup_tab(
     ui: &mut egui::Ui,
@@ -15,17 +18,21 @@ pub fn show_setup_tab(
     motor_positions_m: &[[f32; 2]; 4],
 ) {
     let is_mock = matches!(mode, ConnectionMode::MockFc { .. });
+    let is_usb = matches!(mode, ConnectionMode::UsbSerial { .. });
+    let stream_stale = telem
+        .stream_last_rx
+        .is_none_or(|t| t.elapsed() > Duration::from_millis(1500));
 
     // Top control strip (Betaflight-style Reset Z-Axis / Camera / Mesh toggles)
     ui.horizontal(|ui| {
         if ui
-            .button("↺ Reset Z-Axis / Heading Offset")
+            .button("Reset Z-Axis / Heading Offset")
             .on_hover_text("Zero the displayed Yaw heading at the drone's current orientation")
             .clicked()
         {
             telem.yaw_offset_deg = telem.euler_deg[2];
         }
-        if ui.button("⌖ Reset 3D Camera").clicked() {
+        if ui.button("Reset 3D Camera").clicked() {
             scene.reset_camera();
         }
         if !scene.cad_triangles.is_empty() {
@@ -34,11 +41,12 @@ pub fn show_setup_tab(
         ui.checkbox(&mut scene.show_axes, "Show FLU Axes");
         ui.checkbox(&mut scene.show_thrust_pillars, "Show 3D Motor Pillars");
 
-        if matches!(mode, ConnectionMode::UsbSerial { .. })
+        if is_usb
+            && stream_stale
             && let Some(conn) = usb_conn
             && ui
-                .button("↻ Re-enable Attitude/IMU Streams")
-                .on_hover_text("Sends `stream att on`, `stream imu1 on`, `stream dshot on`")
+                .button("Re-enable Attitude/IMU Streams")
+                .on_hover_text("Telemetry paused >1.5s — sends `stream att/imu1/power/dshot on`")
                 .clicked()
         {
             conn.send_command("stream att on");
@@ -78,7 +86,7 @@ pub fn show_setup_tab(
                 ui.label(
                     RichText::new("Attitude & IMU Telemetry (FLU Body Frame)")
                         .strong()
-                        .color(Color32::from_rgb(255, 175, 70)),
+                        .color(widgets::WARN_AMBER),
                 );
                 ui.separator();
                 let [roll, pitch, yaw] = telem.euler_deg;
@@ -126,10 +134,24 @@ pub fn show_setup_tab(
                         ui.end_row();
 
                         ui.label("Battery / IMU Temp:");
-                        ui.monospace(format!(
-                            "{:.2} V ({}S) | {:.1} °C",
-                            telem.battery_v, telem.cell_count, telem.imu_temp_c
-                        ));
+                        let power_str = if telem.battery_v < 1.0 {
+                            format!("USB Powered (No LiPo) | {:.1} °C", telem.imu_temp_c)
+                        } else {
+                            format!(
+                                "{:.2} V ({}S) | {:.1} °C",
+                                telem.battery_v, telem.cell_count, telem.imu_temp_c
+                            )
+                        };
+                        let power_col = if telem.battery_v < 1.0 {
+                            widgets::TEXT_SECONDARY
+                        } else {
+                            widgets::TEXT_PRIMARY
+                        };
+                        ui.label(
+                            RichText::new(power_str)
+                                .monospace()
+                                .color(power_col),
+                        );
                         ui.end_row();
                     });
             });
@@ -141,38 +163,36 @@ pub fn show_setup_tab(
                 ui.label(
                     RichText::new("Motor Outputs & Mixer Response (QuadX)")
                         .strong()
-                        .color(Color32::from_rgb(100, 220, 160)),
+                        .color(widgets::OK_GREEN),
                 );
                 ui.separator();
 
                 let names = [
-                    "m0 (M1 Rear-Right CW)",
-                    "m1 (M2 Front-Right CCW)",
-                    "m2 (M3 Rear-Left CCW)",
-                    "m3 (M4 Front-Left CW)",
+                    "M1 (Rear-Right CW) [m0]",
+                    "M2 (Front-Right CCW) [m1]",
+                    "M3 (Rear-Left CCW) [m2]",
+                    "M4 (Front-Left CW) [m3]",
                 ];
-                for i in 0..4 {
+                let bar_w = ui.available_width();
+                for (i, label) in names.iter().enumerate() {
                     let thr = telem.motor_throttle[i].clamp(0.0, 1.0);
                     let thrust_g = telem.motor_thrust_n[i] * (1000.0 / 9.80665);
                     let bar_col = if thr > 0.75 {
-                        Color32::from_rgb(245, 90, 70)
+                        widgets::ERR_RED
                     } else if thr > 0.45 {
-                        Color32::from_rgb(245, 185, 60)
+                        widgets::WARN_AMBER
                     } else {
-                        Color32::from_rgb(65, 205, 135)
+                        widgets::OK_GREEN
                     };
-                    ui.label(RichText::new(names[i]).small());
-                    ui.add(
-                        egui::ProgressBar::new(thr)
-                            .fill(bar_col)
-                            .text(format!(
-                                "{:5.1}%  |  {:4.1} gf ({:.3} N)  |  {} eRPM",
-                                thr * 100.0,
-                                thrust_g,
-                                telem.motor_thrust_n[i],
-                                telem.motor_erpm[i]
-                            )),
+                    ui.label(RichText::new(*label).small().color(widgets::TEXT_SECONDARY));
+                    let bar_text = format!(
+                        "{:5.1}%  |  {:4.1} gf ({:.3} N)  |  {} eRPM",
+                        thr * 100.0,
+                        thrust_g,
+                        telem.motor_thrust_n[i],
+                        telem.motor_erpm[i]
                     );
+                    widgets::progress_bar(ui, thr, bar_col, &bar_text, bar_w);
                 }
             });
 
@@ -182,16 +202,16 @@ pub fn show_setup_tab(
             egui::Frame::group(ui.style()).show(ui, |ui| {
                 if is_mock {
                     ui.label(
-                        RichText::new("⚙ Mock Drone Bench Tilt Simulator")
+                        RichText::new("Mock Drone Bench Tilt Simulator")
                             .strong()
-                            .color(Color32::from_rgb(120, 195, 255)),
+                            .color(widgets::INFO_BLUE),
                     );
                     ui.label(
                         RichText::new(
                             "Runs cybflight-core Mahony SO(3) + LinearAllocator in-process.",
                         )
                         .small()
-                        .weak(),
+                        .color(widgets::TEXT_MUTED),
                     );
                     ui.separator();
 
@@ -214,19 +234,19 @@ pub fn show_setup_tab(
                     });
 
                     ui.horizontal_wrapped(|ui| {
-                        if ui.button("⚖ Level (0°)").clicked() {
+                        if ui.button("Level (0°)").clicked() {
                             mock_fc.reset_level();
                             telem.yaw_offset_deg = 0.0;
                         }
                         if ui
-                            .button("⚡ Nose-Down Impulse")
+                            .button("Nose-Down Impulse")
                             .on_hover_text("Inject a +25° pitch impulse to watch front motors M2/M4 spike")
                             .clicked()
                         {
                             mock_fc.inject_impulse([0.0, 25.0, 0.0], [0.0, 3.5, 0.0]);
                         }
                         if ui
-                            .button("⚡ Roll-Right Impulse")
+                            .button("Roll-Right Impulse")
                             .on_hover_text("Inject a +25° roll impulse to watch right motors M1/M2 spike")
                             .clicked()
                         {
@@ -234,21 +254,64 @@ pub fn show_setup_tab(
                         }
                     });
                 } else {
-                    ui.label(
-                        RichText::new("⚡ Live Hardware Connection")
+                    ui.horizontal(|ui| {
+                        let (dot_col, dot_filled) = if is_usb {
+                            (widgets::OK_GREEN, true)
+                        } else {
+                            (widgets::TEXT_MUTED, false)
+                        };
+                        widgets::status_dot(ui, dot_col, dot_filled);
+                        ui.label(
+                            RichText::new(if is_usb {
+                                "Live Hardware Connection"
+                            } else {
+                                "Hardware Connection Standby"
+                            })
                             .strong()
-                            .color(Color32::from_rgb(100, 230, 140)),
-                    );
+                            .color(if is_usb {
+                                widgets::OK_GREEN
+                            } else {
+                                widgets::TEXT_SECONDARY
+                            }),
+                        );
+                    });
                     ui.separator();
                     ui.label(
-                        "Tilt the physical flight controller board in your hand to verify IMU orientation and FLU axis alignment.",
+                        RichText::new(
+                            "Tilt the physical flight controller board in your hand to verify IMU orientation and FLU axis alignment.",
+                        )
+                        .color(widgets::TEXT_SECONDARY),
                     );
                     if !telem.build_facts.is_empty() {
-                        ui.add_space(4.0);
-                        ui.label(RichText::new("Reported Firmware Build Facts:").small().strong());
-                        for (k, v) in &telem.build_facts {
-                            ui.monospace(format!("{k}: {v}"));
-                        }
+                        ui.add_space(6.0);
+                        ui.label(
+                            RichText::new("Reported Firmware Build Facts")
+                                .small()
+                                .strong()
+                                .color(widgets::TEXT_PRIMARY),
+                        );
+                        ui.add_space(2.0);
+                        egui::Grid::new("setup_build_facts_grid")
+                            .num_columns(2)
+                            .striped(true)
+                            .spacing([14.0, 3.0])
+                            .show(ui, |ui| {
+                                for (k, v) in &telem.build_facts {
+                                    ui.label(
+                                        RichText::new(k)
+                                            .small()
+                                            .monospace()
+                                            .color(widgets::TEXT_MUTED),
+                                    );
+                                    ui.label(
+                                        RichText::new(v)
+                                            .small()
+                                            .monospace()
+                                            .color(widgets::TEXT_PRIMARY),
+                                    );
+                                    ui.end_row();
+                                }
+                            });
                     }
                 }
             });

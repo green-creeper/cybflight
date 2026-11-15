@@ -8,7 +8,6 @@ publish = false
 
 [dependencies]
 cybflight-core = { path = "../cybflight_core" }
-cybflight-sim = { path = "../cybflight_sim" }
 vehicle-yaml = { path = "../vehicle_yaml" }
 nalgebra = { version = "0.34.1", features = ["std", "macros"] }
 eframe = "0.31"

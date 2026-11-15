@@ -44,7 +44,8 @@ pub struct ParamSyncSummary {
 /// Real-time telemetry snapshot shared between the active backend and the UI.
 #[derive(Debug, Clone)]
 pub struct TelemetrySnapshot {
-    pub timestamp_ms: f64,
+    /// True while a live USB CDC flight controller session is connected.
+    pub usb_connected: bool,
     /// Orientation quaternion `[x, y, z, w]` (FLU body -> ENU world).
     pub quat_xyzw: [f32; 4],
     /// ZYX Euler angles in degrees `(roll, pitch, yaw)` in FLU convention:
@@ -59,7 +60,7 @@ pub struct TelemetrySnapshot {
     /// IMU die temperature in °C.
     pub imu_temp_c: f32,
     /// Normalized motor commands `[m0, m1, m2, m3]` in `0.0..=1.0`.
-    /// Motor numbering: m0 (RR CW), m1 (FR CCW), m2 (RL CCW), m3 (FL CW).
+    /// Motor numbering: M1/m0 (RR CW), M2/m1 (FR CCW), M3/m2 (RL CCW), M4/m3 (FL CW).
     pub motor_throttle: [f32; 4],
     /// Per-motor thrust in Newtons `[m0, m1, m2, m3]`.
     pub motor_thrust_n: [f32; 4],
@@ -67,20 +68,8 @@ pub struct TelemetrySnapshot {
     pub motor_erpm: [u32; 4],
     /// Battery voltage in V.
     pub battery_v: f32,
-    /// Battery current in A.
-    pub current_a: f32,
-    /// Drawn capacity in mAh.
-    pub mah_drawn: u32,
     /// Cell count.
     pub cell_count: u8,
-    /// GPS fix type (`0` = no fix, `3` = 3D, etc.) and satellite count.
-    pub gps_fix: u8,
-    pub gps_sv: u8,
-    pub gps_lat_deg: f64,
-    pub gps_lon_deg: f64,
-    pub gps_alt_m: f32,
-    /// Latest ESKF summary line if received.
-    pub eskf_summary: String,
     /// Compile-time `[build]` facts reported by `param list`.
     pub build_facts: BTreeMap<String, String>,
     /// Latest 16 RC channel pulse widths in microseconds (`[CH1..CH16]`, AETR order).
@@ -101,12 +90,14 @@ pub struct TelemetrySnapshot {
     pub rc_snr_db: i8,
     /// Latest RC RF mode index.
     pub rc_rf_mode: u8,
-    /// Host timestamp when the latest `RcLinkStatus` frame arrived.
-    pub rc_link_last_rx: Option<std::time::Instant>,
     /// Multi-UART RC scanner / framing diagnostics from `rcdiag`.
     pub rc_diag: Option<RcDiagSnapshot>,
+    /// Host timestamp of the most recent telemetry stream packet (`att`/`imu1`/`dshot`/`power`/`rc`).
+    pub stream_last_rx: Option<std::time::Instant>,
     /// Packet/line counter from the active backend.
     pub rx_line_count: u64,
+    /// Accumulated received byte count over the active USB session.
+    pub rx_bytes: u64,
 }
 
 /// Snapshot of the firmware's `rcdiag` command output.
@@ -127,7 +118,7 @@ pub struct RcDiagSnapshot {
 impl Default for TelemetrySnapshot {
     fn default() -> Self {
         Self {
-            timestamp_ms: 0.0,
+            usb_connected: false,
             quat_xyzw: [0.0, 0.0, 0.0, 1.0],
             euler_deg: [0.0, 0.0, 0.0],
             yaw_offset_deg: 0.0,
@@ -137,21 +128,10 @@ impl Default for TelemetrySnapshot {
             motor_throttle: [0.0; 4],
             motor_thrust_n: [0.0; 4],
             motor_erpm: [0; 4],
-            battery_v: 7.6,
-            current_a: 0.0,
-            mah_drawn: 0,
-            cell_count: 2,
-            gps_fix: 0,
-            gps_sv: 0,
-            gps_lat_deg: 0.0,
-            gps_lon_deg: 0.0,
-            gps_alt_m: 0.0,
-            eskf_summary: String::new(),
+            battery_v: 0.0,
+            cell_count: 0,
             build_facts: BTreeMap::new(),
-            rc_channels_us: [
-                1500, 1500, 988, 1500, 988, 988, 988, 988, 1500, 1500, 1500, 1500, 1500, 1500,
-                1500, 1500,
-            ],
+            rc_channels_us: [0; 16],
             rc_channel_count: 0,
             rc_frame_count: 0,
             rc_rate_hz: 0.0,
@@ -160,14 +140,20 @@ impl Default for TelemetrySnapshot {
             rc_lq_pct: 0,
             rc_snr_db: 0,
             rc_rf_mode: 0,
-            rc_link_last_rx: None,
             rc_diag: None,
+            stream_last_rx: None,
             rx_line_count: 0,
+            rx_bytes: 0,
         }
     }
 }
 
 impl TelemetrySnapshot {
+    /// Reset all telemetry and session counters cleanly on disconnect or mode switch.
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
+
     pub fn set_quaternion(&mut self, q: UnitQuaternion<f32>) {
         self.quat_xyzw = [q.i, q.j, q.k, q.w];
         let (roll, pitch, yaw) = q.euler_angles();
@@ -293,14 +279,13 @@ impl ParamTable {
             Err(_) => (scaffold.clone(), format!("{vehicle_name}.yaml not found")),
         };
 
-        Self::build(vehicle_name, summary, &yaml_cfg, &scaffold)
+        Self::build(vehicle_name, summary, &yaml_cfg)
     }
 
     pub fn build(
         vehicle_name: &str,
         vehicle_config_summary: String,
         yaml_cfg: &FirmwareConfig,
-        scaffold: &FirmwareConfig,
     ) -> Self {
         let mut entries = Vec::with_capacity(PARAM_COUNT);
         let mut name_to_pos = HashMap::with_capacity(PARAM_COUNT);
@@ -334,10 +319,6 @@ impl ParamTable {
                 ParamValue::Bool(_) => ParamKind::Bool,
             };
             let yaml_value = pv.as_f32();
-            let _scaffold_value = scaffold
-                .param_get(idx)
-                .map(|v| v.as_f32())
-                .unwrap_or(yaml_value);
             let meta = FirmwareConfig::param_meta(idx);
 
             let is_airframe_structural = matches!(
@@ -421,10 +402,12 @@ impl ParamTable {
         self.pending_sync_event = None;
     }
 
-    /// Clears FC-synced badges when disconnecting from hardware.
+    /// Clears FC-synced badges, FC values, and dirty RAM edits when disconnecting from hardware.
     pub fn clear_fc_sync_state(&mut self) {
         for entry in &mut self.entries {
             entry.fc_synced = false;
+            entry.fc_value = entry.yaml_value;
+            entry.edit_value = entry.yaml_value;
         }
         self.sync_in_progress = false;
         self.overwrite_edits_on_sync = false;
@@ -652,31 +635,27 @@ pub fn parse_shell_line(
         return false;
     }
     telem.rx_line_count += 1;
+    telem.rx_bytes += raw_line.len() as u64 + 1;
 
     // 1. VehicleAttitude(timestamp=1234.0000, orientation=Quaternion(x=0.0000,y=0.0000,z=0.0000,w=1.0000))
-    if let Some(rest) = line.strip_prefix("VehicleAttitude(") {
-        if let Some(ts) = extract_f64_after(rest, "timestamp=") {
-            telem.timestamp_ms = ts;
-        }
-        if let (Some(x), Some(y), Some(z), Some(w)) = (
+    if let Some(rest) = line.strip_prefix("VehicleAttitude(")
+        && let (Some(x), Some(y), Some(z), Some(w)) = (
             extract_f32_after(rest, "x="),
             extract_f32_after(rest, "y="),
             extract_f32_after(rest, "z="),
             extract_f32_after(rest, "w="),
-        ) {
-            let q = Quaternion::new(w, x, y, z);
-            if q.norm_squared() > 1e-8 {
-                telem.set_quaternion(UnitQuaternion::from_quaternion(q));
-            }
-            return true;
+        )
+    {
+        let q = Quaternion::new(w, x, y, z);
+        if q.norm_squared() > 1e-8 {
+            telem.set_quaternion(UnitQuaternion::from_quaternion(q));
         }
+        telem.stream_last_rx = Some(std::time::Instant::now());
+        return true;
     }
 
     // 2. Imu(timestamp=1234.0000,accel_m_s2=[0.0000,0.0000,9.8100],gyro_rad_s=[0.0000,0.0000,0.0000],temp_c=25.0000)
     if let Some(rest) = line.strip_prefix("Imu(") {
-        if let Some(ts) = extract_f64_after(rest, "timestamp=") {
-            telem.timestamp_ms = ts;
-        }
         if let Some(acc) = extract_vec3_after(rest, "accel_m_s2=[") {
             telem.accel_m_s2 = acc;
         }
@@ -686,6 +665,7 @@ pub fn parse_shell_line(
         if let Some(temp) = extract_f32_after(rest, "temp_c=") {
             telem.imu_temp_c = temp;
         }
+        telem.stream_last_rx = Some(std::time::Instant::now());
         return true;
     }
 
@@ -711,6 +691,7 @@ pub fn parse_shell_line(
                 }
             }
         }
+        telem.stream_last_rx = Some(std::time::Instant::now());
         return true;
     }
 
@@ -726,78 +707,58 @@ pub fn parse_shell_line(
                 && let Ok(v) = v_str.parse::<f32>()
             {
                 telem.battery_v = v;
-            } else if let Some(a_str) = p.strip_suffix('A')
-                && let Ok(a) = a_str.parse::<f32>()
-            {
-                telem.current_a = a;
-            } else if let Some(mah_str) = p.strip_suffix("mAh")
-                && let Ok(mah) = mah_str.parse::<u32>()
-            {
-                telem.mah_drawn = mah;
             } else if let Some(s_str) = p.strip_suffix('S')
                 && let Ok(cells) = s_str.parse::<u8>()
             {
                 telem.cell_count = cells;
             }
         }
+        telem.stream_last_rx = Some(std::time::Instant::now());
         return true;
     }
 
     // 5. GpsFix(t=..., fix=3, sv=12, lat=..., lon=..., alt_msl=123000mm, ...)
-    if let Some(rest) = line.strip_prefix("GpsFix(") {
-        if let Some(fix) = extract_f32_after(rest, "fix=") {
-            telem.gps_fix = fix as u8;
-        }
-        if let Some(sv) = extract_f32_after(rest, "sv=") {
-            telem.gps_sv = sv as u8;
-        }
-        if let Some(lat) = extract_f64_after(rest, "lat=") {
-            telem.gps_lat_deg = lat;
-        }
-        if let Some(lon) = extract_f64_after(rest, "lon=") {
-            telem.gps_lon_deg = lon;
-        }
-        if let Some(alt_mm) = extract_f32_after(rest, "alt_msl=") {
-            telem.gps_alt_m = alt_mm * 0.001;
-        }
+    if line.starts_with("GpsFix(") {
+        telem.stream_last_rx = Some(std::time::Instant::now());
         return true;
     }
 
     // 6. RcInput(timestamp=12345, channels=[1500,1500,988,1500,...], count=16)
-    if let Some(rest) = line.strip_prefix("RcInput(") {
-        if let Some(ch_idx) = rest.find("channels=[") {
-            let after = &rest[ch_idx + "channels=[".len()..];
-            if let Some(end) = after.find(']') {
-                let mut parsed_n = 0usize;
-                for tok in after[..end].split(',') {
-                    if parsed_n >= 16 {
-                        break;
-                    }
-                    if let Ok(v) = tok.trim().parse::<u16>() {
-                        telem.rc_channels_us[parsed_n] = v;
-                        parsed_n += 1;
-                    }
+    if let Some(rest) = line.strip_prefix("RcInput(")
+        && let Some(ch_idx) = rest.find("channels=[")
+    {
+        let after = &rest[ch_idx + "channels=[".len()..];
+        if let Some(end) = after.find(']') {
+            let mut parsed_n = 0usize;
+            for tok in after[..end].split(',') {
+                if parsed_n >= 16 {
+                    break;
                 }
-                let reported_cnt = extract_f32_after(rest, "count=")
-                    .map(|v| v as u8)
-                    .unwrap_or(parsed_n as u8);
-                telem.rc_channel_count = reported_cnt.max(parsed_n as u8).min(16);
-                let now = std::time::Instant::now();
-                if let Some(prev) = telem.rc_last_rx {
-                    let dt = now.duration_since(prev).as_secs_f32();
-                    if (0.001..1.0).contains(&dt) {
-                        let inst_hz = 1.0 / dt;
-                        telem.rc_rate_hz = if telem.rc_rate_hz <= 0.1 {
-                            inst_hz
-                        } else {
-                            0.85 * telem.rc_rate_hz + 0.15 * inst_hz
-                        };
-                    }
+                if let Ok(v) = tok.trim().parse::<u16>() {
+                    telem.rc_channels_us[parsed_n] = v;
+                    parsed_n += 1;
                 }
-                telem.rc_last_rx = Some(now);
-                telem.rc_frame_count += 1;
-                return true;
             }
+            let reported_cnt = extract_f32_after(rest, "count=")
+                .map(|v| v as u8)
+                .unwrap_or(parsed_n as u8);
+            telem.rc_channel_count = reported_cnt.max(parsed_n as u8).min(16);
+            let now = std::time::Instant::now();
+            if let Some(prev) = telem.rc_last_rx {
+                let dt = now.duration_since(prev).as_secs_f32();
+                if (0.001..1.0).contains(&dt) {
+                    let inst_hz = 1.0 / dt;
+                    telem.rc_rate_hz = if telem.rc_rate_hz <= 0.1 {
+                        inst_hz
+                    } else {
+                        0.85 * telem.rc_rate_hz + 0.15 * inst_hz
+                    };
+                }
+            }
+            telem.rc_last_rx = Some(now);
+            telem.stream_last_rx = Some(now);
+            telem.rc_frame_count += 1;
+            return true;
         }
     }
 
@@ -815,7 +776,7 @@ pub fn parse_shell_line(
         if let Some(rf) = extract_f32_after(rest, "rf_mode=") {
             telem.rc_rf_mode = rf.max(0.0) as u8;
         }
-        telem.rc_link_last_rx = Some(std::time::Instant::now());
+        telem.stream_last_rx = Some(std::time::Instant::now());
         return true;
     }
 
@@ -851,7 +812,7 @@ pub fn parse_shell_line(
 
     // 8. ESKF[...] summary line
     if line.starts_with("ESKF[") {
-        telem.eskf_summary = line.to_string();
+        telem.stream_last_rx = Some(std::time::Instant::now());
         return true;
     }
 
@@ -891,7 +852,7 @@ pub fn parse_shell_line(
         return false;
     }
     if line == "params saved to flash" || line.starts_with("store pruned to ") {
-        params.push_fc_notice(format!("✓ {line}"), true);
+        params.push_fc_notice(format!("[OK] {line}"), true);
         return false;
     }
 
@@ -907,7 +868,7 @@ pub fn parse_shell_line(
                 return false;
             }
             let val_token = rhs_trimmed.split_ascii_whitespace().next().unwrap_or("");
-            let parsed_val = val_token.parse::<f32>().ok().or_else(|| match val_token {
+            let parsed_val = val_token.parse::<f32>().ok().or(match val_token {
                 "true" => Some(1.0),
                 "false" => Some(0.0),
                 _ => None,
@@ -965,17 +926,6 @@ fn extract_f32_after(s: &str, key: &str) -> Option<f32> {
         })
         .unwrap_or(after.len());
     after[..end].parse::<f32>().ok()
-}
-
-fn extract_f64_after(s: &str, key: &str) -> Option<f64> {
-    let idx = s.find(key)?;
-    let after = &s[idx + key.len()..];
-    let end = after
-        .find(|c: char| {
-            !(c.is_ascii_digit() || c == '.' || c == '-' || c == '+' || c == 'e' || c == 'E')
-        })
-        .unwrap_or(after.len());
-    after[..end].parse::<f64>().ok()
 }
 
 fn extract_vec3_after(s: &str, key: &str) -> Option<[f32; 3]> {
@@ -1259,5 +1209,48 @@ mod tests {
         assert_eq!(sum2.params_synced_total, PARAM_COUNT);
 
         conn.disconnect();
+    }
+
+    #[test]
+    fn disconnect_reset_clears_telemetry_and_fc_param_state() {
+        let root = find_workspace_root();
+        let mut telem = TelemetrySnapshot::default();
+        let mut params = ParamTable::from_vehicle_yaml(&root, "goku_f745");
+        let mut in_build = false;
+
+        telem.usb_connected = true;
+        parse_shell_line(
+            "Power(t=100, 8.32V, 1.00A, 10mAh, 2S)",
+            &mut telem,
+            &mut params,
+            &mut in_build,
+        );
+        parse_shell_line(
+            "[build]  (compile-time, read-only)",
+            &mut telem,
+            &mut params,
+            &mut in_build,
+        );
+        parse_shell_line("  vehicle = goku_f745", &mut telem, &mut params, &mut in_build);
+        parse_shell_line("[airframe.body]", &mut telem, &mut params, &mut in_build);
+        parse_shell_line("  mass = 0.1111 [kg] (reboot)", &mut telem, &mut params, &mut in_build);
+
+        let mass_pos = params.entries.iter().position(|e| e.name == "mass").unwrap();
+        params.entries[mass_pos].edit_value = 0.2222;
+        assert_eq!(params.fc_synced_count(), 1);
+        assert_eq!(params.dirty_entries().len(), 1);
+
+        telem.reset();
+        params.clear_fc_sync_state();
+
+        assert!(!telem.usb_connected);
+        assert_eq!(telem.battery_v, 0.0);
+        assert_eq!(telem.cell_count, 0);
+        assert!(telem.build_facts.is_empty());
+        assert_eq!(telem.rx_bytes, 0);
+        assert!(telem.stream_last_rx.is_none());
+        assert_eq!(params.fc_synced_count(), 0);
+        assert!(params.dirty_entries().is_empty());
+        assert!((params.entries[mass_pos].fc_value - params.entries[mass_pos].yaml_value).abs() < 1e-6);
     }
 }

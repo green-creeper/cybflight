@@ -5,9 +5,51 @@ use egui::{Align, Color32, CornerRadius, FontId, Layout, Pos2, Rect, RichText, S
 use crate::backend::mock_fc::MockFcBackend;
 use crate::backend::usb_serial::UsbSerialConnection;
 use crate::backend::{ConnectionMode, ParamKind, ParamTable, TelemetrySnapshot};
+use crate::ui::widgets;
 
 const US_VIEW_MIN: f32 = 850.0;
 const US_VIEW_MAX: f32 = 2150.0;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RcTabAction {
+    None,
+    RebootStarted,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OuterLoopKind {
+    Rate,
+    Cascade,
+    Mpc,
+}
+
+fn parse_outer_loop_kind(s: &str) -> OuterLoopKind {
+    if s == "rate" {
+        OuterLoopKind::Rate
+    } else if s.starts_with("cascade") {
+        OuterLoopKind::Cascade
+    } else {
+        OuterLoopKind::Mpc
+    }
+}
+
+/// Firmware `outer_rate` piecewise-linear collective thrust mapping:
+/// - `0.0..=0.5` -> `0.0..=hover_thrust_n`
+/// - `0.5..=1.0` -> `hover_thrust_n..=max_collective_thrust_n`
+pub fn rate_stick_to_thrust_n(
+    thr_cmd: f32,
+    hover_thrust_n: f32,
+    max_collective_thrust_n: f32,
+) -> f32 {
+    let s = thr_cmd.clamp(0.0, 1.0);
+    let max_t = max_collective_thrust_n.max(hover_thrust_n);
+    if s <= 0.5 {
+        (s / 0.5) * hover_thrust_n
+    } else {
+        let upper = (s - 0.5) / 0.5;
+        hover_thrust_n + upper * (max_t - hover_thrust_n)
+    }
+}
 
 pub struct RcTabState {
     /// True = Mode 2 (Left: Yaw + Throttle, Right: Roll + Pitch); False = Mode 1.
@@ -18,6 +60,11 @@ pub struct RcTabState {
     pub armed_latched: bool,
     /// Hysteretic state preview for the Mission / Offboard Schmitt trigger.
     pub mission_schmitt_latched: bool,
+    /// Tracks prior frame mission-switch state so latching requires a rising edge while ARMED.
+    pub prev_mission_sw_high: bool,
+    /// Tracks whether takeoff launch (`thr_us > launch_us` for `launch_confirm_frames`) has occurred while armed.
+    pub launched_latched: bool,
+    pub launch_confirm_ticks: u8,
     pub status_banner: Option<(String, bool)>,
     /// Last time `"rcdiag"` was auto-polled while connected over USB with no RC signal.
     pub last_rcdiag_poll: Option<std::time::Instant>,
@@ -30,6 +77,9 @@ impl Default for RcTabState {
             keep_rc_stream_in_bg: true,
             armed_latched: false,
             mission_schmitt_latched: false,
+            prev_mission_sw_high: false,
+            launched_latched: false,
+            launch_confirm_ticks: 0,
             status_banner: None,
             last_rcdiag_poll: None,
         }
@@ -44,7 +94,8 @@ pub fn show_rc_tab(
     mode: &ConnectionMode,
     usb_conn: &Option<UsbSerialConnection>,
     mock_fc: &mut MockFcBackend,
-) {
+) -> RcTabAction {
+    let mut action = RcTabAction::None;
     let is_mock = matches!(mode, ConnectionMode::MockFc { .. });
     let is_usb = matches!(mode, ConnectionMode::UsbSerial { .. });
 
@@ -78,6 +129,10 @@ pub fn show_rc_tab(
     let rxloss_s = param_table.get_value("fs_rxloss_trigger_s", 0.15);
     let hover_thrust_n =
         param_table.get_value("mass", 0.0618) * param_table.get_value("gravity_m_s2", 9.81);
+    let max_collective_thrust_n = (0..4)
+        .map(|i| param_table.get_value(&format!("m{i}_thrust"), 0.6063))
+        .sum::<f32>()
+        .max(hover_thrust_n);
 
     let outer_loop = telem
         .build_facts
@@ -95,6 +150,7 @@ pub fn show_rc_tab(
                 "mpc"
             }
         });
+    let outer_kind = parse_outer_loop_kind(outer_loop);
     let rc_proto = telem
         .build_facts
         .get("rc_protocol")
@@ -115,7 +171,7 @@ pub fn show_rc_tab(
     let yaw_raw = ChannelCalibration::centered_inverted_with(3, ep)
         .normalize(telem.rc_channels_us[3] as i16);
 
-    let active_xy_db = if outer_loop == "rate" {
+    let active_xy_db = if outer_kind == OuterLoopKind::Rate {
         rate_deadband
     } else {
         xy_deadband
@@ -123,21 +179,11 @@ pub fn show_rc_tab(
     let roll_cmd = apply_deadband(roll_raw, active_xy_db);
     let pitch_cmd = apply_deadband(pitch_raw, active_xy_db);
     let yaw_cmd = apply_deadband(yaw_raw, active_xy_db);
-    let thr_cmd = if outer_loop == "rate" {
+    let thr_cmd = if outer_kind == OuterLoopKind::Rate {
         if thr_raw < rate_deadband { 0.0 } else { thr_raw }
     } else {
         apply_deadband((thr_raw - 0.5) * 2.0, thr_deadband)
     };
-
-    // Update Schmitt trigger preview for mission/offboard channel
-    let mission_us = telem.rc_channels_us[mission_ch];
-    if state.mission_schmitt_latched {
-        if mission_us <= mission_low_us {
-            state.mission_schmitt_latched = false;
-        }
-    } else if mission_us > mission_high_us {
-        state.mission_schmitt_latched = true;
-    }
 
     // RC Link freshness
     let rc_age_ms = telem
@@ -150,6 +196,57 @@ pub fn show_rc_tab(
     } else {
         false
     };
+    let rc_stream_stale = telem
+        .rc_last_rx
+        .is_none_or(|t| t.elapsed() > std::time::Duration::from_millis(1500));
+
+    let has_rx = is_mock || telem.rc_frame_count > 0;
+    let arm_us = telem.rc_channels_us[arm_ch];
+    let thr_us = telem.rc_channels_us[2];
+    let arm_sw_on = arm_us > arm_thresh_us;
+    let thr_safe = thr_us <= mincheck_us;
+    let lq_safe = is_mock || telem.rc_lq_pct >= min_lq_gate;
+    let can_arm = rc_live && thr_safe && lq_safe;
+    let mission_us = telem.rc_channels_us[mission_ch];
+
+    // Mirror `ArmStateMachine` (`sensors/rc.rs`): `thr_safe` and `lq_safe` gate
+    // the disarmed -> armed transition; once latched, raising throttle above
+    // `mincheck_us` keeps the craft armed in its active flight mode.
+    if !rc_live || !arm_sw_on || !lq_safe {
+        state.armed_latched = false;
+    } else if !state.armed_latched && thr_safe {
+        state.armed_latched = true;
+    }
+
+    // Track takeoff launch debounce (`thr_us > launch_us` for `launch_confirm_frames`).
+    if !rc_live || !state.armed_latched || !has_rx {
+        state.launched_latched = false;
+        state.launch_confirm_ticks = 0;
+    } else if !state.launched_latched {
+        if thr_us > launch_us {
+            state.launch_confirm_ticks = state.launch_confirm_ticks.saturating_add(1);
+            if state.launch_confirm_ticks >= launch_frames.max(1) {
+                state.launched_latched = true;
+            }
+        } else {
+            state.launch_confirm_ticks = 0;
+        }
+    }
+
+    // Enforce rising-edge-while-ARMED on mission/offboard Schmitt trigger:
+    // holding the switch high while disarmed must NEVER pre-latch autonomous/offboard!
+    let mission_high_now = has_rx && mission_us > mission_high_us;
+    let mission_rising = mission_high_now && !state.prev_mission_sw_high;
+    state.prev_mission_sw_high = mission_high_now;
+    if !rc_live || !state.armed_latched || !has_rx {
+        state.mission_schmitt_latched = false;
+    } else if state.mission_schmitt_latched {
+        if mission_us <= mission_low_us {
+            state.mission_schmitt_latched = false;
+        }
+    } else if mission_rising {
+        state.mission_schmitt_latched = true;
+    }
 
     if is_usb
         && !rc_live
@@ -185,40 +282,41 @@ pub fn show_rc_tab(
         ui.label(
             RichText::new(proto_label)
                 .strong()
-                .color(Color32::from_rgb(255, 185, 70)),
+                .color(widgets::WARN_AMBER),
         );
         ui.separator();
 
         if is_mock {
-            ui.colored_label(
-                Color32::from_rgb(115, 200, 255),
-                "● MOCK TX ACTIVE (16 ch @ 150 Hz)",
-            );
+            widgets::status_dot(ui, widgets::INFO_BLUE, true);
+            ui.colored_label(widgets::INFO_BLUE, "MOCK TX ACTIVE (16 ch @ 150 Hz)");
         } else if rc_live {
+            widgets::status_dot(ui, widgets::OK_GREEN, true);
             ui.colored_label(
-                Color32::from_rgb(85, 235, 145),
+                widgets::OK_GREEN,
                 format!(
-                    "● RC LIVE ({:.0} Hz | {} ch | {} frames)",
+                    "RC LIVE ({:.0} Hz | {} ch | {} frames)",
                     telem.rc_rate_hz, telem.rc_channel_count, telem.rc_frame_count
                 ),
             );
         } else if let Some(age) = rc_age_ms {
+            widgets::status_dot(ui, widgets::ERR_RED, true);
             ui.colored_label(
-                Color32::from_rgb(255, 100, 90),
-                format!("⚠ RC SIGNAL LOST ({:.0} ms ago — Failsafe)", age),
+                widgets::ERR_RED,
+                format!("[!] RC SIGNAL LOST ({:.0} ms ago — Failsafe)", age),
             );
         } else {
+            widgets::status_dot(ui, widgets::TEXT_MUTED, false);
             ui.colored_label(
-                Color32::from_rgb(175, 182, 195),
-                "○ Waiting for RC Frames (turn on TX)",
+                widgets::TEXT_MUTED,
+                "Waiting for RC Frames (turn on TX)",
             );
         }
 
         ui.separator();
         let lq_col = if telem.rc_lq_pct >= min_lq_gate {
-            Color32::from_rgb(90, 230, 145)
+            widgets::OK_GREEN
         } else {
-            Color32::from_rgb(255, 165, 70)
+            widgets::WARN_AMBER
         };
         ui.colored_label(lq_col, format!("LQ: {}%", telem.rc_lq_pct));
         ui.monospace(format!("RSSI: {} dBm", telem.rc_rssi_dbm));
@@ -237,16 +335,17 @@ pub fn show_rc_tab(
                 "Keep RC stream on in other tabs",
             );
             if let Some(conn) = usb_conn {
-                if ui
-                    .button("↻ Re-enable RC Stream")
-                    .on_hover_text("Sends `stream rc on` and `stream rcstats on` to FC")
-                    .clicked()
+                if rc_stream_stale
+                    && ui
+                        .button("Re-enable RC Stream")
+                        .on_hover_text("Sends `stream rc on` and `stream rcstats on` to FC")
+                        .clicked()
                 {
                     conn.send_command("stream rc on");
                     conn.send_command("stream rcstats on");
                 }
                 if ui
-                    .button("⟲ Rescan UARTs")
+                    .button("Rescan UARTs")
                     .on_hover_text("Unlocks active RC UART, resets counters, and scans USART2/1/5/4/3")
                     .clicked()
                 {
@@ -260,36 +359,19 @@ pub fn show_rc_tab(
 
     if let Some((msg, ok)) = state.status_banner.clone() {
         let col = if ok {
-            Color32::from_rgb(95, 220, 145)
+            widgets::OK_GREEN
         } else {
-            Color32::from_rgb(255, 100, 90)
+            widgets::ERR_RED
         };
         ui.horizontal(|ui| {
             ui.colored_label(col, msg);
-            if ui.small_button("✖").clicked() {
+            if ui.small_button("Close").clicked() {
                 state.status_banner = None;
             }
         });
     }
 
     ui.separator();
-
-    let has_rx = is_mock || telem.rc_frame_count > 0;
-    let arm_us = telem.rc_channels_us[arm_ch];
-    let thr_us = telem.rc_channels_us[2];
-    let arm_sw_on = arm_us > arm_thresh_us;
-    let thr_safe = thr_us <= mincheck_us;
-    let lq_safe = is_mock || telem.rc_lq_pct >= min_lq_gate;
-    let can_arm = rc_live && thr_safe && lq_safe;
-
-    // Mirror `ArmStateMachine` (`sensors/rc.rs`): `thr_safe` and `lq_safe` gate
-    // the disarmed -> armed transition; once latched, raising throttle above
-    // `mincheck_us` keeps the craft armed in its active flight mode.
-    if !rc_live || !arm_sw_on || !lq_safe {
-        state.armed_latched = false;
-    } else if !state.armed_latched && thr_safe {
-        state.armed_latched = true;
-    }
 
     let render_left = |ui: &mut egui::Ui,
                        col_w: f32,
@@ -302,7 +384,7 @@ pub fn show_rc_tab(
             ui.label(
                 RichText::new("Online Stick Gimbals & Commanded Setpoints (AETR)")
                     .strong()
-                    .color(Color32::from_rgb(255, 175, 70)),
+                    .color(widgets::WARN_AMBER),
             );
             ui.separator();
 
@@ -369,24 +451,34 @@ pub fn show_rc_tab(
                                 .small()
                                 .weak(),
                         );
-                    } else if outer_loop == "rate" {
+                    } else if outer_kind == OuterLoopKind::Rate {
                         let r_dps = (roll_cmd * max_rate_rp).to_degrees();
                         let p_dps = (pitch_cmd * max_rate_rp).to_degrees();
                         let y_dps = (yaw_cmd * max_rate_yaw).to_degrees();
-                        let thrust_n = thr_cmd * 2.0 * hover_thrust_n;
+                        let thrust_n = rate_stick_to_thrust_n(
+                            thr_cmd,
+                            hover_thrust_n,
+                            max_collective_thrust_n,
+                        );
+                        let thrust_gf = thrust_n * (1000.0 / 9.80665);
                         ui.monospace(format!("Roll : {:+6.1} °/s", r_dps));
                         ui.monospace(format!("Pitch: {:+6.1} °/s", p_dps));
                         ui.monospace(format!("Yaw  : {:+6.1} °/s", y_dps));
                         ui.monospace(format!(
-                            "Thr  : {:5.1}% ({:.2} N)",
+                            "Thr  : {:5.1}% ({:.2} N | {:.0} gf)",
                             thr_cmd * 100.0,
-                            thrust_n
+                            thrust_n,
+                            thrust_gf
                         ));
                     } else {
                         let vx = pitch_cmd * xy_rate_m_s;
                         let vy = -roll_cmd * xy_rate_m_s;
                         let vz = if telem.rc_channels_us[2] < land_us {
-                            -land_rate_m_s
+                            if state.launched_latched {
+                                -land_rate_m_s
+                            } else {
+                                0.0
+                            }
                         } else {
                             thr_cmd * z_rate_m_s
                         };
@@ -419,7 +511,7 @@ pub fn show_rc_tab(
             draw_channel_scale_header(ui, min_us as u16, mid_us as u16, max_us as u16);
 
             let count_shown = if telem.rc_channel_count > 0 {
-                (telem.rc_channel_count as usize).max(8).min(16)
+                (telem.rc_channel_count as usize).clamp(8, 16)
             } else {
                 16
             };
@@ -457,9 +549,9 @@ pub fn show_rc_tab(
             ui.add_space(6.0);
             full_width_card(ui, max_card_w, |ui| {
                 ui.label(
-                    RichText::new("🎛 Mock RC Transmitter Controls (Offline Test)")
+                    RichText::new("Mock RC Transmitter Controls (Offline Test)")
                         .strong()
-                        .color(Color32::from_rgb(120, 195, 255)),
+                        .color(widgets::INFO_BLUE),
                 );
                 ui.separator();
                 ui.add(
@@ -509,23 +601,25 @@ pub fn show_rc_tab(
         }
     };
 
-    let render_right = |ui: &mut egui::Ui,
-                        col_w: f32,
-                        state: &mut RcTabState,
-                        param_table: &mut ParamTable,
-                        mock_fc: &mut MockFcBackend| {
+    let mut render_right = |ui: &mut egui::Ui,
+                            col_w: f32,
+                            state: &mut RcTabState,
+                            param_table: &mut ParamTable,
+                            mock_fc: &mut MockFcBackend| {
         let max_card_w = (col_w - 14.0).max(260.0);
 
         // 1. Resolved Active Flight Mode Banner
         full_width_card(ui, max_card_w, |ui| {
-            let (headline, subline, col) = if !rc_live {
+            let (badge_txt, headline, subline, col) = if !rc_live {
                 (
-                    "FAILSAFE / NO RC SIGNAL",
+                    "FAILSAFE",
+                    "FAILSAFE — NO RC SIGNAL",
                     "Turn on transmitter — FC keeps motors disarmed until valid RC frames & link stats arrive.",
-                    Color32::from_rgb(245, 105, 95),
+                    widgets::ERR_RED,
                 )
             } else if !arm_sw_on {
                 (
+                    "SAFE",
                     "DISARMED (SAFE)",
                     if can_arm {
                         "All RC pre-arm checks passing — ready to arm via switch."
@@ -534,58 +628,140 @@ pub fn show_rc_tab(
                     } else {
                         "Pre-arm gate: waiting for RC Link Quality above threshold."
                     },
-                    Color32::from_rgb(175, 190, 210),
+                    widgets::TEXT_SECONDARY,
                 )
             } else if !state.armed_latched {
                 if !thr_safe {
                     (
+                        "BLOCKED",
                         "ARM BLOCKED — LOWER THROTTLE TO IDLE",
                         "Arming transition requires CH3 Throttle <= rc_throttle_mincheck_us.",
-                        Color32::from_rgb(255, 195, 70),
+                        widgets::WARN_AMBER,
                     )
                 } else {
                     (
+                        "BLOCKED",
                         "ARM BLOCKED — LINK QUALITY BELOW GATE",
                         "Arming requires RC Link Quality >= arm_min_link_quality.",
-                        Color32::from_rgb(255, 165, 70),
+                        widgets::WARN_AMBER,
                     )
                 }
             } else if state.mission_schmitt_latched {
-                if outer_loop == "rate" {
+                if outer_kind == OuterLoopKind::Rate {
                     (
+                        "ARMED",
                         "ARMED — OFFBOARD / RL POLICY MODE",
                         "Mode switch HIGH (> rc_mission_high_us): external UART / RL neural policy controls rates.",
-                        Color32::from_rgb(190, 135, 255),
+                        widgets::ACCENT_PURPLE,
                     )
                 } else {
                     (
+                        "ARMED",
                         "ARMED — AUTONOMOUS MISSION MODE",
                         "Mission switch HIGH (> rc_mission_high_us): trajectory planner / MPC executing mission.",
-                        Color32::from_rgb(190, 135, 255),
+                        widgets::ACCENT_PURPLE,
                     )
                 }
-            } else if outer_loop == "rate" {
+            } else if outer_kind == OuterLoopKind::Rate {
                 (
+                    "ARMED",
                     "ARMED — MANUAL ACRO RATE (INDI)",
                     "Sticks command body angular rates [roll, pitch, yaw] + collective thrust via INDI.",
-                    Color32::from_rgb(85, 235, 145),
+                    widgets::OK_GREEN,
                 )
             } else if thr_us < land_us {
-                (
-                    "ARMED — AUTO-LAND DESCENT",
-                    "Throttle below rc_throttle_land_us: descending at rc_land_rate_m_s until touchdown.",
-                    Color32::from_rgb(110, 210, 255),
-                )
+                if state.launched_latched {
+                    (
+                        "ARMED",
+                        "ARMED — AUTO-LAND DESCENT",
+                        "Throttle below rc_throttle_land_us: descending at rc_land_rate_m_s until touchdown.",
+                        widgets::INFO_BLUE,
+                    )
+                } else {
+                    (
+                        "ARMED",
+                        "ARMED — IDLE (AWAITING LAUNCH)",
+                        "Motors idling on ground; raise CH3 Throttle > rc_launch_us to latch takeoff.",
+                        widgets::INFO_BLUE,
+                    )
+                }
             } else {
                 (
+                    "ARMED",
                     "ARMED — POSITION HOLD (VELOCITY STICK)",
                     "Sticks slew 3D position + heading reference; center sticks hold current position.",
-                    Color32::from_rgb(85, 235, 145),
+                    widgets::OK_GREEN,
                 )
             };
 
-            ui.label(RichText::new(headline).size(15.5).strong().color(col));
-            ui.label(RichText::new(subline).small().weak());
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 8.0;
+                let (bg, border) = widgets::pill_colors(col);
+                widgets::pill_badge(
+                    ui,
+                    Some((col, rc_live && (state.armed_latched || can_arm))),
+                    badge_txt,
+                    col,
+                    bg,
+                    border,
+                );
+                ui.label(RichText::new(headline).size(15.5).strong().color(col));
+            });
+            ui.label(RichText::new(subline).small().color(widgets::TEXT_SECONDARY));
+
+            // Pre-arm safety gate chips
+            ui.add_space(4.0);
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = vec2(6.0, 4.0);
+                let gate_chip = |ui: &mut egui::Ui, label: &str, ok: Option<bool>| {
+                    let c = match ok {
+                        Some(true) => widgets::OK_GREEN,
+                        Some(false) => widgets::ERR_RED,
+                        None => widgets::TEXT_MUTED,
+                    };
+                    let (bg, brd) = widgets::pill_colors(c);
+                    widgets::pill_badge(ui, Some((c, ok.is_some())), label, c, bg, brd);
+                };
+                gate_chip(
+                    ui,
+                    if !has_rx {
+                        "Throttle WAIT"
+                    } else if thr_safe || state.armed_latched {
+                        "Throttle OK"
+                    } else {
+                        "Throttle HIGH"
+                    },
+                    if has_rx { Some(thr_safe || state.armed_latched) } else { None },
+                );
+                gate_chip(
+                    ui,
+                    if !rc_live {
+                        "Link LQ NO RX"
+                    } else if lq_safe {
+                        "Link LQ OK"
+                    } else {
+                        "Link LQ LOW"
+                    },
+                    if rc_live { Some(lq_safe) } else { Some(false) },
+                );
+                let att_ok = telem.euler_deg[0].abs() < 35.0 && telem.euler_deg[1].abs() < 35.0;
+                gate_chip(
+                    ui,
+                    if att_ok { "Attitude OK" } else { "Attitude TILT" },
+                    Some(att_ok),
+                );
+                let hold_ms = hold_s * 1000.0;
+                let (h_bg, h_brd) = widgets::pill_colors(widgets::INFO_BLUE);
+                widgets::pill_badge(
+                    ui,
+                    None,
+                    &format!("Hold {:.0} ms", hold_ms),
+                    widgets::TEXT_SECONDARY,
+                    h_bg,
+                    h_brd,
+                );
+            });
+
             if !rc_live
                 && let Some(d) = &telem.rc_diag
             {
@@ -597,7 +773,7 @@ pub fn show_rc_tab(
                     ))
                     .small()
                     .monospace()
-                    .color(Color32::from_rgb(185, 200, 220)),
+                    .color(widgets::TEXT_SECONDARY),
                 );
                 ui.label(
                     RichText::new(format!(
@@ -611,15 +787,15 @@ pub fn show_rc_tab(
                     ))
                     .small()
                     .monospace()
-                    .color(Color32::from_rgb(165, 185, 210)),
+                    .color(widgets::TEXT_MUTED),
                 );
                 if d.vbat_mv < 4500 && d.rx_bytes.iter().all(|&b| b == 0) {
                     ui.label(
                         RichText::new(
-                            "⚠ VBAT < 4.5V (USB only) and 0 RX bytes on all UARTs — if receiver uses a 5V BEC pad, connect LiPo.",
+                            "[!] VBAT < 4.5V (USB only) and 0 RX bytes on all UARTs — if receiver uses a 5V BEC pad, connect LiPo.",
                         )
                         .small()
-                        .color(Color32::from_rgb(255, 195, 70)),
+                        .color(widgets::WARN_AMBER),
                     );
                 }
             }
@@ -632,7 +808,7 @@ pub fn show_rc_tab(
             ui.label(
                 RichText::new("Configured Flight Modes & Switch Ranges")
                     .strong()
-                    .color(Color32::from_rgb(255, 175, 70)),
+                    .color(widgets::WARN_AMBER),
             );
             ui.separator();
 
@@ -652,7 +828,7 @@ pub fn show_rc_tab(
                 state.armed_latched,
                 has_rx,
                 &format!(
-                    "Pre-arm Gates: Throttle {} ({} ≤ {} µs) | LQ {} ({}% ≥ {}%) | Hold {:.0} ms",
+                    "Pre-arm Gates: Throttle {} ({} <= {} µs) | LQ {} ({}% >= {}%) | Hold {:.0} ms",
                     if !has_rx {
                         "WAIT RX"
                     } else if thr_safe || state.armed_latched {
@@ -676,20 +852,20 @@ pub fn show_rc_tab(
             ui.add_space(6.0);
 
             // Mode Card B: Primary Manual Flight Mode + Offboard/Mission Switch
-            let (primary_title, primary_short, trig_title, trig_short) = match outer_loop {
-                "rate" => (
+            let (primary_title, primary_short, trig_title, trig_short) = match outer_kind {
+                OuterLoopKind::Rate => (
                     "MANUAL ACRO RATE (INDI)",
                     "ACRO RATE",
                     "OFFBOARD / RL POLICY",
                     "RL / OFFB",
                 ),
-                "cascade" => (
+                OuterLoopKind::Cascade => (
                     "GEOMETRIC CASCADE POS-HOLD",
                     "CASCADE",
                     "MISSION TRIGGER",
                     "MISSION",
                 ),
-                _ => (
+                OuterLoopKind::Mpc => (
                     "MPC POSITION / TRAJECTORY",
                     "MPC POS",
                     "AUTONOMOUS MISSION",
@@ -698,7 +874,7 @@ pub fn show_rc_tab(
             };
             draw_mode_range_card(
                 ui,
-                &format!("{primary_title}  ↔  {trig_title}"),
+                &format!("{primary_title} <-> {trig_title}"),
                 &format!(
                     "{}  (Low < {} µs | High > {} µs)",
                     ch_full_name(mission_ch),
@@ -737,52 +913,53 @@ pub fn show_rc_tab(
             ui.add_space(6.0);
 
             // Mode Card C: Throttle Stick Safety & Launch/Land Thresholds
-            let thr_zones: Vec<(f32, f32, Color32, &str, &str)> = if outer_loop == "rate" {
-                vec![(
-                    US_VIEW_MIN,
-                    mincheck_us as f32,
-                    Color32::from_rgba_unmultiplied(85, 225, 140, 75),
-                    "MINCHECK (ARM SAFE)",
-                    "ARM SAFE",
-                )]
-            } else {
-                vec![
-                    (
+            let thr_zones: Vec<(f32, f32, Color32, &str, &str)> =
+                if outer_kind == OuterLoopKind::Rate {
+                    vec![(
                         US_VIEW_MIN,
                         mincheck_us as f32,
                         Color32::from_rgba_unmultiplied(85, 225, 140, 75),
+                        "MINCHECK (ARM SAFE)",
                         "ARM SAFE",
-                        "SAFE",
-                    ),
-                    (
-                        mincheck_us as f32,
-                        land_us as f32,
-                        Color32::from_rgba_unmultiplied(100, 200, 255, 75),
-                        "LAND",
-                        "LND",
-                    ),
-                    (
-                        launch_us as f32,
-                        US_VIEW_MAX,
-                        Color32::from_rgba_unmultiplied(255, 185, 70, 80),
-                        "LAUNCH",
-                        "LNCH",
-                    ),
-                ]
-            };
+                    )]
+                } else {
+                    vec![
+                        (
+                            US_VIEW_MIN,
+                            mincheck_us as f32,
+                            Color32::from_rgba_unmultiplied(85, 225, 140, 75),
+                            "ARM SAFE",
+                            "SAFE",
+                        ),
+                        (
+                            mincheck_us as f32,
+                            land_us as f32,
+                            Color32::from_rgba_unmultiplied(100, 200, 255, 75),
+                            "LAND",
+                            "LND",
+                        ),
+                        (
+                            launch_us as f32,
+                            US_VIEW_MAX,
+                            Color32::from_rgba_unmultiplied(255, 185, 70, 80),
+                            "LAUNCH",
+                            "LNCH",
+                        ),
+                    ]
+                };
             draw_mode_range_card(
                 ui,
                 "THROTTLE SAFETY & LAUNCH / LAND ZONES",
                 &format!(
-                    "CH3 Throttle  (Mincheck ≤ {} µs | Land < {} µs | Launch > {} µs ×{}f)",
+                    "CH3 Throttle  (Mincheck <= {} µs | Land < {} µs | Launch > {} µs x{}f)",
                     mincheck_us, land_us, launch_us, launch_frames
                 ),
                 thr_us,
                 &thr_zones,
                 thr_safe && rc_live,
                 has_rx,
-                if outer_loop == "rate" {
-                    "In `outer_rate`, Throttle ≤ mincheck permits arming; above deadband maps 0..100% -> 0..2×hover thrust."
+                if outer_kind == OuterLoopKind::Rate {
+                    "In `outer_rate`, Throttle <= mincheck permits arming; above deadband maps 0..50% -> hover, 50..100% -> max thrust."
                 } else {
                     "In Position/MPC modes, raising CH3 > launch_us latches takeoff; lowering CH3 < land_us descends smoothly."
                 },
@@ -794,23 +971,23 @@ pub fn show_rc_tab(
         // 3. Inline Switch & Endpoint Assignment Editor
         full_width_card(ui, max_card_w, |ui| {
             ui.label(
-                RichText::new("⚙ Switch & Stick Mapping Configuration (`rc` group)")
+                RichText::new("Switch & Stick Mapping Configuration (`rc` group)")
                     .strong()
-                    .color(Color32::from_rgb(115, 205, 255)),
+                    .color(widgets::INFO_BLUE),
             );
             ui.label(
                 RichText::new(
                     "Note: `rc_*` parameters are latched at boot — Save to Flash + Reboot FC after changing switch assignments.",
                 )
                 .small()
-                .weak(),
+                .color(widgets::TEXT_MUTED),
             );
             ui.separator();
 
             let wide_grid = ui.available_width() >= 650.0;
             egui::Grid::new("rc_quick_map_grid")
                 .num_columns(if wide_grid { 4 } else { 2 })
-                .spacing([10.0, 6.0])
+                .spacing([12.0, 6.0])
                 .show(ui, |ui| {
                     // ARM Switch Channel
                     ui.label("ARM Switch:");
@@ -879,12 +1056,28 @@ pub fn show_rc_tab(
                     edit_u16_param(ui, param_table, "rc_throttle_mincheck_us", 900, 1500);
                     ui.end_row();
 
-                    // Max Rates
+                    // Max Rates with deg/s equivalents
                     ui.label("Max Rate R/P & Yaw:");
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 4.0;
-                        edit_f32_param(ui, param_table, "rc_max_rate_rp", 0.5, 35.0, "rad/s");
-                        edit_f32_param(ui, param_table, "rc_max_rate_yaw", 0.5, 25.0, "rad/s");
+                    ui.vertical(|ui| {
+                        ui.spacing_mut().item_spacing.y = 3.0;
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 5.0;
+                            edit_f32_param(ui, param_table, "rc_max_rate_rp", 0.5, 35.0, "rad/s");
+                            ui.label(
+                                RichText::new(format!("R/P ({:.0} °/s)", max_rate_rp.to_degrees()))
+                                    .small()
+                                    .color(widgets::TEXT_MUTED),
+                            );
+                        });
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 5.0;
+                            edit_f32_param(ui, param_table, "rc_max_rate_yaw", 0.5, 25.0, "rad/s");
+                            ui.label(
+                                RichText::new(format!("Yaw ({:.0} °/s)", max_rate_yaw.to_degrees()))
+                                    .small()
+                                    .color(widgets::TEXT_MUTED),
+                            );
+                        });
                     });
                     if !wide_grid {
                         ui.end_row();
@@ -908,7 +1101,7 @@ pub fn show_rc_tab(
                     .add_enabled(
                         rc_dirty_count > 0,
                         egui::Button::new(format!(
-                            "⚡ Apply RC Changes to FC RAM ({rc_dirty_count})"
+                            "Apply RC Changes to FC RAM ({rc_dirty_count})"
                         )),
                     )
                     .clicked()
@@ -923,11 +1116,11 @@ pub fn show_rc_tab(
                         let applied = apply_rc_group_edits(param_table, mode, usb_conn, mock_fc);
                         let msg = if matches!(mode, ConnectionMode::UsbSerial { .. }) {
                             format!(
-                                "⟳ Sent {applied} `rc_*` parameter update(s) to USB FC — awaiting confirmation..."
+                                "Sent {applied} `rc_*` parameter update(s) to USB FC — awaiting confirmation..."
                             )
                         } else {
                             format!(
-                                "✓ Applied {applied} `rc_*` parameter update(s) to Mock FC RAM."
+                                "[OK] Applied {applied} `rc_*` parameter update(s) to Mock FC RAM."
                             )
                         };
                         state.status_banner = Some((msg, true));
@@ -935,7 +1128,7 @@ pub fn show_rc_tab(
                 }
 
                 if ui
-                    .button("💾 Save to Flash & Reboot FC")
+                    .button("Save to Flash & Reboot FC")
                     .on_hover_text(
                         "Applies pending RC edits, runs `param save`, and reboots FC so new switch mappings take effect",
                     )
@@ -947,8 +1140,9 @@ pub fn show_rc_tab(
                             if let Some(conn) = usb_conn {
                                 conn.send_command("param save");
                                 conn.send_command("reboot");
+                                action = RcTabAction::RebootStarted;
                                 state.status_banner = Some((
-                                    "Saved RC parameters to Flash and sent `reboot` — reconnect in ~2s."
+                                    "Saved RC parameters to Flash and sent `reboot` — auto-reconnecting..."
                                         .into(),
                                     true,
                                 ));
@@ -1023,6 +1217,7 @@ pub fn show_rc_tab(
                 render_left(ui, col_w, state, mock_fc);
             });
     }
+    action
 }
 
 fn apply_rc_group_edits(
@@ -1208,7 +1403,7 @@ fn draw_gimbal_box(
     });
 }
 
-const CH_LABEL_W: f32 = 144.0;
+const CH_LABEL_W: f32 = 152.0;
 const CH_VAL_W: f32 = 62.0;
 
 fn draw_channel_scale_header(ui: &mut egui::Ui, min_us: u16, mid_us: u16, max_us: u16) {
@@ -1266,10 +1461,18 @@ fn draw_channel_bar_row(
     let (row_rect, _) = ui.allocate_exact_size(vec2(row_w, 17.0), Sense::hover());
     let painter = ui.painter_at(row_rect);
 
-    let lbl_col = if highlight {
-        Color32::from_rgb(255, 195, 75)
+    let is_low_rail = has_rx && us < 900;
+    let lbl_col = if is_low_rail {
+        widgets::TEXT_MUTED
+    } else if highlight {
+        widgets::WARN_AMBER
     } else {
-        Color32::from_rgb(210, 220, 232)
+        widgets::TEXT_PRIMARY
+    };
+    let label_text = if is_low_rail {
+        format!("CH{:<2} {} (low)", ch_idx + 1, role)
+    } else {
+        format!("CH{:<2} {}", ch_idx + 1, role)
     };
     let label_clip = Rect::from_min_max(
         row_rect.min,
@@ -1278,7 +1481,7 @@ fn draw_channel_bar_row(
     painter.with_clip_rect(label_clip).text(
         pos2(row_rect.left(), row_rect.center().y),
         egui::Align2::LEFT_CENTER,
-        format!("CH{:<2} {}", ch_idx + 1, role),
+        label_text,
         FontId::monospace(11.0),
         lbl_col,
     );
@@ -1294,7 +1497,9 @@ fn draw_channel_bar_row(
     if has_rx {
         let frac = ((us as f32 - US_VIEW_MIN) / (US_VIEW_MAX - US_VIEW_MIN)).clamp(0.0, 1.0);
         let fill_rect = Rect::from_min_size(rect.min, vec2(rect.width() * frac, rect.height()));
-        let fill_col = if ch_idx < 4 {
+        let fill_col = if is_low_rail {
+            Color32::from_rgb(76, 86, 104)
+        } else if ch_idx < 4 {
             Color32::from_rgb(70, 175, 245)
         } else if highlight {
             Color32::from_rgb(245, 165, 55)
@@ -1326,10 +1531,10 @@ fn draw_channel_bar_row(
     } else {
         "   — µs".to_string()
     };
-    let val_col = if has_rx {
-        Color32::from_rgb(215, 224, 235)
+    let val_col = if !has_rx || is_low_rail {
+        widgets::TEXT_MUTED
     } else {
-        Color32::from_rgb(115, 125, 140)
+        widgets::TEXT_PRIMARY
     };
     painter.text(
         pos2(row_rect.right(), row_rect.center().y),
@@ -1368,19 +1573,25 @@ fn draw_mode_range_card(
             ui.set_min_width(inner_w);
             ui.set_max_width(inner_w);
 
-            // Row 1: Title on left + Status badge pinned cleanly to right (no right_to_left overflow!)
+            // Row 1: Title on left + Vector dot & Status badge pinned cleanly to right
             let (hdr_rect, _) = ui.allocate_exact_size(vec2(inner_w, 18.0), Sense::hover());
             let hdr_painter = ui.painter_at(hdr_rect);
-            let (badge, bcol) = if is_active {
-                ("● ACTIVE", Color32::from_rgb(90, 235, 145))
+            let (badge, bcol, dot_filled) = if is_active {
+                ("ACTIVE", widgets::OK_GREEN, true)
             } else if !has_rx {
-                ("○ NO RX", Color32::from_rgb(130, 140, 156))
+                ("NO RX", widgets::TEXT_MUTED, false)
             } else {
-                ("○ STANDBY", Color32::from_rgb(155, 165, 182))
+                ("STANDBY", widgets::TEXT_SECONDARY, false)
             };
             let badge_galley =
                 hdr_painter.layout_no_wrap(badge.to_string(), FontId::proportional(11.0), bcol);
             let badge_w = badge_galley.size().x;
+            let dot_center = pos2(hdr_rect.right() - badge_w - 8.0, hdr_rect.center().y);
+            if dot_filled {
+                hdr_painter.circle_filled(dot_center, 3.6, bcol);
+            } else {
+                hdr_painter.circle_stroke(dot_center, 3.2, Stroke::new(1.4, bcol));
+            }
             hdr_painter.galley(
                 pos2(
                     hdr_rect.right() - badge_w,
@@ -1392,12 +1603,12 @@ fn draw_mode_range_card(
 
             let title_clip = Rect::from_min_max(
                 hdr_rect.min,
-                pos2((hdr_rect.right() - badge_w - 10.0).max(hdr_rect.left() + 40.0), hdr_rect.bottom()),
+                pos2((hdr_rect.right() - badge_w - 20.0).max(hdr_rect.left() + 40.0), hdr_rect.bottom()),
             );
             let title_col = if is_active {
-                Color32::from_rgb(95, 235, 150)
+                widgets::OK_GREEN
             } else {
-                Color32::from_rgb(225, 232, 240)
+                widgets::TEXT_PRIMARY
             };
             hdr_painter.with_clip_rect(title_clip).text(
                 pos2(hdr_rect.left(), hdr_rect.center().y),
@@ -1419,91 +1630,136 @@ fn draw_mode_range_card(
                     RichText::new(&sub_text)
                         .small()
                         .monospace()
-                        .color(Color32::from_rgb(160, 174, 194)),
+                        .color(widgets::TEXT_SECONDARY),
                 )
                 .truncate(),
             )
             .on_hover_text(&sub_text);
 
             // Row 3: Visual µs Range Bar
-            let (rect, _) = ui.allocate_exact_size(Vec2::new(inner_w, 24.0), Sense::hover());
+            let (rect, _) = ui.allocate_exact_size(Vec2::new(inner_w, 26.0), Sense::hover());
             let painter = ui.painter_at(rect);
 
             painter.rect_filled(rect, CornerRadius::same(4), Color32::from_rgb(12, 15, 20));
+
+            // Zone range fills
+            for &(z_lo, z_hi, col, _, _) in zones {
+                let x0 = us_to_x(rect, z_lo);
+                let x1 = us_to_x(rect, z_hi);
+                if x1 > x0 {
+                    let z_rect = Rect::from_min_max(
+                        pos2(x0, rect.top() + 3.0),
+                        pos2(x1, rect.bottom() - 3.0),
+                    );
+                    painter.rect_filled(z_rect, CornerRadius::same(3), col);
+                }
+            }
 
             // Reference ticks at 1000 / 1500 / 2000 µs
             for ref_us in [1000.0_f32, 1500.0, 2000.0] {
                 let tx = us_to_x(rect, ref_us);
                 painter.line_segment(
                     [pos2(tx, rect.top() + 2.0), pos2(tx, rect.bottom() - 2.0)],
-                    Stroke::new(1.0, Color32::from_rgba_unmultiplied(255, 255, 255, 24)),
+                    Stroke::new(1.0, Color32::from_rgba_unmultiplied(255, 255, 255, 32)),
                 );
             }
 
-            let text_col = Color32::from_rgb(240, 245, 250);
-            for &(z_lo, z_hi, col, full_lbl, short_lbl) in zones {
+            // Muted behind-pill vertical pulse hairline + edge chevrons so needle never slices text
+            if has_rx {
+                let cur_x = us_to_x(rect, live_us as f32);
+                painter.line_segment(
+                    [pos2(cur_x, rect.top() + 2.0), pos2(cur_x, rect.bottom() - 2.0)],
+                    Stroke::new(1.4, Color32::from_rgba_unmultiplied(255, 225, 75, 110)),
+                );
+            }
+
+            // Zone label pills painted ABOVE the muted hairline
+            let text_col = widgets::TEXT_PRIMARY;
+            for &(z_lo, z_hi, _, full_lbl, short_lbl) in zones {
                 let x0 = us_to_x(rect, z_lo);
                 let x1 = us_to_x(rect, z_hi);
                 if x1 > x0 {
                     let z_rect = Rect::from_min_max(
-                        pos2(x0, rect.top() + 2.0),
-                        pos2(x1, rect.bottom() - 2.0),
+                        pos2(x0, rect.top() + 3.0),
+                        pos2(x1, rect.bottom() - 3.0),
                     );
-                    painter.rect_filled(z_rect, CornerRadius::same(3), col);
-
-                    let avail_lbl_w = z_rect.width() - 8.0;
+                    let avail_lbl_w = z_rect.width() - 10.0;
                     if avail_lbl_w > 18.0 {
                         let clipped = painter.with_clip_rect(z_rect.shrink2(vec2(2.0, 0.0)));
                         let full_g = clipped.layout_no_wrap(
                             full_lbl.to_string(),
-                            FontId::proportional(10.5),
+                            FontId::proportional(10.0),
                             text_col,
                         );
-                        if full_g.size().x <= avail_lbl_w {
-                            clipped.galley(
-                                pos2(
-                                    z_rect.center().x - full_g.size().x * 0.5,
-                                    z_rect.center().y - full_g.size().y * 0.5,
-                                ),
-                                full_g,
-                                text_col,
-                            );
+                        let chosen = if full_g.size().x <= avail_lbl_w {
+                            Some(full_g)
                         } else {
                             let short_g = clipped.layout_no_wrap(
                                 short_lbl.to_string(),
-                                FontId::proportional(10.0),
+                                FontId::proportional(9.5),
                                 text_col,
                             );
-                            if short_g.size().x <= avail_lbl_w {
-                                clipped.galley(
-                                    pos2(
-                                        z_rect.center().x - short_g.size().x * 0.5,
-                                        z_rect.center().y - short_g.size().y * 0.5,
-                                    ),
-                                    short_g,
-                                    text_col,
-                                );
-                            }
+                            (short_g.size().x <= avail_lbl_w).then_some(short_g)
+                        };
+                        if let Some(g) = chosen {
+                            let g_pos = pos2(
+                                z_rect.center().x - g.size().x * 0.5,
+                                z_rect.center().y - g.size().y * 0.5,
+                            );
+                            let pill_r = Rect::from_min_size(
+                                g_pos - vec2(4.0, 1.0),
+                                g.size() + vec2(8.0, 2.0),
+                            );
+                            clipped.rect_filled(
+                                pill_r,
+                                CornerRadius::same(3),
+                                Color32::from_rgba_unmultiplied(12, 16, 24, 210),
+                            );
+                            clipped.galley(g_pos, g, text_col);
                         }
                     }
                 }
             }
 
-            // Live channel needle cursor (only drawn brightly when RC frames have arrived)
+            // Bright gold top & bottom edge chevrons (▼ / ▲) for live channel pulse cursor
             if has_rx {
                 let cur_x = us_to_x(rect, live_us as f32);
-                painter.line_segment(
-                    [pos2(cur_x, rect.top() - 1.0), pos2(cur_x, rect.bottom() + 1.0)],
-                    Stroke::new(2.8, Color32::from_rgb(255, 225, 75)),
-                );
-                painter.circle_filled(
-                    pos2(cur_x, rect.bottom()),
-                    3.5,
-                    Color32::from_rgb(255, 225, 75),
+                let gold = Color32::from_rgb(255, 225, 75);
+                painter.add(egui::Shape::convex_polygon(
+                    vec![
+                        pos2(cur_x - 4.0, rect.top()),
+                        pos2(cur_x + 4.0, rect.top()),
+                        pos2(cur_x, rect.top() + 5.0),
+                    ],
+                    gold,
+                    Stroke::NONE,
+                ));
+                painter.add(egui::Shape::convex_polygon(
+                    vec![
+                        pos2(cur_x - 4.0, rect.bottom()),
+                        pos2(cur_x + 4.0, rect.bottom()),
+                        pos2(cur_x, rect.bottom() - 5.0),
+                    ],
+                    gold,
+                    Stroke::NONE,
+                ));
+            }
+
+            // 1000 / 1500 / 2000 µs reference tick labels cleanly beneath bar
+            let (scale_rect, _) = ui.allocate_exact_size(Vec2::new(inner_w, 12.0), Sense::hover());
+            let scale_painter = ui.painter_at(scale_rect);
+            for (ref_us, lbl) in [(1000.0_f32, "1000"), (1500.0, "1500"), (2000.0, "2000")] {
+                let tx = us_to_x(scale_rect, ref_us);
+                scale_painter.text(
+                    pos2(tx, scale_rect.center().y),
+                    egui::Align2::CENTER_CENTER,
+                    lbl,
+                    FontId::monospace(9.5),
+                    widgets::TEXT_MUTED,
                 );
             }
 
-            ui.label(RichText::new(footnote).small().weak());
+            ui.label(RichText::new(footnote).small().color(widgets::TEXT_MUTED));
         });
 }
 
@@ -1588,7 +1844,7 @@ mod tests {
             };
             let out = ctx.run(raw_input, |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    show_rc_tab(ui, state, telem, param_table, mode, &None, mock_fc);
+                    let _ = show_rc_tab(ui, state, telem, param_table, mode, &None, mock_fc);
                     last_min_rect = ui.min_rect();
                 });
             });
@@ -1772,10 +2028,16 @@ mod tests {
         };
         let vp = vec2(1180.0, 720.0);
 
-        let mut telem = TelemetrySnapshot::default();
-        telem.rc_frame_count = 10;
-        telem.rc_lq_pct = 100;
-        telem.rc_last_rx = Some(Instant::now());
+        let mut telem = TelemetrySnapshot {
+            rc_channels_us: [
+                1500, 1500, 988, 1500, 988, 988, 988, 988, 1500, 1500, 1500, 1500, 1500, 1500,
+                1500, 1500,
+            ],
+            rc_frame_count: 10,
+            rc_lq_pct: 100,
+            rc_last_rx: Some(Instant::now()),
+            ..Default::default()
+        };
         let mut state = RcTabState::default();
 
         // 1. Flip ARM high while throttle (1400 µs) > mincheck (1050 µs) -> blocked!
@@ -1804,5 +2066,76 @@ mod tests {
         telem.rc_channels_us[4] = 1000;
         run_headless_rc_tab(vp, &mut state, &telem, &mut param_table, &mode, &mut mock_fc);
         assert!(!state.armed_latched, "Flipping ARM low must disarm immediately");
+    }
+
+    #[test]
+    fn rate_stick_to_thrust_n_matches_piecewise_firmware_curve() {
+        let hover = 0.606;
+        let max_coll = 4.0 * 0.6063;
+        assert!((rate_stick_to_thrust_n(0.0, hover, max_coll) - 0.0).abs() < 1e-6);
+        assert!((rate_stick_to_thrust_n(0.25, hover, max_coll) - 0.5 * hover).abs() < 1e-6);
+        assert!((rate_stick_to_thrust_n(0.5, hover, max_coll) - hover).abs() < 1e-6);
+        assert!(
+            (rate_stick_to_thrust_n(0.75, hover, max_coll) - 0.5 * (hover + max_coll)).abs() < 1e-6
+        );
+        assert!((rate_stick_to_thrust_n(1.0, hover, max_coll) - max_coll).abs() < 1e-6);
+    }
+
+    #[test]
+    fn mission_schmitt_trigger_requires_rising_edge_while_armed_and_tracks_cascade_and_idle_launch() {
+        let ws = workspace_root();
+        let mut param_table = ParamTable::from_vehicle_yaml(&ws, "goku_f745");
+        let mut mock_fc = MockFcBackend::from_vehicle_yaml(&ws, "goku_f745");
+        let mode = ConnectionMode::MockFc {
+            vehicle_name: "goku_f745".into(),
+        };
+        let vp = vec2(1180.0, 720.0);
+
+        let mut telem = TelemetrySnapshot {
+            rc_channels_us: [1500, 1500, 988, 1500, 1000, 988, 2000, 988, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500],
+            rc_frame_count: 10,
+            rc_lq_pct: 100,
+            rc_last_rx: Some(Instant::now()),
+            ..Default::default()
+        };
+        telem.build_facts
+            .insert("outer_loop".into(), "cascade (outer_geometric)".into());
+        let mut state = RcTabState::default();
+
+        // 1. CH7 HIGH while DISARMED must NEVER latch mission_schmitt_latched
+        run_headless_rc_tab(vp, &mut state, &telem, &mut param_table, &mode, &mut mock_fc);
+        assert!(!state.armed_latched);
+        assert!(!state.mission_schmitt_latched);
+
+        // 2. Arm with CH7 already held HIGH -> still must NOT pre-latch; AND cascade idle pre-launch shows IDLE (AWAITING LAUNCH)
+        telem.rc_channels_us[4] = 2000;
+        let (_, out) = run_headless_rc_tab(vp, &mut state, &telem, &mut param_table, &mode, &mut mock_fc);
+        assert!(state.armed_latched);
+        assert!(!state.mission_schmitt_latched);
+        assert!(!state.launched_latched);
+        let texts = collect_visible_texts(&out.shapes);
+        assert!(
+            texts.iter().any(|(_, t)| t.contains("ARMED — IDLE (AWAITING LAUNCH)")),
+            "expected pre-launch idle banner in cascade mode"
+        );
+        assert!(
+            texts.iter().any(|(_, t)| t.contains("GEOMETRIC CASCADE POS-HOLD")),
+            "expected cascade (outer_geometric) to match CASCADE mode card"
+        );
+
+        // 3. Drop CH7 LOW, then rising edge HIGH while ARMED -> latches mission_schmitt_latched!
+        telem.rc_channels_us[6] = 1000;
+        run_headless_rc_tab(vp, &mut state, &telem, &mut param_table, &mode, &mut mock_fc);
+        assert!(!state.mission_schmitt_latched);
+
+        telem.rc_channels_us[6] = 2000;
+        run_headless_rc_tab(vp, &mut state, &telem, &mut param_table, &mode, &mut mock_fc);
+        assert!(state.mission_schmitt_latched);
+
+        // 4. Disarm clears mission_schmitt_latched immediately
+        telem.rc_channels_us[4] = 1000;
+        run_headless_rc_tab(vp, &mut state, &telem, &mut param_table, &mode, &mut mock_fc);
+        assert!(!state.armed_latched);
+        assert!(!state.mission_schmitt_latched);
     }
 }
