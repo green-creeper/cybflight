@@ -109,6 +109,13 @@ pub async fn postmortem_task() {
     let mut last_flush_ms: u32 = 0;
 
     let boot_instant = Instant::now();
+    // Commit an initial post-board_init heartbeat immediately so any crash or
+    // watchdog reset after `board_init::init` completes is distinguishable from
+    // an early startup hang (`uptime_ms = 0`).
+    bkpsram::with_record_mut(|r| {
+        r.header.uptime_ms = 1;
+        record::finalize(r);
+    });
     let mut ticker = Ticker::every(embassy_time::Duration::from_millis(TICK_PERIOD_MS));
 
     defmt::info!("postmortem: task running ({}ms tick)", TICK_PERIOD_MS);

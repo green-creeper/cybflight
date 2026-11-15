@@ -175,7 +175,10 @@ async fn main(spawner: embassy_executor::Spawner) {
     // Start IWDG and its feeder before awaiting SPI/I2C/UART init so `STARTED`
     // is live before flash parameter recovery and `iwdg_feed_task` keeps
     // feeding if a warm reset (`reboot` / DFU `:leave`) left IWDG running.
+    // Bracket `board_init::init` with the ~8.1 s extended window so synchronous
+    // peripheral probes / flash erases cannot expire the strict ~500 ms timeout.
     cybflight::watchdog::init();
+    cybflight::watchdog::extend_timeout();
     #[cfg(feature = "postmortem")]
     {
         use cybflight::hal::interrupt::{self, InterruptExt, Priority};
@@ -199,6 +202,7 @@ async fn main(spawner: embassy_executor::Spawner) {
     //   * Everything else (LED, USB, RC, mag, baro, GPS, ESP bridge)
     //     on `spawner` (thread).
     cybflight::board_init::init(&spawner, &ctrl_spawner, &high_spawner, board).await;
+    cybflight::watchdog::restore_timeout();
 
     // --- Post-mortem steady-state task ---
     #[cfg(feature = "postmortem")]
@@ -219,13 +223,11 @@ async fn main(spawner: embassy_executor::Spawner) {
         .spawn(cybflight::control::rc_interpreter::rc_interpreter_task())
         .unwrap_or_else(|_| defmt::panic!("failed to spawn RC interpreter task"));
 
-    // Failsafe on the control executor (P10): the RC parsers it depends
-    // on also live on P10 now, and its controller-watchdog stamps
-    // (`LAST_CONTROLLER_PUBLISH`) come from INDI/MPC on P10. Keeping
-    // failsafe on the same tier as its inputs means stage-1 RC-loss
-    // detection and controller-silence detection both respond within
-    // a couple of milliseconds, even while the thread executor is
-    // busy with a planner solve.
+    // Failsafe on the control executor (P10): runs alongside `indi_task`
+    // and reads lock-free atomics/PubSub from RC (`spawner`) and the
+    // controllers, keeping stage-1 RC-loss and controller-silence detection
+    // responsive within a couple of milliseconds even while the thread
+    // executor is busy with a planner solve.
     ctrl_spawner
         .spawn(cybflight::control::failsafe::failsafe_task())
         .unwrap_or_else(|_| defmt::panic!("failed to spawn failsafe task"));

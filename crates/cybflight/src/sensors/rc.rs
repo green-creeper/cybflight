@@ -705,7 +705,7 @@ pub mod multi_rc_runner {
     }
 
     struct LockedSessionState {
-        last_activity: Instant,
+        last_wire_rx: Instant,
         last_rc: Option<Instant>,
         last_link_rx: Option<Instant>,
         last_hb_tx: Option<Instant>,
@@ -747,9 +747,10 @@ pub mod multi_rc_runner {
 
     /// Feed a chunk received during scan into one port's parsers.
     ///
-    /// Accumulates decoded link stats and channel frames into `pending`; a port
-    /// is only eligible to lock once `pending.as_ref().is_some_and(|h| h.init_rc.is_some())`
-    /// so bare MAVLink heartbeats or `RADIO_STATUS` alone never spoof a locked RC link.
+    /// Accumulates decoded link stats, passive receiver failsafe frames, and
+    /// channel frames into `pending`; bare heartbeats and non-RC frames never
+    /// populate `pending`, and active control (`RC_LINK_ACTIVE`) remains false
+    /// until real `RcChannels` frames arrive.
     fn feed_scan_chunk(
         port: usize,
         baud: u32,
@@ -758,6 +759,7 @@ pub mod multi_rc_runner {
         usart1_cobs: &mut CobsRxFeed,
         allow_cobs: bool,
         pending: &mut Option<ScanHit>,
+        port_crc_errors: &mut u32,
     ) {
         RC_UART_RX_BYTES[port].fetch_add(data.len() as u32, Ordering::Relaxed);
 
@@ -836,16 +838,27 @@ pub mod multi_rc_runner {
                             h.init_link = Some(ls);
                         }
                     }
-                    // Never lock on bare Failsafe, Heartbeat, or non-RC MAVLink frames.
-                    MavlinkRcEvent::Failsafe
-                    | MavlinkRcEvent::Heartbeat { .. }
-                    | MavlinkRcEvent::Other { .. } => {}
+                    // Lock UART transport passively on verified RX failsafe frames
+                    // (e.g. ELRS `RADIO_RC_CHANNELS` `#420` with FAILSAFE flag while
+                    // TX is off) without activating `RC_LINK_ACTIVE`.
+                    MavlinkRcEvent::Failsafe => {
+                        if pending.is_none() {
+                            *pending = Some(ScanHit {
+                                port,
+                                proto: LockedProto::Mavlink,
+                                baud,
+                                init_rc: None,
+                                init_link: None,
+                            });
+                        }
+                    }
+                    // Never lock on bare Heartbeat or non-RC MAVLink frames.
+                    MavlinkRcEvent::Heartbeat { .. } | MavlinkRcEvent::Other { .. } => {}
                 }
             }
         }
 
-        let mut dummy = 0u32;
-        drain_parser_crc_errors(parsers, &mut dummy);
+        drain_parser_crc_errors(parsers, port_crc_errors);
     }
 
     async fn flush_and_prepare_uarts(
@@ -912,6 +925,8 @@ pub mod multi_rc_runner {
                 let deadline = Instant::now() + Duration::from_millis(window_ms);
                 let allow_cobs = baud == 460_800;
                 let mut pending_hits: [Option<ScanHit>; 5] = [const { None }; 5];
+                let mut port_crc_errors = [0u32; 5];
+                let mut rescan_aborted = false;
 
                 loop {
                     let now = Instant::now();
@@ -948,6 +963,7 @@ pub mod multi_rc_runner {
                             usart1_cobs,
                             allow_cobs,
                             &mut pending_hits[port],
+                            &mut port_crc_errors[port],
                         );
                         if pending_hits[port].as_ref().is_some_and(|h| h.init_rc.is_some()) {
                             return pending_hits[port].take().unwrap();
@@ -956,7 +972,18 @@ pub mod multi_rc_runner {
 
                     if RC_RESCAN_REQ.swap(false, Ordering::AcqRel) {
                         reset_diag_counters();
+                        rescan_aborted = true;
                         break;
+                    }
+                }
+
+                if !rescan_aborted {
+                    for idx in 0..5 {
+                        if port_crc_errors[idx] == 0
+                            && let Some(hit) = pending_hits[idx].take()
+                        {
+                            return hit;
+                        }
                     }
                 }
             }
@@ -1007,6 +1034,7 @@ pub mod multi_rc_runner {
         st: &mut LockedSessionState,
     ) {
         RC_LINK_FRAMES.fetch_add(1, Ordering::Relaxed);
+        st.last_wire_rx = now;
         st.locked_crc_errors = 0;
         let max_rc_age = arm_config().link_stats_max_age_ms;
         let rc_fresh = st
@@ -1041,16 +1069,21 @@ pub mod multi_rc_runner {
     ) {
         RC_VALID_FRAMES.fetch_add(1, Ordering::Relaxed);
         st.last_rc = Some(now);
-        st.last_activity = now;
+        st.last_wire_rx = now;
         st.locked_crc_errors = 0;
         publish_rc_channels(arm, now, rc.channels, rc.channel_count);
     }
 
-    fn apply_failsafe_event(arm: &mut ArmStateMachine, st: &mut LockedSessionState) {
+    fn apply_failsafe_event(
+        arm: &mut ArmStateMachine,
+        now: Instant,
+        st: &mut LockedSessionState,
+    ) {
         arm.set_link_inactive();
         set_latest_rc_link_inactive();
         st.last_known_link = None;
         st.last_link_rx = None;
+        st.last_wire_rx = now;
         st.locked_crc_errors = 0;
     }
 
@@ -1102,11 +1135,11 @@ pub mod multi_rc_runner {
                                 apply_link_event(arm, now, &ls, st);
                             }
                             MavlinkRcEvent::Failsafe => {
-                                apply_failsafe_event(arm, st);
+                                apply_failsafe_event(arm, now, st);
                             }
                             MavlinkRcEvent::Heartbeat { .. } | MavlinkRcEvent::Other { .. } => {
-                                // Bare Heartbeats / telemetry never extend `last_activity`
-                                // or `RC_LINK_ACTIVE` without real RC channel frames.
+                                // Bare Heartbeats / telemetry never extend `last_wire_rx`
+                                // or `RC_LINK_ACTIVE` without real RC/receiver frames.
                                 st.locked_crc_errors = 0;
                             }
                         }
@@ -1181,15 +1214,17 @@ pub mod multi_rc_runner {
             }
         }
 
-        // Auto-unlock while disarmed if real RC frames stop or accumulate CRC errors.
+        // Auto-unlock while disarmed if verified RC/receiver wire frames stop
+        // or accumulate CRC errors.
         if !arm.armed {
-            let idle_ms = now.saturating_duration_since(st.last_activity).as_millis();
-            if (idle_ms >= UNLOCK_CRC_STALE_MS && st.locked_crc_errors >= UNLOCK_CRC_MIN_ERRORS)
-                || idle_ms >= UNLOCK_SILENT_STALE_MS
+            let wire_idle_ms = now.saturating_duration_since(st.last_wire_rx).as_millis();
+            if (wire_idle_ms >= UNLOCK_CRC_STALE_MS
+                && st.locked_crc_errors >= UNLOCK_CRC_MIN_ERRORS)
+                || wire_idle_ms >= UNLOCK_SILENT_STALE_MS
             {
                 defmt::info!(
-                    "RC auto-unlock (idle_ms={}, crc_err={})",
-                    idle_ms,
+                    "RC auto-unlock (wire_idle_ms={}, crc_err={})",
+                    wire_idle_ms,
                     st.locked_crc_errors
                 );
                 return true;
@@ -1213,7 +1248,7 @@ pub mod multi_rc_runner {
 
         let now = Instant::now();
         let mut st = LockedSessionState {
-            last_activity: now,
+            last_wire_rx: now,
             last_rc: None,
             last_link_rx: None,
             last_hb_tx: None,

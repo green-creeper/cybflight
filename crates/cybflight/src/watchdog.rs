@@ -1,4 +1,4 @@
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 use crate::hal::pac;
 
@@ -7,6 +7,11 @@ use crate::hal::pac;
 /// never-started watchdog would spin on the PVU flag with LSI possibly
 /// off (only IWDG START forces LSI on), hanging boot forever.
 static STARTED: AtomicBool = AtomicBool::new(false);
+
+/// Nesting depth of active [`extend_timeout`] / [`restore_timeout`] brackets so
+/// inner flash-erase guards cannot prematurely drop an outer boot extension back
+/// to 500 ms.
+static EXTEND_DEPTH: AtomicU8 = AtomicU8::new(0);
 
 /// Initialize and start the Independent Watchdog (IWDG1).
 ///
@@ -24,6 +29,15 @@ const IWDG_REGS: pac::iwdg::Iwdg = pac::IWDG;
 
 pub fn init() {
     let iwdg = IWDG_REGS;
+    EXTEND_DEPTH.store(0, Ordering::Release);
+
+    // On a warm reset when IWDG is already running, wait for any in-flight
+    // PR/RLR shadow register transfer to finish before unlocking/reprogramming
+    // (RM0385 §26.3.2); on cold POR, IWDG_SR reads 0 so this exits immediately.
+    while {
+        let sr = iwdg.sr().read();
+        sr.pvu() || sr.rvu()
+    } {}
 
     // Unlock PR/RLR registers
     iwdg.kr().write(|w| w.set_key(pac::iwdg::vals::Key::ENABLE));
@@ -59,8 +73,11 @@ pub fn feed() {
 }
 
 /// Temporarily extend the IWDG timeout for long-running blocking
-/// operations (e.g. flash sector erase). Feeds the counter immediately so
-/// the full extended period starts now.
+/// operations (e.g. flash sector erase or peripheral init). Feeds the counter
+/// immediately so the full extended period starts now.
+///
+/// Nest-safe via [`EXTEND_DEPTH`]: nested calls keep the extended window active
+/// and refresh the counter without waiting on shadow registers again.
 ///
 /// Uses prescaler `/256` + reload `1500` (~8.1 s even at worst-case 47 kHz LSI),
 /// safely covering the ~4.0 s max 256 KB single-bank STM32F745 sector erase.
@@ -71,6 +88,11 @@ pub fn extend_timeout() {
     // No-op before `init`: there is no running watchdog to outlast the
     // erase, and the PVU/RVU spin below requires LSI (started by IWDG START).
     if !STARTED.load(Ordering::Acquire) {
+        return;
+    }
+    let prev = EXTEND_DEPTH.fetch_add(1, Ordering::AcqRel);
+    if prev > 0 {
+        feed();
         return;
     }
     let iwdg = IWDG_REGS;
@@ -92,9 +114,19 @@ pub fn extend_timeout() {
     feed();
 }
 
-/// Restore the IWDG timeout to the normal ~500 ms and feed immediately.
+/// Restore the IWDG timeout to the normal ~500 ms and feed immediately once
+/// all nested [`extend_timeout`] brackets have unwound.
 pub fn restore_timeout() {
     if !STARTED.load(Ordering::Acquire) {
+        return;
+    }
+    let prev = EXTEND_DEPTH
+        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |d| {
+            Some(d.saturating_sub(1))
+        })
+        .unwrap_or(0);
+    if prev > 1 {
+        feed();
         return;
     }
     let iwdg = IWDG_REGS;

@@ -128,6 +128,7 @@ pub async fn init(
 
     // Wait for power to stabilize before touching SPI devices.
     Timer::after_millis(100).await;
+    crate::watchdog::feed();
 
     // Start SPI4 at 1 MHz (54 MHz / 64 = 843.75 kHz) to satisfy the MPU-6000
     // <= 1 MHz register-write specification during WHO_AM_I probe & config,
@@ -275,6 +276,7 @@ pub async fn init(
             defmt::error!("Unknown IMU on SPI4: WHO_AM_I={:#x}", id);
         }
     }
+    crate::watchdog::feed();
 
     let _ = &ctrl_spawner;
 
@@ -346,7 +348,7 @@ pub async fn init(
                 defmt::info!(
                     "Multi-UART RC init OK: USART2, USART1, UART5, UART4, USART3 @ 460800 initial"
                 );
-                ctrl_spawner
+                spawner
                     .spawn(crate::sensors::rc::multi_rc_runner::multi_rc_task([
                         u2, u1, u5, u4, u3,
                     ]))
@@ -564,6 +566,7 @@ pub async fn init(
                 .unwrap_or_else(|e| defmt::error!("Failed to spawn SPL06 baro task: {}", e));
         }
     }
+    crate::watchdog::feed();
 
     // --- Offboard / ESP bridge (`PORT_ESP_BRIDGE`, default USART1 PA9/PA10 @ 460800 baud) ---
     // When `rx_crsf` is active, USART1 is time-sliced/monitored inside `multi_rc_task`.
@@ -684,6 +687,7 @@ pub async fn init(
     spawner
         .spawn(power_task(power_mon))
         .unwrap_or_else(|_| defmt::error!("Failed to spawn power task"));
+    crate::watchdog::feed();
 }
 
 #[cfg(all(feature = "est_pos_gps", not(feature = "gps_unicore")))]
