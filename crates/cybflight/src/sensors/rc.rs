@@ -4,7 +4,7 @@
 //! statistics to the pub/sub channels, and sends telemetry in the inter-frame gaps.
 
 use core::cell::{Cell, RefCell};
-use core::sync::atomic::Ordering;
+use core::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 
 use embassy_sync::blocking_mutex::{Mutex as BlockingMutex, raw::CriticalSectionRawMutex};
 use embassy_time::Instant;
@@ -13,6 +13,52 @@ use crate::hal;
 use crate::motors::ARM_STATE;
 use crate::status;
 use cybflight_msgs as msgs;
+
+/// Ordered names matching `[u2, u1, u5, u4, u3]` UART indices on Flywoo F745.
+pub const RC_DIAG_PORT_NAMES: [&str; 5] = ["USART2", "USART1", "UART5", "UART4", "USART3"];
+
+/// Total RX bytes observed on each RC candidate UART since boot or last `rcdiag rescan`.
+pub static RC_UART_RX_BYTES: [AtomicU32; 5] = [const { AtomicU32::new(0) }; 5];
+/// Accumulated CRSF/MAVLink candidate framing & CRC errors.
+pub static RC_CRC_ERRORS: AtomicU32 = AtomicU32::new(0);
+/// Valid decoded RC channel frames since boot or last `rcdiag rescan`.
+pub static RC_VALID_FRAMES: AtomicU32 = AtomicU32::new(0);
+/// Valid decoded RC link-status frames since boot or last `rcdiag rescan`.
+pub static RC_LINK_FRAMES: AtomicU32 = AtomicU32::new(0);
+/// Currently locked UART index (`0..5` into `RC_DIAG_PORT_NAMES`, or `0xFF` = none).
+pub static RC_LOCKED_PORT: AtomicU8 = AtomicU8::new(0xFF);
+/// Locked RC protocol (`0` = none, `1` = CRSF, `2` = MAVLink, `3` = GHST).
+pub static RC_LOCKED_PROTO: AtomicU8 = AtomicU8::new(0);
+/// Locked UART baudrate in bps (`0` when unlocked).
+pub static RC_LOCKED_BAUD: AtomicU32 = AtomicU32::new(0);
+/// Runner scan state (`0` = INIT, `1` = SCAN, `2` = LOCKED).
+pub static RC_SCAN_STATE: AtomicU8 = AtomicU8::new(0);
+/// Shell-requested unlock & counter-reset rescan flag.
+pub static RC_RESCAN_REQ: AtomicBool = AtomicBool::new(false);
+
+/// Map `RC_LOCKED_PROTO` atomic code to a human/GS protocol label.
+pub fn rc_diag_proto_name(code: u8) -> &'static str {
+    match code {
+        1 => "CRSF",
+        2 => "MAVLink",
+        3 => "GHST",
+        _ => "none",
+    }
+}
+
+/// Map `RC_SCAN_STATE` atomic code to a state label.
+pub fn rc_diag_state_name(code: u8) -> &'static str {
+    match code {
+        1 => "SCAN",
+        2 => "LOCKED",
+        _ => "INIT",
+    }
+}
+
+/// Request an immediate unlock, counter reset, and full UART/baud rescan.
+pub fn request_rc_rescan() {
+    RC_RESCAN_REQ.store(true, Ordering::Release);
+}
 
 /// Latest gate-rejection reason from the most recent arm attempt, plus the
 /// instant it was latched. Cleared on disarm and on successful arm. Read by
@@ -224,6 +270,11 @@ impl ArmStateMachine {
         }
     }
 
+    /// Returns `true` when the FC is currently armed according to the RC state machine.
+    fn is_armed(&self) -> bool {
+        self.armed
+    }
+
     /// Feed latest link statistics. Call on every link-stats frame.
     fn update_link(&mut self, quality: u8) {
         self.link_quality = quality;
@@ -358,6 +409,45 @@ impl ArmStateMachine {
     }
 }
 
+fn publish_rc_channels(
+    arm: &mut ArmStateMachine,
+    now: Instant,
+    channels: [u16; 16],
+    channel_count: u8,
+) {
+    let frame = msgs::RcInput {
+        timestamp: now,
+        channels,
+        channel_count,
+    };
+    super::RC_INPUT.immediate_publisher().publish_immediate(frame.clone());
+    LATEST_RC_INPUT.lock(|c| c.replace(Some(frame)));
+    arm.update_channels(&channels, channel_count);
+}
+
+fn publish_rc_link(
+    arm: &mut ArmStateMachine,
+    now: Instant,
+    rssi_dbm: i16,
+    link_quality: u8,
+    snr: i8,
+    rf_mode: u8,
+) -> msgs::RcLinkStatus {
+    arm.update_link(link_quality);
+    let link = msgs::RcLinkStatus {
+        timestamp: now,
+        rssi_dbm,
+        link_quality,
+        snr,
+        rf_mode,
+    };
+    super::RC_LINK_STATUS
+        .immediate_publisher()
+        .publish_immediate(link.clone());
+    LATEST_RC_LINK_STATUS.lock(|c| c.replace(Some(link.clone())));
+    link
+}
+
 // ---------------------------------------------------------------------------
 // CRSF
 // ---------------------------------------------------------------------------
@@ -388,9 +478,10 @@ pub mod crsf_runner {
         }
 
         pub async fn run(&mut self) -> ! {
-            let rc_pub = super::super::RC_INPUT.immediate_publisher();
-            let link_pub = super::super::RC_LINK_STATUS.immediate_publisher();
             let mut arm = ArmStateMachine::new();
+            RC_LOCKED_PROTO.store(1, Ordering::Relaxed);
+            RC_LOCKED_BAUD.store(420_000, Ordering::Relaxed);
+            RC_SCAN_STATE.store(1, Ordering::Relaxed);
 
             loop {
                 match self.crsf.read_frame().await {
@@ -398,30 +489,25 @@ pub mod crsf_runner {
                         let now = Instant::now();
                         match event {
                             CrsfEvent::RcChannelsPacked(rc) | CrsfEvent::SubsetRcChannels(rc) => {
-                                let frame = msgs::RcInput {
-                                    timestamp: now,
-                                    channels: rc.channels,
-                                    channel_count: rc.channel_count,
-                                };
-                                rc_pub.publish_immediate(frame.clone());
-                                LATEST_RC_INPUT.lock(|c| c.replace(Some(frame)));
-                                arm.update_channels(&rc.channels, rc.channel_count);
+                                RC_SCAN_STATE.store(2, Ordering::Relaxed);
+                                RC_VALID_FRAMES.fetch_add(1, Ordering::Relaxed);
+                                publish_rc_channels(&mut arm, now, rc.channels, rc.channel_count);
 
                                 // Send one telemetry frame per RC frame received
                                 self.send_telemetry().await;
                             }
                             CrsfEvent::LinkStatistics(stats)
                             | CrsfEvent::LinkStatisticsTx(stats) => {
-                                arm.update_link(stats.link_quality);
-                                let link = msgs::RcLinkStatus {
-                                    timestamp: now,
-                                    rssi_dbm: stats.rssi_dbm,
-                                    link_quality: stats.link_quality,
-                                    snr: stats.snr,
-                                    rf_mode: stats.rf_mode,
-                                };
-                                link_pub.publish_immediate(link.clone());
-                                LATEST_RC_LINK_STATUS.lock(|c| c.replace(Some(link)));
+                                RC_SCAN_STATE.store(2, Ordering::Relaxed);
+                                RC_LINK_FRAMES.fetch_add(1, Ordering::Relaxed);
+                                publish_rc_link(
+                                    &mut arm,
+                                    now,
+                                    stats.rssi_dbm,
+                                    stats.link_quality,
+                                    stats.snr,
+                                    stats.rf_mode,
+                                );
                             }
                             CrsfEvent::SpeedProposal { port_id, baud } => {
                                 defmt::info!(
@@ -520,9 +606,10 @@ pub mod ghst_runner {
         }
 
         pub async fn run(&mut self) -> ! {
-            let rc_pub = super::super::RC_INPUT.immediate_publisher();
-            let link_pub = super::super::RC_LINK_STATUS.immediate_publisher();
             let mut arm = ArmStateMachine::new();
+            RC_LOCKED_PROTO.store(3, Ordering::Relaxed);
+            RC_LOCKED_BAUD.store(420_000, Ordering::Relaxed);
+            RC_SCAN_STATE.store(1, Ordering::Relaxed);
 
             let mut frame_count: u32 = 0;
             let mut err_count: u32 = 0;
@@ -591,14 +678,9 @@ pub mod ghst_runner {
                                     );
                                 }
 
-                                let frame = msgs::RcInput {
-                                    timestamp: now,
-                                    channels: rc.channels,
-                                    channel_count: rc.channel_count,
-                                };
-                                rc_pub.publish_immediate(frame.clone());
-                                LATEST_RC_INPUT.lock(|c| c.replace(Some(frame)));
-                                arm.update_channels(&rc.channels, rc.channel_count);
+                                RC_SCAN_STATE.store(2, Ordering::Relaxed);
+                                RC_VALID_FRAMES.fetch_add(1, Ordering::Relaxed);
+                                publish_rc_channels(&mut arm, now, rc.channels, rc.channel_count);
 
                                 // Guard delay: GHST requires 1ms minimum gap after
                                 // the last received byte before transmitting telemetry
@@ -607,22 +689,22 @@ pub mod ghst_runner {
                                 self.send_telemetry().await;
                             }
                             GhstEvent::RssiFrame(stats) => {
-                                arm.update_link(stats.link_quality);
+                                RC_SCAN_STATE.store(2, Ordering::Relaxed);
+                                RC_LINK_FRAMES.fetch_add(1, Ordering::Relaxed);
                                 defmt::debug!(
                                     "GHST link: rssi={}dBm lq={}% rf_mode={}",
                                     stats.rssi_dbm,
                                     stats.link_quality,
                                     stats.rf_mode,
                                 );
-                                let link = msgs::RcLinkStatus {
-                                    timestamp: now,
-                                    rssi_dbm: stats.rssi_dbm,
-                                    link_quality: stats.link_quality,
-                                    snr: stats.snr,
-                                    rf_mode: stats.rf_mode,
-                                };
-                                link_pub.publish_immediate(link.clone());
-                                LATEST_RC_LINK_STATUS.lock(|c| c.replace(Some(link)));
+                                publish_rc_link(
+                                    &mut arm,
+                                    now,
+                                    stats.rssi_dbm,
+                                    stats.link_quality,
+                                    stats.snr,
+                                    stats.rf_mode,
+                                );
                             }
                             GhstEvent::Other { frame_type } => {
                                 defmt::debug!("GHST unknown frame type={:#x}", frame_type);
@@ -664,5 +746,679 @@ pub mod ghst_runner {
     pub async fn ghst_task(uart: RcUart) {
         let mut runner = GhstRunner::new(uart);
         runner.run().await;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Multi-UART auto-detecting RC runner (CRSF + ELRS MAVLink2) for Flywoo F745
+// ---------------------------------------------------------------------------
+
+#[cfg(all(feature = "board_flywoof745", feature = "rx_crsf"))]
+pub mod multi_rc_runner {
+    use super::*;
+    use crate::comm::esp_bridge::CobsRxFeed;
+    use cybflight_drivers::rc::crsf::{
+        CrsfEvent, CrsfParser, encode_attitude_frame, encode_flight_mode_frame,
+        encode_heartbeat_frame, encode_speed_response_frame,
+    };
+    use cybflight_drivers::rc::mavlink_rc::{MavlinkRcEvent, MavlinkRcParser, encode_heartbeat_v2};
+    use cybflight_drivers::rc::{LinkStatistics, RcChannels};
+    use embassy_futures::select::{Either, Either3, Either6, select, select3, select6};
+    use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, pubsub::Subscriber};
+    use embassy_time::{Duration, Ticker, Timer, with_timeout};
+    use embedded_io_async::{Read as _, Write as _};
+
+    type AttitudeSub = Subscriber<'static, CriticalSectionRawMutex, msgs::VehicleAttitude, 4, 6, 1>;
+
+    /// Probe table: `(baudrate, probe_window_ms, send_mavlink_heartbeat)`.
+    const SCAN_PROFILES: [(u32, u64, bool); 5] = [
+        (460_800, 120, true),
+        (420_000, 120, false),
+        (57_600, 100, true),
+        (115_200, 90, false),
+        (921_600, 90, false),
+    ];
+
+    /// Refresh period for keeping `ArmStateMachine::link_stats_time` < `500 ms`
+    /// between 1 Hz MAVLink `RADIO_STATUS` packets.
+    const TICK_PERIOD_MS: u64 = 200;
+    const MAVLINK_HEARTBEAT_PERIOD_MS: u64 = 1000;
+    const LINK_REFRESH_MAX_IDLE_MS: u64 = 1500;
+    const UNLOCK_CRC_STALE_MS: u64 = 2500;
+    const UNLOCK_CRC_MIN_ERRORS: u32 = 5;
+    const UNLOCK_SILENT_STALE_MS: u64 = 5000;
+
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    #[repr(u8)]
+    enum LockedProto {
+        Crsf = 1,
+        Mavlink = 2,
+    }
+
+    struct PortParsers {
+        crsf: CrsfParser,
+        mav: MavlinkRcParser,
+    }
+
+    impl PortParsers {
+        const fn new() -> Self {
+            Self {
+                crsf: CrsfParser::new(),
+                mav: MavlinkRcParser::new(),
+            }
+        }
+
+        fn reset_for_probe(&mut self) {
+            self.crsf.reset();
+            self.mav.reset_stream();
+        }
+    }
+
+    struct ScanHit {
+        port: usize,
+        proto: LockedProto,
+        baud: u32,
+        init_rc: Option<RcChannels>,
+        init_link: Option<LinkStatistics>,
+        saw_failsafe: bool,
+    }
+
+    struct LockedSessionState {
+        last_activity: Instant,
+        last_rc: Option<Instant>,
+        last_hb_tx: Option<Instant>,
+        last_link_refresh: Instant,
+        last_known_link: Option<msgs::RcLinkStatus>,
+        locked_crc_errors: u32,
+        hb_seq: u8,
+        crsf_telem_idx: u8,
+        attitude_sub: Option<AttitudeSub>,
+    }
+
+    fn reset_diag_counters() {
+        for c in &RC_UART_RX_BYTES {
+            c.store(0, Ordering::Relaxed);
+        }
+        RC_CRC_ERRORS.store(0, Ordering::Relaxed);
+        RC_VALID_FRAMES.store(0, Ordering::Relaxed);
+        RC_LINK_FRAMES.store(0, Ordering::Relaxed);
+    }
+
+    fn clear_lock_state() {
+        RC_LOCKED_PORT.store(0xFF, Ordering::Relaxed);
+        RC_LOCKED_PROTO.store(0, Ordering::Relaxed);
+        RC_LOCKED_BAUD.store(0, Ordering::Relaxed);
+        RC_SCAN_STATE.store(1, Ordering::Relaxed);
+    }
+
+    fn drain_parser_crc_errors(p: &mut PortParsers, track_locked: &mut u32) {
+        let errs = p
+            .crsf
+            .take_crc_errors()
+            .saturating_add(p.mav.take_crc_errors());
+        if errs > 0 {
+            RC_CRC_ERRORS.fetch_add(errs, Ordering::Relaxed);
+            *track_locked = track_locked.saturating_add(errs);
+        }
+    }
+
+    /// Feed a chunk received during scan into one port's parsers; returns `Some(ScanHit)`
+    /// once a CRC-validated CRSF or MAVLink RC/Heartbeat frame is recognized.
+    fn feed_scan_chunk(
+        port: usize,
+        baud: u32,
+        data: &[u8],
+        parsers: &mut PortParsers,
+        usart1_cobs: &mut CobsRxFeed,
+        allow_cobs: bool,
+    ) -> Option<ScanHit> {
+        RC_UART_RX_BYTES[port].fetch_add(data.len() as u32, Ordering::Relaxed);
+        let mut hit: Option<ScanHit> = None;
+
+        for &b in data {
+            if port == 1 && allow_cobs {
+                usart1_cobs.feed_byte(b);
+            }
+
+            if let Some(evt) = parsers.crsf.feed(b) {
+                match evt {
+                    CrsfEvent::RcChannelsPacked(rc) | CrsfEvent::SubsetRcChannels(rc) => {
+                        let h = hit.get_or_insert(ScanHit {
+                            port,
+                            proto: LockedProto::Crsf,
+                            baud,
+                            init_rc: None,
+                            init_link: None,
+                            saw_failsafe: false,
+                        });
+                        if h.proto == LockedProto::Crsf {
+                            h.init_rc = Some(rc);
+                        }
+                    }
+                    CrsfEvent::LinkStatistics(ls) | CrsfEvent::LinkStatisticsTx(ls) => {
+                        let h = hit.get_or_insert(ScanHit {
+                            port,
+                            proto: LockedProto::Crsf,
+                            baud,
+                            init_rc: None,
+                            init_link: None,
+                            saw_failsafe: false,
+                        });
+                        if h.proto == LockedProto::Crsf {
+                            h.init_link = Some(ls);
+                        }
+                    }
+                    CrsfEvent::SpeedProposal { .. } | CrsfEvent::Other { .. } => {}
+                }
+            }
+
+            if let Some(evt) = parsers.mav.feed(b) {
+                match evt {
+                    MavlinkRcEvent::RcChannels(rc) => {
+                        let h = hit.get_or_insert(ScanHit {
+                            port,
+                            proto: LockedProto::Mavlink,
+                            baud,
+                            init_rc: None,
+                            init_link: None,
+                            saw_failsafe: false,
+                        });
+                        if h.proto == LockedProto::Mavlink {
+                            h.init_rc = Some(rc);
+                            h.saw_failsafe = false;
+                        }
+                    }
+                    MavlinkRcEvent::LinkStats(ls) => {
+                        let h = hit.get_or_insert(ScanHit {
+                            port,
+                            proto: LockedProto::Mavlink,
+                            baud,
+                            init_rc: None,
+                            init_link: None,
+                            saw_failsafe: false,
+                        });
+                        if h.proto == LockedProto::Mavlink {
+                            h.init_link = Some(ls);
+                        }
+                    }
+                    MavlinkRcEvent::Failsafe => {
+                        let h = hit.get_or_insert(ScanHit {
+                            port,
+                            proto: LockedProto::Mavlink,
+                            baud,
+                            init_rc: None,
+                            init_link: None,
+                            saw_failsafe: false,
+                        });
+                        if h.proto == LockedProto::Mavlink {
+                            h.saw_failsafe = true;
+                        }
+                    }
+                    MavlinkRcEvent::Heartbeat { .. } => {
+                        hit.get_or_insert(ScanHit {
+                            port,
+                            proto: LockedProto::Mavlink,
+                            baud,
+                            init_rc: None,
+                            init_link: None,
+                            saw_failsafe: false,
+                        });
+                    }
+                    MavlinkRcEvent::Other { .. } => {}
+                }
+            }
+        }
+
+        let mut dummy = 0u32;
+        drain_parser_crc_errors(parsers, &mut dummy);
+        hit
+    }
+
+    async fn flush_and_prepare_uarts(
+        uarts: &mut [RcUart; 5],
+        parsers: &mut [PortParsers; 5],
+        baud: u32,
+        send_hb: bool,
+        armed: bool,
+        hb_seq: u8,
+    ) {
+        let mut trash = [0u8; 64];
+        let (hb, hb_len) = encode_heartbeat_v2(hb_seq, 1, 1, armed);
+        for idx in 0..5 {
+            let _ = uarts[idx].set_baudrate(baud);
+            while let Ok(Ok(n)) =
+                with_timeout(Duration::from_millis(2), uarts[idx].read(&mut trash)).await
+            {
+                if n == 0 {
+                    break;
+                }
+            }
+            parsers[idx].reset_for_probe();
+            if send_hb {
+                let _ = with_timeout(
+                    Duration::from_millis(4),
+                    uarts[idx].write_all(&hb[..hb_len]),
+                )
+                .await;
+            }
+        }
+    }
+
+    async fn scan_for_rc_link(
+        uarts: &mut [RcUart; 5],
+        parsers: &mut [PortParsers; 5],
+        usart1_cobs: &mut CobsRxFeed,
+        armed: bool,
+    ) -> ScanHit {
+        clear_lock_state();
+        let mut b0 = [0u8; 64];
+        let mut b1 = [0u8; 64];
+        let mut b2 = [0u8; 64];
+        let mut b3 = [0u8; 64];
+        let mut b4 = [0u8; 64];
+        let mut hb_seq: u8 = 0;
+
+        loop {
+            for &(baud, window_ms, send_hb) in &SCAN_PROFILES {
+                if RC_RESCAN_REQ.swap(false, Ordering::AcqRel) {
+                    reset_diag_counters();
+                }
+
+                flush_and_prepare_uarts(uarts, parsers, baud, send_hb, armed, hb_seq).await;
+                if send_hb {
+                    hb_seq = hb_seq.wrapping_add(1);
+                }
+                let deadline = Instant::now() + Duration::from_millis(window_ms);
+                let allow_cobs = baud == 460_800;
+
+                loop {
+                    let now = Instant::now();
+                    if now >= deadline {
+                        break;
+                    }
+                    let [u0, u1, u2, u3, u4] = uarts;
+                    let ev = select6(
+                        u0.read(&mut b0),
+                        u1.read(&mut b1),
+                        u2.read(&mut b2),
+                        u3.read(&mut b3),
+                        u4.read(&mut b4),
+                        Timer::at(deadline),
+                    )
+                    .await;
+
+                    let chunk: Option<(usize, &[u8])> = match ev {
+                        Either6::First(Ok(n)) if n > 0 => Some((0, &b0[..n])),
+                        Either6::Second(Ok(n)) if n > 0 => Some((1, &b1[..n])),
+                        Either6::Third(Ok(n)) if n > 0 => Some((2, &b2[..n])),
+                        Either6::Fourth(Ok(n)) if n > 0 => Some((3, &b3[..n])),
+                        Either6::Fifth(Ok(n)) if n > 0 => Some((4, &b4[..n])),
+                        Either6::Sixth(()) => break,
+                        _ => None,
+                    };
+
+                    if let Some((port, data)) = chunk
+                        && let Some(hit) = feed_scan_chunk(
+                            port,
+                            baud,
+                            data,
+                            &mut parsers[port],
+                            usart1_cobs,
+                            allow_cobs,
+                        )
+                    {
+                        return hit;
+                    }
+
+                    if RC_RESCAN_REQ.swap(false, Ordering::AcqRel) {
+                        reset_diag_counters();
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    fn split_locked_and_usart1(
+        uarts: &mut [RcUart; 5],
+        locked_idx: usize,
+    ) -> (&mut RcUart, Option<&mut RcUart>) {
+        if locked_idx == 1 {
+            (&mut uarts[1], None)
+        } else if locked_idx < 1 {
+            let (left, right) = uarts.split_at_mut(1);
+            (&mut left[locked_idx], Some(&mut right[0]))
+        } else {
+            let (left, right) = uarts.split_at_mut(locked_idx);
+            (&mut right[0], Some(&mut left[1]))
+        }
+    }
+
+    async fn send_crsf_telemetry(uart: &mut RcUart, st: &mut LockedSessionState) {
+        let idx = st.crsf_telem_idx % 3;
+        st.crsf_telem_idx = st.crsf_telem_idx.wrapping_add(1);
+        let encoded = match idx {
+            0 => Some(encode_heartbeat_frame()),
+            1 => {
+                if let Some(ref mut sub) = st.attitude_sub
+                    && let Some(att) = sub.try_next_message_pure()
+                {
+                    let (roll, pitch, yaw) = att.orientation.euler_angles();
+                    Some(encode_attitude_frame(pitch, roll, yaw))
+                } else {
+                    None
+                }
+            }
+            _ => Some(encode_flight_mode_frame(b"ACRO")),
+        };
+        if let Some((frame, len)) = encoded {
+            let _ = with_timeout(Duration::from_millis(4), uart.write_all(&frame[..len])).await;
+        }
+    }
+
+    fn apply_link_event(
+        arm: &mut ArmStateMachine,
+        now: Instant,
+        stats: &LinkStatistics,
+        st: &mut LockedSessionState,
+    ) {
+        RC_LINK_FRAMES.fetch_add(1, Ordering::Relaxed);
+        let link = publish_rc_link(
+            arm,
+            now,
+            stats.rssi_dbm,
+            stats.link_quality,
+            stats.snr,
+            stats.rf_mode,
+        );
+        st.last_known_link = Some(link);
+        st.last_link_refresh = now;
+        st.last_activity = now;
+        st.locked_crc_errors = 0;
+    }
+
+    fn apply_rc_event(
+        arm: &mut ArmStateMachine,
+        now: Instant,
+        rc: &RcChannels,
+        st: &mut LockedSessionState,
+    ) {
+        RC_VALID_FRAMES.fetch_add(1, Ordering::Relaxed);
+        publish_rc_channels(arm, now, rc.channels, rc.channel_count);
+        st.last_rc = Some(now);
+        st.last_activity = now;
+        st.locked_crc_errors = 0;
+    }
+
+    fn apply_failsafe_event(arm: &mut ArmStateMachine, now: Instant, st: &mut LockedSessionState) {
+        let link = publish_rc_link(arm, now, -120, 0, 0, 0);
+        st.last_known_link = Some(link);
+        st.last_link_refresh = now;
+        st.last_activity = now;
+        st.locked_crc_errors = 0;
+    }
+
+    async fn handle_locked_rx(
+        hit_proto: LockedProto,
+        port: usize,
+        data: &[u8],
+        uart: &mut RcUart,
+        parser: &mut PortParsers,
+        arm: &mut ArmStateMachine,
+        st: &mut LockedSessionState,
+    ) {
+        RC_UART_RX_BYTES[port].fetch_add(data.len() as u32, Ordering::Relaxed);
+        let now = Instant::now();
+
+        match hit_proto {
+            LockedProto::Crsf => {
+                for &b in data {
+                    if let Some(evt) = parser.crsf.feed(b) {
+                        match evt {
+                            CrsfEvent::RcChannelsPacked(rc) | CrsfEvent::SubsetRcChannels(rc) => {
+                                apply_rc_event(arm, now, &rc, st);
+                                send_crsf_telemetry(uart, st).await;
+                            }
+                            CrsfEvent::LinkStatistics(ls) | CrsfEvent::LinkStatisticsTx(ls) => {
+                                apply_link_event(arm, now, &ls, st);
+                            }
+                            CrsfEvent::SpeedProposal { port_id, .. } => {
+                                let (frame, len) = encode_speed_response_frame(port_id, false);
+                                let _ = with_timeout(
+                                    Duration::from_millis(4),
+                                    uart.write_all(&frame[..len]),
+                                )
+                                .await;
+                            }
+                            CrsfEvent::Other { .. } => {}
+                        }
+                    }
+                }
+            }
+            LockedProto::Mavlink => {
+                for &b in data {
+                    if let Some(evt) = parser.mav.feed(b) {
+                        match evt {
+                            MavlinkRcEvent::RcChannels(rc) => {
+                                apply_rc_event(arm, now, &rc, st);
+                            }
+                            MavlinkRcEvent::LinkStats(ls) => {
+                                apply_link_event(arm, now, &ls, st);
+                            }
+                            MavlinkRcEvent::Failsafe => {
+                                apply_failsafe_event(arm, now, st);
+                            }
+                            MavlinkRcEvent::Heartbeat { .. } => {
+                                st.last_activity = now;
+                                st.locked_crc_errors = 0;
+                            }
+                            MavlinkRcEvent::Other { .. } => {}
+                        }
+                    }
+                }
+            }
+        }
+
+        drain_parser_crc_errors(parser, &mut st.locked_crc_errors);
+    }
+
+    async fn handle_locked_tick(
+        hit_proto: LockedProto,
+        uart: &mut RcUart,
+        arm: &mut ArmStateMachine,
+        st: &mut LockedSessionState,
+    ) -> bool {
+        if RC_RESCAN_REQ.swap(false, Ordering::AcqRel) {
+            reset_diag_counters();
+            return true;
+        }
+
+        let now = Instant::now();
+
+        if hit_proto == LockedProto::Mavlink {
+            if st
+                .last_hb_tx
+                .is_none_or(|t| now.duration_since(t).as_millis() >= MAVLINK_HEARTBEAT_PERIOD_MS)
+            {
+                st.last_hb_tx = Some(now);
+                let (hb, len) = encode_heartbeat_v2(st.hb_seq, 1, 1, arm.is_armed());
+                st.hb_seq = st.hb_seq.wrapping_add(1);
+                let _ =
+                    with_timeout(Duration::from_millis(4), uart.write_all(&hb[..len])).await;
+            }
+
+            // Refresh link status every 200ms while recent MAVLink RC/HB activity exists so
+            // `ArmStateMachine`'s `link_stats_max_age_ms` (500ms) doesn't expire between 1 Hz
+            // `RADIO_STATUS` packets.
+            let active_recent =
+                now.duration_since(st.last_activity).as_millis() <= LINK_REFRESH_MAX_IDLE_MS;
+            if active_recent
+                && let Some(ref link) = st.last_known_link
+                && now.duration_since(st.last_link_refresh).as_millis() >= TICK_PERIOD_MS
+            {
+                let refreshed = publish_rc_link(
+                    arm,
+                    now,
+                    link.rssi_dbm,
+                    link.link_quality,
+                    link.snr,
+                    link.rf_mode,
+                );
+                st.last_known_link = Some(refreshed);
+                st.last_link_refresh = now;
+            }
+        }
+
+        // Auto-unlock while disarmed if stream disappears or accumulates CRC errors.
+        if !arm.is_armed() {
+            let idle_ms = now.duration_since(st.last_activity).as_millis();
+            if (idle_ms >= UNLOCK_CRC_STALE_MS && st.locked_crc_errors >= UNLOCK_CRC_MIN_ERRORS)
+                || idle_ms >= UNLOCK_SILENT_STALE_MS
+            {
+                defmt::info!(
+                    "RC auto-unlock (idle_ms={}, crc_err={})",
+                    idle_ms,
+                    st.locked_crc_errors
+                );
+                return true;
+            }
+        }
+
+        false
+    }
+
+    async fn run_locked_session(
+        hit: ScanHit,
+        uarts: &mut [RcUart; 5],
+        parser: &mut PortParsers,
+        usart1_cobs: &mut CobsRxFeed,
+        arm: &mut ArmStateMachine,
+    ) {
+        RC_LOCKED_PORT.store(hit.port as u8, Ordering::Relaxed);
+        RC_LOCKED_PROTO.store(hit.proto as u8, Ordering::Relaxed);
+        RC_LOCKED_BAUD.store(hit.baud, Ordering::Relaxed);
+        RC_SCAN_STATE.store(2, Ordering::Relaxed);
+
+        let now = Instant::now();
+        let mut st = LockedSessionState {
+            last_activity: now,
+            last_rc: None,
+            last_hb_tx: None,
+            last_link_refresh: now,
+            last_known_link: None,
+            locked_crc_errors: 0,
+            hb_seq: 0,
+            crsf_telem_idx: 0,
+            attitude_sub: super::super::VEHICLE_ATTITUDE.subscriber().ok(),
+        };
+
+        if let Some(ref rc) = hit.init_rc {
+            apply_rc_event(arm, now, rc, &mut st);
+        }
+        if let Some(ref ls) = hit.init_link {
+            apply_link_event(arm, now, ls, &mut st);
+        }
+        if hit.saw_failsafe {
+            apply_failsafe_event(arm, now, &mut st);
+        }
+
+        defmt::info!(
+            "RC locked: port={} proto={} baud={}",
+            RC_DIAG_PORT_NAMES[hit.port],
+            rc_diag_proto_name(hit.proto as u8),
+            hit.baud,
+        );
+
+        let (locked_uart, mut usart1_opt) = split_locked_and_usart1(uarts, hit.port);
+        if let Some(u1) = usart1_opt.as_deref_mut() {
+            let _ = u1.set_baudrate(460_800);
+        }
+
+        let mut ticker = Ticker::every(Duration::from_millis(TICK_PERIOD_MS));
+        let mut rx_buf = [0u8; 64];
+        let mut u1_buf = [0u8; 64];
+
+        loop {
+            match usart1_opt.as_deref_mut() {
+                Some(u1) => {
+                    match select3(
+                        locked_uart.read(&mut rx_buf),
+                        u1.read(&mut u1_buf),
+                        ticker.next(),
+                    )
+                    .await
+                    {
+                        Either3::First(Ok(n)) if n > 0 => {
+                            handle_locked_rx(
+                                hit.proto,
+                                hit.port,
+                                &rx_buf[..n],
+                                locked_uart,
+                                parser,
+                                arm,
+                                &mut st,
+                            )
+                            .await;
+                        }
+                        Either3::Second(Ok(n)) if n > 0 => {
+                            RC_UART_RX_BYTES[1].fetch_add(n as u32, Ordering::Relaxed);
+                            for &b in &u1_buf[..n] {
+                                usart1_cobs.feed_byte(b);
+                            }
+                        }
+                        Either3::Third(()) => {
+                            if handle_locked_tick(hit.proto, locked_uart, arm, &mut st).await {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                None => {
+                    match select(locked_uart.read(&mut rx_buf), ticker.next()).await {
+                        Either::First(Ok(n)) if n > 0 => {
+                            handle_locked_rx(
+                                hit.proto,
+                                hit.port,
+                                &rx_buf[..n],
+                                locked_uart,
+                                parser,
+                                arm,
+                                &mut st,
+                            )
+                            .await;
+                        }
+                        Either::Second(()) => {
+                            if handle_locked_tick(hit.proto, locked_uart, arm, &mut st).await {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
+    #[embassy_executor::task]
+    pub async fn multi_rc_task(mut uarts: [RcUart; 5]) {
+        let mut arm = ArmStateMachine::new();
+        let mut usart1_cobs = CobsRxFeed::new();
+        let mut parsers = [
+            PortParsers::new(),
+            PortParsers::new(),
+            PortParsers::new(),
+            PortParsers::new(),
+            PortParsers::new(),
+        ];
+
+        defmt::info!("Multi-UART RC auto-detect task started (USART2/USART1/UART5/UART4/USART3)");
+
+        loop {
+            let hit = scan_for_rc_link(&mut uarts, &mut parsers, &mut usart1_cobs, arm.is_armed()).await;
+            let port = hit.port;
+            run_locked_session(hit, &mut uarts, &mut parsers[port], &mut usart1_cobs, &mut arm)
+                .await;
+        }
     }
 }

@@ -19,16 +19,19 @@ pub struct RcTabState {
     /// Hysteretic state preview for the Mission / Offboard Schmitt trigger.
     pub mission_schmitt_latched: bool,
     pub status_banner: Option<(String, bool)>,
+    /// Last time `"rcdiag"` was auto-polled while connected over USB with no RC signal.
+    pub last_rcdiag_poll: Option<std::time::Instant>,
 }
 
 impl Default for RcTabState {
     fn default() -> Self {
         Self {
             stick_mode_2: true,
-            keep_rc_stream_in_bg: false,
+            keep_rc_stream_in_bg: true,
             armed_latched: false,
             mission_schmitt_latched: false,
             status_banner: None,
+            last_rcdiag_poll: None,
         }
     }
 }
@@ -148,10 +151,39 @@ pub fn show_rc_tab(
         false
     };
 
+    if is_usb
+        && !rc_live
+        && let Some(conn) = usb_conn
+    {
+        let should_poll = state
+            .last_rcdiag_poll
+            .is_none_or(|t| t.elapsed() >= std::time::Duration::from_millis(1500));
+        if should_poll {
+            conn.send_command("rcdiag");
+            state.last_rcdiag_poll = Some(std::time::Instant::now());
+        }
+    }
+
     // ── Top RC Link & Stream Controls Strip ──────────────────────────────
     ui.horizontal_wrapped(|ui| {
+        let proto_label = if let Some(d) = &telem.rc_diag {
+            if d.proto != "none" {
+                format!(
+                    "Proto: {} ({} @ {})",
+                    d.proto.to_ascii_uppercase(),
+                    d.port,
+                    d.baud
+                )
+            } else if d.state == "SCAN" {
+                "Proto: AUTO-SCAN".to_string()
+            } else {
+                format!("Proto: {}", rc_proto.to_ascii_uppercase())
+            }
+        } else {
+            format!("Proto: {}", rc_proto.to_ascii_uppercase())
+        };
         ui.label(
-            RichText::new(format!("Protocol: {}", rc_proto.to_ascii_uppercase()))
+            RichText::new(proto_label)
                 .strong()
                 .color(Color32::from_rgb(255, 185, 70)),
         );
@@ -178,7 +210,7 @@ pub fn show_rc_tab(
         } else {
             ui.colored_label(
                 Color32::from_rgb(175, 182, 195),
-                "○ Waiting for RC Receiver Frames (turn on Transmitter)",
+                "○ Waiting for RC Frames (turn on TX)",
             );
         }
 
@@ -189,12 +221,12 @@ pub fn show_rc_tab(
             Color32::from_rgb(255, 165, 70)
         };
         ui.colored_label(lq_col, format!("LQ: {}%", telem.rc_lq_pct));
-        ui.monospace(format!(
-            "RSSI: {} dBm | SNR: {:+} dB | RF: {}",
-            telem.rc_rssi_dbm, telem.rc_snr_db, telem.rc_rf_mode
-        ));
+        ui.monospace(format!("RSSI: {} dBm", telem.rc_rssi_dbm));
+        ui.monospace(format!("SNR: {:+} dB", telem.rc_snr_db));
+        ui.monospace(format!("RF: {}", telem.rc_rf_mode));
+    });
 
-        ui.separator();
+    ui.horizontal_wrapped(|ui| {
         ui.selectable_value(&mut state.stick_mode_2, true, "Mode 2");
         ui.selectable_value(&mut state.stick_mode_2, false, "Mode 1");
 
@@ -204,14 +236,24 @@ pub fn show_rc_tab(
                 &mut state.keep_rc_stream_in_bg,
                 "Keep RC stream on in other tabs",
             );
-            if let Some(conn) = usb_conn
-                && ui
+            if let Some(conn) = usb_conn {
+                if ui
                     .button("↻ Re-enable RC Stream")
                     .on_hover_text("Sends `stream rc on` and `stream rcstats on` to FC")
                     .clicked()
-            {
-                conn.send_command("stream rc on");
-                conn.send_command("stream rcstats on");
+                {
+                    conn.send_command("stream rc on");
+                    conn.send_command("stream rcstats on");
+                }
+                if ui
+                    .button("⟲ Rescan UARTs")
+                    .on_hover_text("Unlocks active RC UART, resets counters, and scans USART2/1/5/4/3")
+                    .clicked()
+                {
+                    conn.send_command("rcdiag rescan");
+                    conn.send_command("rcdiag");
+                    state.last_rcdiag_poll = Some(std::time::Instant::now());
+                }
             }
         }
     });
@@ -544,6 +586,43 @@ pub fn show_rc_tab(
 
             ui.label(RichText::new(headline).size(15.5).strong().color(col));
             ui.label(RichText::new(subline).small().weak());
+            if !rc_live
+                && let Some(d) = &telem.rc_diag
+            {
+                ui.add_space(3.0);
+                ui.label(
+                    RichText::new(format!(
+                        "RX Scan: {} ({} @ {} | {} bps) | RC={} Link={} CRC_err={}",
+                        d.state, d.port, d.proto, d.baud, d.rc_frames, d.link_frames, d.crc_err
+                    ))
+                    .small()
+                    .monospace()
+                    .color(Color32::from_rgb(185, 200, 220)),
+                );
+                ui.label(
+                    RichText::new(format!(
+                        "UART RX bytes — U2:{}  U1:{}  U5:{}  U4:{}  U3:{}  (VBAT {:.2} V)",
+                        d.rx_bytes[0],
+                        d.rx_bytes[1],
+                        d.rx_bytes[2],
+                        d.rx_bytes[3],
+                        d.rx_bytes[4],
+                        d.vbat_mv as f32 / 1000.0
+                    ))
+                    .small()
+                    .monospace()
+                    .color(Color32::from_rgb(165, 185, 210)),
+                );
+                if d.vbat_mv < 4500 && d.rx_bytes.iter().all(|&b| b == 0) {
+                    ui.label(
+                        RichText::new(
+                            "⚠ VBAT < 4.5V (USB only) and 0 RX bytes on all UARTs — if receiver uses a 5V BEC pad, connect LiPo.",
+                        )
+                        .small()
+                        .color(Color32::from_rgb(255, 195, 70)),
+                    );
+                }
+            }
         });
 
         ui.add_space(6.0);
@@ -1595,6 +1674,13 @@ mod tests {
         usb_standby_telem
             .build_facts
             .insert("rc_protocol".into(), "crsf".into());
+        usb_standby_telem.rc_diag = Some(crate::backend::RcDiagSnapshot {
+            state: "SCAN".into(),
+            port: "none".into(),
+            proto: "none".into(),
+            vbat_mv: 20,
+            ..Default::default()
+        });
         let usb_mode = ConnectionMode::UsbSerial {
             port_name: "/dev/cu.usbmodem0011".into(),
         };

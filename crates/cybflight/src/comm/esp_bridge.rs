@@ -33,11 +33,158 @@ use super::{FrameAccumulator, encode_frame};
 // RX task — receive uplink messages from ESP32 via DMA + idle line detection
 // ---------------------------------------------------------------------------
 
+/// Incremental COBS RX byte feeder shared by `esp_bridge_rx_task` and
+/// `multi_rc_runner` (when `USART1` is time-sliced during RC auto-scan).
+pub(crate) struct CobsRxFeed {
+    acc: FrameAccumulator,
+}
+
+impl CobsRxFeed {
+    pub fn new() -> Self {
+        Self {
+            acc: FrameAccumulator::new(),
+        }
+    }
+
+    pub fn feed_byte(&mut self, b: u8) {
+        if let Some(len) = self.acc.feed(b) {
+            let frame = &self.acc.data()[..len];
+            if len < wire::FRAME_HEADER_SIZE {
+                return;
+            }
+            let msg_id = frame[0];
+            // frame[1] is seq — ignored for now
+            let payload = &frame[wire::FRAME_HEADER_SIZE..len];
+
+            match msg_id {
+                wire::msg_id::POSE => {
+                    if let Some(wp) = WirePose::from_bytes(payload) {
+                        let rx_time = embassy_time::Instant::now();
+                        sensors::VICON_POSE
+                            .immediate_publisher()
+                            .publish_immediate(wp.to_vicon_pose(rx_time));
+                    }
+                }
+                wire::msg_id::TIME_SYNC => {
+                    if let Some(ts) = WireTimeSync::from_bytes(payload) {
+                        let rx_time = embassy_time::Instant::now();
+                        super::time_sync::process_time_sync(
+                            rx_time,
+                            ts.esp_send_ntp_us,
+                            ts.prev_tx_complete_ntp_us,
+                        );
+                    }
+                }
+                wire::msg_id::PING_RESP => {
+                    if let Some(pr) = WirePingResp::from_bytes(payload) {
+                        let rx_time = embassy_time::Instant::now();
+                        super::time_sync::process_ping_resp(
+                            rx_time,
+                            pr.stm32_send_us,
+                            pr.gs_recv_time_us,
+                            pr.gs_send_time_us,
+                        );
+                    }
+                }
+                wire::msg_id::FLEET_STATE => {
+                    if let Some(fs) = WireFleetState::from_bytes(payload) {
+                        let rx_time = embassy_time::Instant::now();
+                        let states = NeighborStates::from_wire(&fs, rx_time);
+                        sensors::NEIGHBOR_STATES.sender().send(states);
+                    }
+                }
+                wire::msg_id::ATTITUDE_CONTROL_SETPOINT => {
+                    if control::OFFBOARD_ACTIVE.load(core::sync::atomic::Ordering::Acquire)
+                        && let Some(w) = WireAttitudeControlSetpoint::from_bytes(payload)
+                    {
+                        let thrust = w.collective_thrust_n;
+                        let q = w.attitude_quaternion;
+                        let rate = w.body_rate_rad_s;
+                        let torque = w.torque_n_m;
+                        if thrust.is_finite()
+                            && thrust >= 0.0
+                            && q.iter().all(|v| v.is_finite())
+                            && rate.iter().all(|v| v.is_finite())
+                            && torque.iter().all(|v| v.is_finite())
+                        {
+                            let quat = nalgebra::Quaternion::new(q[3], q[0], q[1], q[2]);
+                            let attitude_quaternion = if quat.norm_squared() > 1e-6 {
+                                nalgebra::UnitQuaternion::from_quaternion(quat)
+                            } else {
+                                nalgebra::UnitQuaternion::identity()
+                            };
+                            control::RATE_COMMAND.signal(
+                                cybflight_msgs::AttitudeControlSetpoint {
+                                    timestamp: embassy_time::Instant::now(),
+                                    collective_thrust_n: thrust,
+                                    attitude_quaternion,
+                                    body_rate_rad_s: nalgebra::Vector3::new(
+                                        rate[0], rate[1], rate[2],
+                                    ),
+                                    torque_n_m: nalgebra::Vector3::new(
+                                        torque[0], torque[1], torque[2],
+                                    ),
+                                },
+                            );
+                        }
+                    }
+                }
+                wire::msg_id::MANUAL_CONTROL_SETPOINT => {
+                    if control::OFFBOARD_ACTIVE.load(core::sync::atomic::Ordering::Acquire)
+                        && let Some(w) = WireManualControlSetpoint::from_bytes(payload)
+                    {
+                        let thrust = w.thrust;
+                        let rr = w.roll_rate;
+                        let pr = w.pitch_rate;
+                        let yr = w.yaw_rate;
+                        if thrust.is_finite()
+                            && thrust >= 0.0
+                            && rr.is_finite()
+                            && pr.is_finite()
+                            && yr.is_finite()
+                        {
+                            control::RATE_COMMAND.signal(
+                                cybflight_msgs::AttitudeControlSetpoint {
+                                    timestamp: embassy_time::Instant::now(),
+                                    collective_thrust_n: thrust,
+                                    attitude_quaternion: nalgebra::UnitQuaternion::identity(),
+                                    body_rate_rad_s: nalgebra::Vector3::new(rr, pr, yr),
+                                    torque_n_m: nalgebra::Vector3::zeros(),
+                                },
+                            );
+                        }
+                    }
+                }
+                wire::msg_id::ACTUATOR_MOTORS => {
+                    if control::OFFBOARD_ACTIVE.load(core::sync::atomic::Ordering::Acquire)
+                        && let Some(w) = WireActuatorMotors::from_bytes(payload)
+                    {
+                        let cmds = w.motor_commands;
+                        if cmds.iter().all(|v| v.is_finite() && (0.0..=1.0).contains(v)) {
+                            let now = embassy_time::Instant::now();
+                            control::DIRECT_MOTOR_COMMAND.signal(cybflight_msgs::ActuatorMotors {
+                                timestamp: now,
+                                motor_commands: [
+                                    cybflight_msgs::NormalizedThrottle::new_saturating(cmds[0]),
+                                    cybflight_msgs::NormalizedThrottle::new_saturating(cmds[1]),
+                                    cybflight_msgs::NormalizedThrottle::new_saturating(cmds[2]),
+                                    cybflight_msgs::NormalizedThrottle::new_saturating(cmds[3]),
+                                ],
+                            });
+                        }
+                    }
+                }
+                _ => {
+                    defmt::warn!("ESP bridge: unknown msg_id={}", msg_id);
+                }
+            }
+        }
+    }
+}
+
 #[embassy_executor::task]
 pub async fn esp_bridge_rx_task(mut rx: UartRx<'static, crate::hal::mode::Async>) {
-    let pose_pub = sensors::VICON_POSE.immediate_publisher();
-    let neighbor_tx = sensors::NEIGHBOR_STATES.sender();
-    let mut acc = FrameAccumulator::new();
+    let mut cobs = CobsRxFeed::new();
     let mut read_buf = [0u8; 128];
 
     defmt::info!("ESP bridge RX task started (DMA)");
@@ -46,155 +193,7 @@ pub async fn esp_bridge_rx_task(mut rx: UartRx<'static, crate::hal::mode::Async>
         match rx.read_until_idle(&mut read_buf).await {
             Ok(n) => {
                 for &b in &read_buf[..n] {
-                    if let Some(len) = acc.feed(b) {
-                        let frame = &acc.data()[..len];
-                        if len < wire::FRAME_HEADER_SIZE {
-                            continue;
-                        }
-                        let msg_id = frame[0];
-                        // frame[1] is seq — ignored for now
-                        let payload = &frame[wire::FRAME_HEADER_SIZE..len];
-
-                        match msg_id {
-                            wire::msg_id::POSE => {
-                                if let Some(wp) = WirePose::from_bytes(payload) {
-                                    let rx_time = embassy_time::Instant::now();
-                                    pose_pub.publish_immediate(wp.to_vicon_pose(rx_time));
-                                }
-                            }
-                            wire::msg_id::TIME_SYNC => {
-                                if let Some(ts) = WireTimeSync::from_bytes(payload) {
-                                    let rx_time = embassy_time::Instant::now();
-                                    super::time_sync::process_time_sync(
-                                        rx_time,
-                                        ts.esp_send_ntp_us,
-                                        ts.prev_tx_complete_ntp_us,
-                                    );
-                                }
-                            }
-                            wire::msg_id::PING_RESP => {
-                                if let Some(pr) = WirePingResp::from_bytes(payload) {
-                                    let rx_time = embassy_time::Instant::now();
-                                    super::time_sync::process_ping_resp(
-                                        rx_time,
-                                        pr.stm32_send_us,
-                                        pr.gs_recv_time_us,
-                                        pr.gs_send_time_us,
-                                    );
-                                }
-                            }
-                            wire::msg_id::FLEET_STATE => {
-                                if let Some(fs) = WireFleetState::from_bytes(payload) {
-                                    let rx_time = embassy_time::Instant::now();
-                                    let states = NeighborStates::from_wire(&fs, rx_time);
-                                    neighbor_tx.send(states);
-                                }
-                            }
-                            wire::msg_id::ATTITUDE_CONTROL_SETPOINT => {
-                                if control::OFFBOARD_ACTIVE
-                                    .load(core::sync::atomic::Ordering::Acquire)
-                                {
-                                    if let Some(w) =
-                                        WireAttitudeControlSetpoint::from_bytes(payload)
-                                    {
-                                        let thrust = w.collective_thrust_n;
-                                        let q = w.attitude_quaternion;
-                                        let rate = w.body_rate_rad_s;
-                                        let torque = w.torque_n_m;
-                                        if thrust.is_finite()
-                                            && thrust >= 0.0
-                                            && q.iter().all(|v| v.is_finite())
-                                            && rate.iter().all(|v| v.is_finite())
-                                            && torque.iter().all(|v| v.is_finite())
-                                        {
-                                            let quat =
-                                                nalgebra::Quaternion::new(q[3], q[0], q[1], q[2]);
-                                            let attitude_quaternion = if quat.norm_squared() > 1e-6
-                                            {
-                                                nalgebra::UnitQuaternion::from_quaternion(quat)
-                                            } else {
-                                                nalgebra::UnitQuaternion::identity()
-                                            };
-                                            control::RATE_COMMAND.signal(
-                                                cybflight_msgs::AttitudeControlSetpoint {
-                                                    timestamp: embassy_time::Instant::now(),
-                                                    collective_thrust_n: thrust,
-                                                    attitude_quaternion,
-                                                    body_rate_rad_s: nalgebra::Vector3::new(
-                                                        rate[0], rate[1], rate[2],
-                                                    ),
-                                                    torque_n_m: nalgebra::Vector3::new(
-                                                        torque[0], torque[1], torque[2],
-                                                    ),
-                                                },
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                            wire::msg_id::MANUAL_CONTROL_SETPOINT => {
-                                if control::OFFBOARD_ACTIVE
-                                    .load(core::sync::atomic::Ordering::Acquire)
-                                {
-                                    if let Some(w) = WireManualControlSetpoint::from_bytes(payload)
-                                    {
-                                        let thrust = w.thrust;
-                                        let rr = w.roll_rate;
-                                        let pr = w.pitch_rate;
-                                        let yr = w.yaw_rate;
-                                        if thrust.is_finite()
-                                            && thrust >= 0.0
-                                            && rr.is_finite()
-                                            && pr.is_finite()
-                                            && yr.is_finite()
-                                        {
-                                            control::RATE_COMMAND.signal(
-                                                cybflight_msgs::AttitudeControlSetpoint {
-                                                    timestamp: embassy_time::Instant::now(),
-                                                    collective_thrust_n: thrust,
-                                                    attitude_quaternion:
-                                                        nalgebra::UnitQuaternion::identity(),
-                                                    body_rate_rad_s: nalgebra::Vector3::new(
-                                                        rr, pr, yr,
-                                                    ),
-                                                    torque_n_m: nalgebra::Vector3::zeros(),
-                                                },
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                            wire::msg_id::ACTUATOR_MOTORS => {
-                                if control::OFFBOARD_ACTIVE
-                                    .load(core::sync::atomic::Ordering::Acquire)
-                                {
-                                    if let Some(w) = WireActuatorMotors::from_bytes(payload) {
-                                        let cmds = w.motor_commands;
-                                        if cmds
-                                            .iter()
-                                            .all(|v| v.is_finite() && (0.0..=1.0).contains(v))
-                                        {
-                                            let now = embassy_time::Instant::now();
-                                            control::DIRECT_MOTOR_COMMAND.signal(
-                                                cybflight_msgs::ActuatorMotors {
-                                                    timestamp: now,
-                                                    motor_commands: [
-                                                        cybflight_msgs::NormalizedThrottle::new_saturating(cmds[0]),
-                                                        cybflight_msgs::NormalizedThrottle::new_saturating(cmds[1]),
-                                                        cybflight_msgs::NormalizedThrottle::new_saturating(cmds[2]),
-                                                        cybflight_msgs::NormalizedThrottle::new_saturating(cmds[3]),
-                                                    ],
-                                                },
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                            _ => {
-                                defmt::warn!("ESP bridge: unknown msg_id={}", msg_id);
-                            }
-                        }
-                    }
+                    cobs.feed_byte(b);
                 }
             }
             Err(_) => {

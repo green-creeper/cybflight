@@ -49,8 +49,10 @@ use hal::spi::{self, Spi};
 use hal::time::Hertz;
 use hal::timer::low_level::Timer as LLTimer;
 
-// Buffered serial UARTs used as role candidates (SerialRx / GPS).
+// Buffered serial UARTs used as role candidates (SerialRx / GPS / Multi-UART RC).
 hal::bind_interrupts!(struct SerialIrqs {
+    #[cfg(feature = "rx_crsf")]
+    USART1 => hal::usart::BufferedInterruptHandler<hal::peripherals::USART1>;
     USART2 => hal::usart::BufferedInterruptHandler<hal::peripherals::USART2>;
     USART3 => hal::usart::BufferedInterruptHandler<hal::peripherals::USART3>;
     UART4  => hal::usart::BufferedInterruptHandler<hal::peripherals::UART4>;
@@ -64,7 +66,8 @@ hal::bind_interrupts!(struct I2c1Irqs {
     I2C1_ER => hal::i2c::ErrorInterruptHandler<hal::peripherals::I2C1>;
 });
 
-// USART1 interrupt for Offboard / ESP bridge (DMA UART).
+// USART1 interrupt for Offboard / ESP bridge (DMA UART) when not scanned by multi_rc_task.
+#[cfg(not(feature = "rx_crsf"))]
 hal::bind_interrupts!(struct Usart1Irqs {
     USART1 => hal::usart::InterruptHandler<hal::peripherals::USART1>;
 });
@@ -252,99 +255,119 @@ pub async fn init(
     }
 
     let _ = &ctrl_spawner;
-    static TX_BUF: StaticCell<[u8; 256]> = StaticCell::new();
-    static RX_BUF: StaticCell<[u8; 256]> = StaticCell::new();
-    let tx_buf = &mut TX_BUF.init([0u8; 256])[..];
-    let rx_buf = &mut RX_BUF.init([0u8; 256])[..];
-    let mut rc_uart_cfg = hal::usart::Config::default();
-    rc_uart_cfg.baudrate = 420_000;
-    rc_uart_cfg.rx_pull = hal::gpio::Pull::Up;
 
-    // --- SerialRx (CRSF / ELRS) ---
+    // --- SerialRx (Multi-UART auto-detecting CRSF + ELRS MAVLink2) ---
     #[cfg(feature = "rx_crsf")]
-    match bsp::PORT_SERIAL_RX {
-        bsp::SerialPortId::Usart2 => {
-            match hal::usart::BufferedUart::new(
-                board.serial.usart2,
-                board.serial.usart2_rx,
-                board.serial.usart2_tx,
-                tx_buf,
-                rx_buf,
-                SerialIrqs,
-                rc_uart_cfg,
-            ) {
-                Ok(uart) => {
-                    defmt::info!("CRSF USART2 init OK (T2=PD5, R2=PD6)");
-                    ctrl_spawner
-                        .spawn(crate::sensors::rc::crsf_runner::crsf_task(uart))
-                        .unwrap_or_else(|e| defmt::error!("Failed to spawn CRSF task: {}", e));
-                }
-                Err(e) => defmt::error!("CRSF USART2 init failed: {}", e),
+    {
+        static RC_TX_BUFS: StaticCell<[[u8; 256]; 5]> = StaticCell::new();
+        static RC_RX_BUFS: StaticCell<[[u8; 256]; 5]> = StaticCell::new();
+        let tx_bufs = RC_TX_BUFS.init([[0u8; 256]; 5]);
+        let rx_bufs = RC_RX_BUFS.init([[0u8; 256]; 5]);
+        let [tx0, tx1, tx2, tx3, tx4] = tx_bufs;
+        let [rx0, rx1, rx2, rx3, rx4] = rx_bufs;
+
+        let mut rc_uart_cfg = hal::usart::Config::default();
+        rc_uart_cfg.baudrate = 460_800;
+        rc_uart_cfg.rx_pull = hal::gpio::Pull::Up;
+
+        // Exact index order matching `sensors::rc::RC_DIAG_PORT_NAMES`:
+        // [0] USART2 (PD5/PD6), [1] USART1 (PA9/PA10), [2] UART5 (PC12/PD2),
+        // [3] UART4 (PA0/PA1),  [4] USART3 (PB10/PB11).
+        let u2 = hal::usart::BufferedUart::new(
+            board.serial.usart2,
+            board.serial.usart2_rx,
+            board.serial.usart2_tx,
+            &mut tx0[..],
+            &mut rx0[..],
+            SerialIrqs,
+            rc_uart_cfg,
+        );
+        let u1 = hal::usart::BufferedUart::new(
+            board.serial.usart1,
+            board.serial.usart1_rx,
+            board.serial.usart1_tx,
+            &mut tx1[..],
+            &mut rx1[..],
+            SerialIrqs,
+            rc_uart_cfg,
+        );
+        let u5 = hal::usart::BufferedUart::new(
+            board.serial.uart5,
+            board.serial.uart5_rx,
+            board.serial.uart5_tx,
+            &mut tx2[..],
+            &mut rx2[..],
+            SerialIrqs,
+            rc_uart_cfg,
+        );
+        let u4 = hal::usart::BufferedUart::new(
+            board.serial.uart4,
+            board.serial.uart4_rx,
+            board.serial.uart4_tx,
+            &mut tx3[..],
+            &mut rx3[..],
+            SerialIrqs,
+            rc_uart_cfg,
+        );
+        let u3 = hal::usart::BufferedUart::new(
+            board.serial.usart3,
+            board.serial.usart3_rx,
+            board.serial.usart3_tx,
+            &mut tx4[..],
+            &mut rx4[..],
+            SerialIrqs,
+            rc_uart_cfg,
+        );
+
+        match (u2, u1, u5, u4, u3) {
+            (Ok(u2), Ok(u1), Ok(u5), Ok(u4), Ok(u3)) => {
+                defmt::info!(
+                    "Multi-UART RC init OK: USART2, USART1, UART5, UART4, USART3 @ 460800 initial"
+                );
+                ctrl_spawner
+                    .spawn(crate::sensors::rc::multi_rc_runner::multi_rc_task([
+                        u2, u1, u5, u4, u3,
+                    ]))
+                    .unwrap_or_else(|e| defmt::error!("Failed to spawn multi_rc task: {}", e));
+            }
+            _ => {
+                defmt::error!("Multi-UART RC BufferedUart init failed on one or more ports");
             }
         }
-        bsp::SerialPortId::Uart4 => {
-            match hal::usart::BufferedUart::new(
-                board.serial.uart4,
-                board.serial.uart4_rx,
-                board.serial.uart4_tx,
-                tx_buf,
-                rx_buf,
-                SerialIrqs,
-                rc_uart_cfg,
-            ) {
-                Ok(uart) => {
-                    defmt::info!("CRSF UART4 init OK (T4=PA0, R4=PA1)");
-                    ctrl_spawner
-                        .spawn(crate::sensors::rc::crsf_runner::crsf_task(uart))
-                        .unwrap_or_else(|e| defmt::error!("Failed to spawn CRSF task: {}", e));
-                }
-                Err(e) => defmt::error!("CRSF UART4 init failed: {}", e),
-            }
-        }
-        bsp::SerialPortId::Uart5 => {
-            match hal::usart::BufferedUart::new(
-                board.serial.uart5,
-                board.serial.uart5_rx,
-                board.serial.uart5_tx,
-                tx_buf,
-                rx_buf,
-                SerialIrqs,
-                rc_uart_cfg,
-            ) {
-                Ok(uart) => {
-                    defmt::info!("CRSF UART5 init OK (T5=PC12, R5=PD2)");
-                    ctrl_spawner
-                        .spawn(crate::sensors::rc::crsf_runner::crsf_task(uart))
-                        .unwrap_or_else(|e| defmt::error!("Failed to spawn CRSF task: {}", e));
-                }
-                Err(e) => defmt::error!("CRSF UART5 init failed: {}", e),
-            }
-        }
-        _ => defmt::warn!("CRSF: PORT_SERIAL_RX is not a supported SerialRx port on this board"),
     }
 
-    #[cfg(feature = "rx_ghst")]
-    match bsp::PORT_SERIAL_RX {
-        bsp::SerialPortId::Usart2 => {
-            match hal::usart::BufferedUart::new_half_duplex(
-                board.serial.usart2,
-                board.serial.usart2_tx,
-                SerialIrqs,
-                tx_buf,
-                rx_buf,
-                rc_uart_cfg,
-                hal::usart::HalfDuplexReadback::NoReadback,
-            ) {
-                Ok(uart) => {
-                    defmt::info!("GHST USART2 half-duplex init OK (T2=PD5)");
-                    ctrl_spawner
-                        .spawn(crate::sensors::rc::ghst_runner::ghst_task(uart))
-                        .unwrap_or_else(|e| defmt::error!("Failed to spawn GHST task: {}", e));
+    #[cfg(all(feature = "rx_ghst", not(feature = "rx_crsf")))]
+    {
+        static TX_BUF: StaticCell<[u8; 256]> = StaticCell::new();
+        static RX_BUF: StaticCell<[u8; 256]> = StaticCell::new();
+        let tx_buf = &mut TX_BUF.init([0u8; 256])[..];
+        let rx_buf = &mut RX_BUF.init([0u8; 256])[..];
+        let mut rc_uart_cfg = hal::usart::Config::default();
+        rc_uart_cfg.baudrate = 420_000;
+        rc_uart_cfg.rx_pull = hal::gpio::Pull::Up;
+
+        match bsp::PORT_SERIAL_RX {
+            bsp::SerialPortId::Usart2 => {
+                match hal::usart::BufferedUart::new_half_duplex(
+                    board.serial.usart2,
+                    board.serial.usart2_tx,
+                    SerialIrqs,
+                    tx_buf,
+                    rx_buf,
+                    rc_uart_cfg,
+                    hal::usart::HalfDuplexReadback::NoReadback,
+                ) {
+                    Ok(uart) => {
+                        defmt::info!("GHST USART2 half-duplex init OK (T2=PD5)");
+                        ctrl_spawner
+                            .spawn(crate::sensors::rc::ghst_runner::ghst_task(uart))
+                            .unwrap_or_else(|e| defmt::error!("Failed to spawn GHST task: {}", e));
+                    }
+                    Err(e) => defmt::error!("GHST USART2 init failed: {}", e),
                 }
-                Err(e) => defmt::error!("GHST USART2 init failed: {}", e),
             }
+            _ => defmt::warn!("GHST: PORT_SERIAL_RX is not a supported SerialRx port on this board"),
         }
-        _ => defmt::warn!("GHST: PORT_SERIAL_RX is not a supported SerialRx port on this board"),
     }
 
     // --- GPS (`PORT_GPS`, default USART6 PC6/PC7) ---
@@ -375,31 +398,6 @@ pub async fn init(
                     Err(e) => {
                         GPS_HEALTH.lock(|c| c.set(GpsHealth::UartInitFailed));
                         defmt::error!("GPS USART6 init failed: {}", e);
-                    }
-                }
-            }
-            bsp::SerialPortId::Usart3 => {
-                defmt::info!("GPS: starting USART3 init (T3=PB10, R3=PB11)");
-                static GPS_TX_BUF: StaticCell<[u8; 256]> = StaticCell::new();
-                static GPS_RX_BUF: StaticCell<[u8; 1024]> = StaticCell::new();
-                let tx_buf = &mut GPS_TX_BUF.init([0u8; 256])[..];
-                let rx_buf = &mut GPS_RX_BUF.init([0u8; 1024])[..];
-                let mut uart_config = hal::usart::Config::default();
-                uart_config.baudrate = 115_200;
-                uart_config.rx_pull = hal::gpio::Pull::Up;
-                match hal::usart::BufferedUart::new(
-                    board.serial.usart3,
-                    board.serial.usart3_rx,
-                    board.serial.usart3_tx,
-                    tx_buf,
-                    rx_buf,
-                    SerialIrqs,
-                    uart_config,
-                ) {
-                    Ok(uart) => init_gps_uart(uart, spawner).await,
-                    Err(e) => {
-                        GPS_HEALTH.lock(|c| c.set(GpsHealth::UartInitFailed));
-                        defmt::error!("GPS USART3 init failed: {}", e);
                     }
                 }
             }
@@ -570,6 +568,8 @@ pub async fn init(
     }
 
     // --- Offboard / ESP bridge (`PORT_ESP_BRIDGE`, default USART1 PA9/PA10 @ 460800 baud) ---
+    // When `rx_crsf` is active, USART1 is time-sliced/monitored inside `multi_rc_task`.
+    #[cfg(not(feature = "rx_crsf"))]
     match bsp::PORT_ESP_BRIDGE {
         bsp::SerialPortId::Usart1 => {
             let mut uart_config = hal::usart::Config::default();

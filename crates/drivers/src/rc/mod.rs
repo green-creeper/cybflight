@@ -1,5 +1,6 @@
 pub mod crsf;
 pub mod ghst;
+pub mod mavlink_rc;
 
 /// Maximum number of RC channels supported.
 pub const MAX_CHANNELS: usize = 16;

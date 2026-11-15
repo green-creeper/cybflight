@@ -103,8 +103,25 @@ pub struct TelemetrySnapshot {
     pub rc_rf_mode: u8,
     /// Host timestamp when the latest `RcLinkStatus` frame arrived.
     pub rc_link_last_rx: Option<std::time::Instant>,
+    /// Multi-UART RC scanner / framing diagnostics from `rcdiag`.
+    pub rc_diag: Option<RcDiagSnapshot>,
     /// Packet/line counter from the active backend.
     pub rx_line_count: u64,
+}
+
+/// Snapshot of the firmware's `rcdiag` command output.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct RcDiagSnapshot {
+    pub state: String,
+    pub port: String,
+    pub proto: String,
+    pub baud: u32,
+    pub rc_frames: u32,
+    pub link_frames: u32,
+    pub crc_err: u32,
+    /// `[USART2, USART1, UART5, UART4, USART3]` RX byte counts.
+    pub rx_bytes: [u32; 5],
+    pub vbat_mv: u16,
 }
 
 impl Default for TelemetrySnapshot {
@@ -144,6 +161,7 @@ impl Default for TelemetrySnapshot {
             rc_snr_db: 0,
             rc_rf_mode: 0,
             rc_link_last_rx: None,
+            rc_diag: None,
             rx_line_count: 0,
         }
     }
@@ -801,6 +819,36 @@ pub fn parse_shell_line(
         return true;
     }
 
+    // 7b. RcDiag(state=..., port=..., proto=..., baud=..., rc_frames=..., link_frames=..., crc_err=..., u2=..., u1=..., u5=..., u4=..., u3=..., vbat_mv=...)
+    if let Some(rest) = line.strip_prefix("RcDiag(") {
+        telem.rc_diag = Some(RcDiagSnapshot {
+            state: extract_token_after(rest, "state=")
+                .unwrap_or("SCAN")
+                .to_string(),
+            port: extract_token_after(rest, "port=")
+                .unwrap_or("none")
+                .to_string(),
+            proto: extract_token_after(rest, "proto=")
+                .unwrap_or("none")
+                .to_string(),
+            baud: extract_u32_after(rest, "baud=").unwrap_or(0),
+            rc_frames: extract_u32_after(rest, "rc_frames=").unwrap_or(0),
+            link_frames: extract_u32_after(rest, "link_frames=").unwrap_or(0),
+            crc_err: extract_u32_after(rest, "crc_err=").unwrap_or(0),
+            rx_bytes: [
+                extract_u32_after(rest, "u2=").unwrap_or(0),
+                extract_u32_after(rest, "u1=").unwrap_or(0),
+                extract_u32_after(rest, "u5=").unwrap_or(0),
+                extract_u32_after(rest, "u4=").unwrap_or(0),
+                extract_u32_after(rest, "u3=").unwrap_or(0),
+            ],
+            vbat_mv: extract_u32_after(rest, "vbat_mv=")
+                .unwrap_or(0)
+                .min(u16::MAX as u32) as u16,
+        });
+        return true;
+    }
+
     // 8. ESKF[...] summary line
     if line.starts_with("ESKF[") {
         telem.eskf_summary = line.to_string();
@@ -894,6 +942,18 @@ fn param_section_header_name(line: &str) -> Option<&str> {
     } else {
         None
     }
+}
+
+fn extract_token_after<'a>(s: &'a str, key: &str) -> Option<&'a str> {
+    let idx = s.find(key)?;
+    let after = &s[idx + key.len()..];
+    let end = after.find([',', ')']).unwrap_or(after.len());
+    let tok = after[..end].trim();
+    if tok.is_empty() { None } else { Some(tok) }
+}
+
+fn extract_u32_after(s: &str, key: &str) -> Option<u32> {
+    extract_token_after(s, key)?.parse::<u32>().ok()
 }
 
 fn extract_f32_after(s: &str, key: &str) -> Option<f32> {
@@ -1008,6 +1068,28 @@ mod tests {
             &mut in_build,
         );
         assert!(is_rc);
+
+        let is_diag = parse_shell_line(
+            "RcDiag(state=LOCKED, port=USART2, proto=MAVLink, baud=460800, rc_frames=120, link_frames=5, crc_err=2, u2=4500, u1=12, u5=0, u4=0, u3=0, vbat_mv=7820)",
+            &mut telem,
+            &mut params,
+            &mut in_build,
+        );
+        assert!(is_diag);
+        assert_eq!(
+            telem.rc_diag,
+            Some(RcDiagSnapshot {
+                state: "LOCKED".into(),
+                port: "USART2".into(),
+                proto: "MAVLink".into(),
+                baud: 460800,
+                rc_frames: 120,
+                link_frames: 5,
+                crc_err: 2,
+                rx_bytes: [4500, 12, 0, 0, 0],
+                vbat_mv: 7820,
+            })
+        );
         assert_eq!(telem.rc_channel_count, 8);
         assert_eq!(telem.rc_channels_us[0], 1502);
         assert_eq!(telem.rc_channels_us[2], 992);

@@ -175,6 +175,8 @@ impl CybflightGsApp {
         }
         self.rc_ui.armed_latched = false;
         self.rc_ui.mission_schmitt_latched = false;
+        self.rc_ui.last_rcdiag_poll = None;
+        self.telem.rc_diag = None;
         if self.selected_port_target == "MOCK" {
             self.mock_fc =
                 MockFcBackend::from_vehicle_yaml(&self.workspace_root, &self.selected_vehicle);
@@ -191,6 +193,8 @@ impl CybflightGsApp {
             self.params_ui.status_banner = Some((msg, true));
         } else {
             self.telem.build_facts.clear();
+            self.telem.rc_diag = None;
+            self.rc_ui.last_rcdiag_poll = None;
             self.in_build_section = false;
             self.param_table.begin_fc_sync(true, true);
             match UsbSerialConnection::connect(&self.selected_port_target, true) {
@@ -227,6 +231,8 @@ impl CybflightGsApp {
         }
         self.rc_ui.armed_latched = false;
         self.rc_ui.mission_schmitt_latched = false;
+        self.rc_ui.last_rcdiag_poll = None;
+        self.telem.rc_diag = None;
         self.param_table.clear_fc_sync_state();
         self.mode = ConnectionMode::Disconnected;
         self.status_message = "Disconnected".to_string();
@@ -474,6 +480,7 @@ impl eframe::App for CybflightGsApp {
                 if self.active_tab == ActiveTab::Receiver {
                     conn.send_command("stream rc on");
                     conn.send_command("stream rcstats on");
+                    conn.send_command("rcdiag");
                 } else if prev_tab == ActiveTab::Receiver && !self.rc_ui.keep_rc_stream_in_bg {
                     conn.send_command("stream rc off");
                 }

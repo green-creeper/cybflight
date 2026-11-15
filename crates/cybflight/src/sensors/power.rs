@@ -13,7 +13,13 @@ use crate::hal;
 use crate::msgs;
 use crate::sensors::{POWER_STATUS, POWER_TELEM};
 use bsp_types::PowerCalibration;
+use core::sync::atomic::{AtomicU16, Ordering};
 use embassy_time::{Duration, Instant, Ticker};
+
+/// Latest filtered pack voltage in millivolts, updated at 100 Hz by `power_task`.
+/// Lock-free mirror so shell diagnostics (`rcdiag`) can read VBAT without using
+/// one of the bounded `POWER_STATUS` PubSub subscriber slots.
+pub static LATEST_VBAT_MV: AtomicU16 = AtomicU16::new(0);
 #[cfg(not(feature = "board_flywoof745"))]
 use hal::adc::{Adc, AdcConfig, Averaging, Resolution};
 #[cfg(feature = "board_flywoof745")]
@@ -354,6 +360,7 @@ pub async fn power_task(mut mon: PowerMonitor) -> ! {
 
         let vbat_filtered = vbat_lpf.apply(vbat_raw as f32, dt_us / 1_000_000.0);
         let voltage_cv = mon.raw_to_voltage_cv(vbat_filtered);
+        LATEST_VBAT_MV.store(voltage_cv.saturating_mul(10), Ordering::Relaxed);
         // Unfiltered twin for the blackbox only — lets a log quantify
         // the filter's lag against real sag instead of guessing.
         let voltage_raw_cv = mon.raw_to_voltage_cv(vbat_raw as f32);

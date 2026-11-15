@@ -49,6 +49,8 @@ const HELP_TEXT: &[u8] = b"\
   ocp                  one-shot OCP solver output\r\n\
   rc                   one-shot RC channel values\r\n\
   rcstats              one-shot RC link status\r\n\
+  rcdiag               RC auto-detect scanner & per-UART RX byte diagnostics\r\n\
+  rcdiag rescan        unlock RC port, zero counters, and rescan all UARTs\r\n\
   dshot                one-shot DShot telemetry\r\n\
   power                one-shot power status\r\n\
   gps                  one-shot GPS fix\r\n\
@@ -886,6 +888,12 @@ async fn dispatch<'d>(
             };
             oneshot(class, &mut sub, 128).await?;
         }
+        "rcdiag" => {
+            dispatch_rcdiag(class, false).await?;
+        }
+        "rcdiag rescan" => {
+            dispatch_rcdiag(class, true).await?;
+        }
         "attcontrol" => {
             let mut sub = match ATTITUDE_CONTROL_SETPOINT.subscriber() {
                 Ok(s) => s,
@@ -1580,6 +1588,78 @@ async fn dispatch_blackbox_set<'d>(
             .await
         }
     }
+}
+
+async fn dispatch_rcdiag<'d>(
+    class: &mut CdcAcmClass<'d, UsbDriver<'d>>,
+    rescan: bool,
+) -> Result<(), EndpointError> {
+    use crate::sensors::power::LATEST_VBAT_MV;
+    use crate::sensors::rc::{
+        LATEST_RC_INPUT, RC_CRC_ERRORS, RC_DIAG_PORT_NAMES, RC_LINK_FRAMES, RC_LOCKED_BAUD,
+        RC_LOCKED_PORT, RC_LOCKED_PROTO, RC_SCAN_STATE, RC_UART_RX_BYTES, RC_VALID_FRAMES,
+        rc_diag_proto_name, rc_diag_state_name, request_rc_rescan,
+    };
+
+    if rescan {
+        request_rc_rescan();
+        write_all(class, b"RC rescan requested\r\n").await?;
+    }
+
+    let state = rc_diag_state_name(RC_SCAN_STATE.load(Ordering::Relaxed));
+    let port_idx = RC_LOCKED_PORT.load(Ordering::Relaxed) as usize;
+    let port = RC_DIAG_PORT_NAMES.get(port_idx).copied().unwrap_or("none");
+    let proto = rc_diag_proto_name(RC_LOCKED_PROTO.load(Ordering::Relaxed));
+    let baud = RC_LOCKED_BAUD.load(Ordering::Relaxed);
+    let rc_frames = RC_VALID_FRAMES.load(Ordering::Relaxed);
+    let link_frames = RC_LINK_FRAMES.load(Ordering::Relaxed);
+    let crc_err = RC_CRC_ERRORS.load(Ordering::Relaxed);
+    let u2 = RC_UART_RX_BYTES[0].load(Ordering::Relaxed);
+    let u1 = RC_UART_RX_BYTES[1].load(Ordering::Relaxed);
+    let u5 = RC_UART_RX_BYTES[2].load(Ordering::Relaxed);
+    let u4 = RC_UART_RX_BYTES[3].load(Ordering::Relaxed);
+    let u3 = RC_UART_RX_BYTES[4].load(Ordering::Relaxed);
+    let vbat_mv = LATEST_VBAT_MV.load(Ordering::Relaxed);
+
+    let mut buf = [0u8; 256];
+    let mut w = WriteBuf::new(&mut buf);
+    let _ = write!(
+        w,
+        "RcDiag(state={}, port={}, proto={}, baud={}, rc_frames={}, link_frames={}, crc_err={}, u2={}, u1={}, u5={}, u4={}, u3={}, vbat_mv={})\r\n",
+        state, port, proto, baud, rc_frames, link_frames, crc_err, u2, u1, u5, u4, u3, vbat_mv,
+    );
+    write_all(class, w.as_slice()).await?;
+
+    let latest_rc = LATEST_RC_INPUT.lock(|c| c.borrow().clone());
+    if let Some(rc) = latest_rc {
+        let age_ms = embassy_time::Instant::now()
+            .duration_since(rc.timestamp)
+            .as_millis();
+        let mut buf2 = [0u8; 160];
+        let mut w2 = WriteBuf::new(&mut buf2);
+        let _ = write!(
+            w2,
+            "rc latest: age_ms={} ch[1..8]=[{}, {}, {}, {}, {}, {}, {}, {}]\r\n",
+            age_ms,
+            rc.channels[0],
+            rc.channels[1],
+            rc.channels[2],
+            rc.channels[3],
+            rc.channels[4],
+            rc.channels[5],
+            rc.channels[6],
+            rc.channels[7],
+        );
+        write_all(class, w2.as_slice()).await?;
+    } else if vbat_mv < 4500 && u2 == 0 && u1 == 0 && u5 == 0 && u4 == 0 && u3 == 0 {
+        write_all(
+            class,
+            b"hint: VBAT < 4.5V (USB-only) - if RX uses a 5V BEC pad, connect LiPo\r\n",
+        )
+        .await?;
+    }
+
+    Ok(())
 }
 
 /// `blackbox ls` shell renderer. Asks the blackbox task to scan the

@@ -10,7 +10,7 @@ use serialport::{SerialPort, SerialPortType};
 
 use super::DiscoveredPort;
 
-const INITIAL_STREAMS: &[&str] = &["att", "imu1", "power", "dshot", "rcstats"];
+const INITIAL_STREAMS: &[&str] = &["att", "imu1", "power", "dshot", "rc", "rcstats"];
 
 #[derive(Default, Clone, Copy)]
 struct DrainOutcome {
@@ -113,6 +113,18 @@ impl UsbSerialConnection {
                         &event_tx,
                         &stop_clone,
                     )?;
+                }
+
+                if !stop_clone.load(Ordering::Relaxed) {
+                    let _ = send_cmd_and_wait_prompt(
+                        &mut *port,
+                        "rcdiag",
+                        Duration::from_millis(250),
+                        &mut rx_buf,
+                        &mut line_acc,
+                        &event_tx,
+                        &stop_clone,
+                    );
                 }
 
                 // 4. Main interleaved I/O loop with one-command-in-flight pacing so even

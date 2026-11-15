@@ -287,16 +287,34 @@ This document records the engineering decisions, root-cause analyses, code chang
 
 ---
 
-## Final Live Hardware & Stress Verification (`Flash #8 / 67b57a5` + `Flash #9`)
+### Issue 24: Live Receiver Zero-Frames Root Cause (ELRS MAVLink2 @ 460800 + Multi-UART Auto-Scan + CRSF Sliding-Window Sync)
+- **User Symptom**: With physical RC connected and Ground Station running (`cybflight-gs`), moving sticks and flipping switches produced zero RC frames (`health` reported `rc link: active=no age_ms=0 lq=0/50`, `rc` and `rcstats` timed out).
+- **Root Cause**:
+  1. **Receiver Protocol & Port (`goku_ardu_params.params`)**: Cross-checking this physical quadrotor's ArduCopter parameters revealed **no UART was configured for CRSF (`SERIALx_PROTOCOL = 23` `RCIN`)**; instead `SERIAL1` (`USART1`) and `SERIAL2` (`USART2`) ran `460,800` baud `MAVLink2` (`RSSI_TYPE = 5` `TelemetryRadioRSSI`). ExpressLRS 3.5+ in MAVLink Link Mode outputs MAVLink2 (`0xFD` — `RADIO_RC_CHANNELS` `#420` / `RC_CHANNELS_OVERRIDE` `#70` + `RADIO_STATUS` `#109`) at `460,800` baud and expects 1 Hz FC `HEARTBEAT` (`#0`), whereas Cybflight previously listened only for CRSF (`0xC8`/`0x00`) at fixed `420,000` baud on `PORT_SERIAL_RX` (`USART2`).
+  2. **CRSF Sliding-Window Sync Bug (`crsf.rs`)**: `Crsf::read_frame` treated `0x00` (`CRSF_ADDRESS_BROADCAST`) as a sync byte and used blocking `read_exact` over `frame_len` before CRC checking, allowing mid-stream `0x00` or false `0xC8` bytes to swallow subsequent valid CRSF frames.
+  3. **Boot `Instant` Subtraction Underflow (Caught via `postmortem show`)**: Initial flash tripped an early-boot `embassy_time::Instant` subtraction panic at `uptime=426ms` (`last_hb_tx: now - Duration::from_secs(1)` in `run_locked_session` — proving the multi-UART scanner locked on `426 ms` after boot!). Fixed by changing `last_hb_tx` to `Option<Instant>`.
+- **What Was Done**:
+  - **Drivers (`crates/drivers/src/rc/mavlink_rc.rs`, `crsf.rs`, `mod.rs`)**: Implemented zero-alloc sliding-window `MavlinkRcParser` (`#0`, `#65`, `#70` with MAVLink2 trailing-zero undo, `#109`, `#420` including FAILSAFE flag) + X.25 CRC + `CRC_EXTRA` + `encode_heartbeat_v2`; extracted zero-alloc sliding-window `CrsfParser` syncing only on `0xC8 | 0xEC | 0xEE | 0xEA` + pure `encode_*` telemetry helpers + unit tests.
+  - **Firmware Multi-UART Auto-Detector & Diagnostics (`sensors/rc.rs`, `sensors/power.rs`, `comm/esp_bridge.rs`, `board_init/flywoof745.rs`, `usb_serial.rs`)**: Wired all 5 Flywoo F745 serial ports (`USART2, USART1, UART5, UART4, USART3`) to `multi_rc_task` scanning `[(460_800, 120ms, HB), (420_000, 120ms), (57_600, 100ms, HB), (115_200, 90ms), (921_600, 90ms)]`, shared `CobsRxFeed` for `USART1` offboard frames, added 1 Hz MAVLink `HEARTBEAT` TX + 200 ms `RC_LINK_STATUS` refresh between 1 Hz `RADIO_STATUS` frames + disarmed stale/CRC auto-unlock, exposed lock-free `LATEST_VBAT_MV`, and added `rcdiag` / `rcdiag rescan` shell commands.
+  - **Ground Station (`crates/cybflight_gs`)**: Added `"rc"` to `INITIAL_STREAMS`, polled/parsed `RcDiag(...)` into `RcDiagSnapshot`, defaulted `keep_rc_stream_in_bg = true`, showed detected `Proto: <PROTO> (<PORT> @ <BAUD>)` + `"⟲ Rescan UARTs"` button + inline UART RX byte & `VBAT` diagnostics inside the no-signal card in `ui/rc_tab.rs`.
+- **Outcome**:
+  - **Unit Tests & Build**: `cargo test -p cybflight-drivers --target aarch64-apple-darwin` (`31 passed, 0 failed`), `cargo test -p cybflight-gs --target aarch64-apple-darwin` (`9 passed, 0 failed, 1 live-USB ignored`), `cargo build -p cybflight-gs --target aarch64-apple-darwin --profile release-host` succeeded cleanly.
+  - **Live Hardware Verification (`/dev/cu.usbmodem0011`, `goku_f745`)**:
+    - Auto-locked immediately on **`USART2` (`MAVLink` @ `460,800` baud)** with live stick/switch updates and `0` CRC errors (`RcDiag(state=LOCKED, port=USART2, proto=MAVLink, baud=460800, rc_frames=1818 -> 3574, link_frames=1653 -> 3250, crc_err=0, u2=116688 -> 229404, u1=0, u5=0, u4=0, u3=0, vbat_mv=20)`).
+    - Live `rc`, `rcstats`, and `health` verified real transmitter channels (`CH1..16`, `rssi=-50dBm`, `lq=100%`, `age_ms=5..7`), gating `ThrottleNotMin(1053us > 1050us)` while throttle was above idle and transitioning to `ARMED — flying.` (`throttle=989us, CH5=2000us`) when armed from the physical radio.
 
-| Subsystem / Check | Normal Boot (`Flash #9`, `Boot 3`) | Post-Warm `reboot` (`Boot 6`, `t = 4–6 s`) | Stress Verification (`65 s` Multi-Stream & `60`-Cmd + `param list`) | Status |
+---
+
+## Final Live Hardware & Stress Verification (`Flash #8 / 67b57a5` + `Flash #9` + Multi-UART RC)
+
+| Subsystem / Check | Normal Boot (`Flash #9`, `Boot 3`) | Post-Warm `reboot` (`Boot 6`, `t = 4–6 s`) | Stress / Live RC Verification (`65 s` Multi-Stream & ELRS MAVLink2) | Status |
 |---|---|---|---|---|
 | **Reset Cause & Postmortem** | `0x98000000 Software`, `0` faults | `0x98000000 Software`, `0` faults | `0x98000000 Software`, **`0` `IWDG` resets / `0` faults** | **PASS** |
-| **Hands-Free Software DFU** | `fc_shell.py --dfu` → `0483:df11` | Verified hands-free across Flashes #7–#9 | `469,016 B` flashed & booted cleanly | **PASS** |
+| **Hands-Free Software DFU** | `fc_shell.py --dfu` → `0483:df11` | Verified hands-free across Flashes #7–#10 | `470,960 B` flashed & booted cleanly | **PASS** |
 | **8 kHz IMU (`MPU-6000`, `SPI4` `13.5 MHz`, `P8`)** | **`8,000.8 Hz (+0.01%)`**, `bias=[+0.0070, +0.0148, -0.0541]` | **`7,999.4 Hz (-0.01%)`**, lost since boot: `2` | **`7,998.8 Hz (-0.01%)`**, `99.991%` delivery over `111.8 s` | **PASS** |
 | **2 kHz INDI Inner Loop (`P10`, `DWT` unlocked)** | `45,707` iters, `avg 213.0 µs`, `max 401.8 µs` | `8,628` iters, `avg 218.7 µs`, `max 357.4 µs` | `211,534` iters, `avg 30.3 µs`, `max 410.3 µs` (`< 500 µs` budget) | **PASS** |
 | **Barometer (`SPL06`, `I2C1` `0x76`)** | **`101,001.91 Pa, 35.08 °C`** | `101,370.12 Pa` → `101,369.71 Pa, 38.37 °C` | **`101,369.81 Pa, 39.30 °C`** (before & after `imurate`) | **PASS** |
 | **External Compass (`QMC5883L`, `I2C1` `0x0D`)** | **`[9.67, 0.50, 45.00] uT, 24.9 °C`** | `[-28.00, 11.20, 42.10] uT`, **`27.5 °C`** | **`[-27.00, 10.73, 41.50] uT`**, **`27.6 °C`** | **PASS** |
 | **GPS (`Flywoo GM10 V3` u-blox M10, `USART6`)** | **`3D Fix (`16` SVs, `h_acc=675 mm`) @ `10.00 Hz` (`99,955 µs`)** | `baud=230400`, **`mean=100,130 µs (9.98 Hz)`** | `baud=230400`, **`mean=100,038 µs (9.99 Hz)`** | **PASS** |
 | **Full FC Parameter Sync (`318` params + `14` build)** | **`318 / 318` (`332 shown`) in `368.7 ms`** | `param_sync.py --dry-run` `exit 0` | **`60× param get` + `param list` mid-stream: `318 / 318` in `2.02 s`** | **PASS** |
-| **RC Stream & Switch Config (`rc` + `rcstats`)** | `21` `rc_*` params (`CH5` Arm, `CH7` Mode) | `stream rc on` + `stream rcstats on` verified | `param set`/`reset` round-trip verified live (`0` overrides left) | **PASS** |
+| **Live RC (`USART2` ELRS MAVLink2 @ `460800` + CRSF)** | `rcdiag`: `LOCKED`, `rc_frames=1818->3574`, `crc_err=0` | `rssi=-50dBm`, `lq=100%`, `age_ms=5..7ms`, `16 ch` | Live TX `CH3/CH5` stick+arm transitions (`ARMED — flying.`) verified | **PASS** |

@@ -96,6 +96,272 @@ pub enum CrsfEvent {
     Other { frame_type: u8 },
 }
 
+#[inline]
+const fn is_crsf_sync_addr(byte: u8) -> bool {
+    matches!(
+        byte,
+        CRSF_ADDRESS_FLIGHT_CONTROLLER
+            | CRSF_ADDRESS_CRSF_RECEIVER
+            | CRSF_ADDRESS_CRSF_TRANSMITTER
+            | CRSF_ADDRESS_RADIO_TRANSMITTER
+    )
+}
+
+/// Zero-allocation sliding-window CRSF frame parser.
+///
+/// Unlike blocking `read_exact` sync, a bad CRC shifts the buffer by a single byte
+/// and re-scans already-buffered bytes so `0x00` payloads or false `0xC8` bytes
+/// inside an earlier frame never cause a real CRSF frame to be skipped.
+pub struct CrsfParser {
+    buf: [u8; CRSF_FRAME_SIZE_MAX],
+    len: usize,
+    crc_errors: u32,
+}
+
+impl Default for CrsfParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CrsfParser {
+    pub const fn new() -> Self {
+        Self {
+            buf: [0u8; CRSF_FRAME_SIZE_MAX],
+            len: 0,
+            crc_errors: 0,
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.len = 0;
+        self.crc_errors = 0;
+    }
+
+    /// Return and clear accumulated CRC/framing errors since last check.
+    pub fn take_crc_errors(&mut self) -> u32 {
+        let e = self.crc_errors;
+        self.crc_errors = 0;
+        e
+    }
+
+    pub fn feed(&mut self, byte: u8) -> Option<CrsfEvent> {
+        if self.len == 0 && !is_crsf_sync_addr(byte) {
+            return None;
+        }
+        if self.len >= CRSF_FRAME_SIZE_MAX {
+            self.shift_one();
+        }
+        self.buf[self.len] = byte;
+        self.len += 1;
+
+        self.try_process()
+    }
+
+    fn shift_one(&mut self) {
+        if self.len > 1 {
+            self.buf.copy_within(1..self.len, 0);
+            self.len -= 1;
+        } else {
+            self.len = 0;
+        }
+        let mut drop_n = 0;
+        while drop_n < self.len && !is_crsf_sync_addr(self.buf[drop_n]) {
+            drop_n += 1;
+        }
+        if drop_n > 0 {
+            if drop_n < self.len {
+                self.buf.copy_within(drop_n..self.len, 0);
+                self.len -= drop_n;
+            } else {
+                self.len = 0;
+            }
+        }
+    }
+
+    fn consume(&mut self, n: usize) {
+        if n >= self.len {
+            self.len = 0;
+        } else {
+            self.buf.copy_within(n..self.len, 0);
+            self.len -= n;
+        }
+        let mut drop_n = 0;
+        while drop_n < self.len && !is_crsf_sync_addr(self.buf[drop_n]) {
+            drop_n += 1;
+        }
+        if drop_n > 0 {
+            if drop_n < self.len {
+                self.buf.copy_within(drop_n..self.len, 0);
+                self.len -= drop_n;
+            } else {
+                self.len = 0;
+            }
+        }
+    }
+
+    fn try_process(&mut self) -> Option<CrsfEvent> {
+        loop {
+            if self.len < 2 {
+                return None;
+            }
+            if !is_crsf_sync_addr(self.buf[0]) {
+                self.shift_one();
+                continue;
+            }
+            let frame_len = self.buf[1] as usize;
+            if frame_len < 2 || frame_len > CRSF_FRAME_SIZE_MAX - 2 {
+                self.shift_one();
+                continue;
+            }
+            let total_len = 2 + frame_len;
+            if self.len < total_len {
+                return None;
+            }
+
+            let addr = self.buf[0];
+            let body = &self.buf[2..total_len];
+            let crc_idx = frame_len - 1;
+            let expected_crc = body[crc_idx];
+            let computed_crc = crc8_dvb_s2_buf(&body[..crc_idx]);
+            if computed_crc != expected_crc {
+                self.crc_errors = self.crc_errors.wrapping_add(1);
+                self.shift_one();
+                continue;
+            }
+
+            let frame_type = body[0];
+            let payload = &body[1..crc_idx];
+            let parsed = match frame_type {
+                CRSF_FRAMETYPE_RC_CHANNELS_PACKED => {
+                    if payload.len() < CRSF_FRAME_RC_CHANNELS_PAYLOAD_SIZE {
+                        self.crc_errors = self.crc_errors.wrapping_add(1);
+                        self.shift_one();
+                        continue;
+                    }
+                    Some(CrsfEvent::RcChannelsPacked(
+                        Crsf::<&[u8]>::unpack_rc_channels_packed(payload),
+                    ))
+                }
+                CRSF_FRAMETYPE_SUBSET_RC_CHANNELS_PACKED => {
+                    if payload.is_empty() {
+                        self.crc_errors = self.crc_errors.wrapping_add(1);
+                        self.shift_one();
+                        continue;
+                    }
+                    Some(CrsfEvent::SubsetRcChannels(
+                        Crsf::<&[u8]>::unpack_subset_rc_channels(payload, frame_len),
+                    ))
+                }
+                CRSF_FRAMETYPE_LINK_STATISTICS => {
+                    if payload.len() < CRSF_FRAME_LINK_STATISTICS_PAYLOAD_SIZE {
+                        self.crc_errors = self.crc_errors.wrapping_add(1);
+                        self.shift_one();
+                        continue;
+                    }
+                    Some(CrsfEvent::LinkStatistics(Crsf::<&[u8]>::parse_link_stats(
+                        payload,
+                    )))
+                }
+                CRSF_FRAMETYPE_LINK_STATISTICS_TX => {
+                    if payload.len() < CRSF_FRAME_LINK_STATISTICS_TX_PAYLOAD_SIZE {
+                        self.crc_errors = self.crc_errors.wrapping_add(1);
+                        self.shift_one();
+                        continue;
+                    }
+                    Some(CrsfEvent::LinkStatisticsTx(
+                        Crsf::<&[u8]>::parse_link_stats_tx(payload),
+                    ))
+                }
+                CRSF_FRAMETYPE_COMMAND => Crsf::<&[u8]>::parse_command_body(body, frame_len, addr),
+                _ => Some(CrsfEvent::Other { frame_type }),
+            };
+
+            self.consume(total_len);
+            if let Some(evt) = parsed {
+                return Some(evt);
+            }
+        }
+    }
+}
+
+/// Encode a standard CRSF frame (`[sync, len, type, payload..., crc]`) into a fixed buffer.
+pub fn encode_frame(frame_type: u8, payload: &[u8]) -> ([u8; CRSF_FRAME_SIZE_MAX], usize) {
+    let payload_len = payload.len().min(CRSF_FRAME_SIZE_MAX - 4);
+    let frame_len = 1 + payload_len + 1;
+    let mut frame = [0u8; CRSF_FRAME_SIZE_MAX];
+    frame[0] = CRSF_SYNC_BYTE;
+    frame[1] = frame_len as u8;
+    frame[2] = frame_type;
+    frame[3..3 + payload_len].copy_from_slice(&payload[..payload_len]);
+    let crc = crc8_dvb_s2_buf(&frame[2..3 + payload_len]);
+    frame[3 + payload_len] = crc;
+    (frame, 2 + frame_len)
+}
+
+/// Encode a dual-CRC command frame (`[sync, len, 0x32, dest, origin, cmd_payload..., crc_ba, crc_d5]`).
+pub fn encode_command_frame(
+    dest: u8,
+    origin: u8,
+    cmd_payload: &[u8],
+) -> ([u8; CRSF_FRAME_SIZE_MAX], usize) {
+    let cmd_len = cmd_payload.len().min(CRSF_FRAME_SIZE_MAX - 7);
+    let inner_len = 1 + 2 + cmd_len + 1 + 1;
+    let mut frame = [0u8; CRSF_FRAME_SIZE_MAX];
+    frame[0] = CRSF_SYNC_BYTE;
+    frame[1] = inner_len as u8;
+    frame[2] = CRSF_FRAMETYPE_COMMAND;
+    frame[3] = dest;
+    frame[4] = origin;
+    frame[5..5 + cmd_len].copy_from_slice(&cmd_payload[..cmd_len]);
+    let cmd_crc_end = 5 + cmd_len;
+    frame[cmd_crc_end] = crc8_poly_0xba_buf(&frame[2..cmd_crc_end]);
+    frame[cmd_crc_end + 1] = crc8_dvb_s2_buf(&frame[2..cmd_crc_end + 1]);
+    (frame, 2 + inner_len)
+}
+
+pub fn encode_heartbeat_frame() -> ([u8; CRSF_FRAME_SIZE_MAX], usize) {
+    let payload = (CRSF_ADDRESS_FLIGHT_CONTROLLER as u16).to_be_bytes();
+    encode_frame(CRSF_FRAMETYPE_HEARTBEAT, &payload)
+}
+
+pub fn encode_attitude_frame(
+    pitch_rad: f32,
+    roll_rad: f32,
+    yaw_rad: f32,
+) -> ([u8; CRSF_FRAME_SIZE_MAX], usize) {
+    let mut payload = [0u8; CRSF_FRAME_ATTITUDE_PAYLOAD_SIZE];
+    payload[0..2].copy_from_slice(&((pitch_rad * 10000.0) as i16).to_be_bytes());
+    payload[2..4].copy_from_slice(&((roll_rad * 10000.0) as i16).to_be_bytes());
+    payload[4..6].copy_from_slice(&((yaw_rad * 10000.0) as i16).to_be_bytes());
+    encode_frame(CRSF_FRAMETYPE_ATTITUDE, &payload)
+}
+
+pub fn encode_flight_mode_frame(mode: &[u8]) -> ([u8; CRSF_FRAME_SIZE_MAX], usize) {
+    let len = mode.len().min(31);
+    let mut payload = [0u8; 32];
+    payload[..len].copy_from_slice(&mode[..len]);
+    payload[len] = 0;
+    encode_frame(CRSF_FRAMETYPE_FLIGHT_MODE, &payload[..len + 1])
+}
+
+pub fn encode_speed_response_frame(
+    port_id: u8,
+    accept: bool,
+) -> ([u8; CRSF_FRAME_SIZE_MAX], usize) {
+    let cmd_payload = [
+        CRSF_COMMAND_SUBCMD_GENERAL,
+        CRSF_COMMAND_SUBCMD_GENERAL_CRSF_SPEED_RESPONSE,
+        port_id,
+        accept as u8,
+    ];
+    encode_command_frame(
+        CRSF_ADDRESS_CRSF_RECEIVER,
+        CRSF_ADDRESS_FLIGHT_CONTROLLER,
+        &cmd_payload,
+    )
+}
+
 /// Driver errors.
 #[derive(Debug)]
 pub enum Error<E> {
@@ -121,6 +387,7 @@ impl<E: defmt::Format> defmt::Format for Error<E> {
 /// CRSF protocol driver, generic over an async read+write transport.
 pub struct Crsf<RW> {
     rw: RW,
+    parser: CrsfParser,
     /// Baudrate hint: set after V3 speed negotiation is accepted.
     /// The caller must reconfigure the UART to this baudrate.
     new_baudrate: Option<u32>,
@@ -287,126 +554,17 @@ impl<RW> Crsf<RW> {
             tx_power_dbm: dl_power as i8,
         }
     }
-}
-
-// -----------------------------------------------------------------------
-// Driver methods requiring Read + Write
-// -----------------------------------------------------------------------
-
-impl<RW> Crsf<RW>
-where
-    RW: Read + Write,
-{
-    pub fn new(rw: RW) -> Self {
-        Self {
-            rw,
-            new_baudrate: None,
-        }
-    }
-
-    /// Returns and clears the pending baudrate hint (set after V3 negotiation).
-    pub fn take_baudrate_hint(&mut self) -> Option<u32> {
-        self.new_baudrate.take()
-    }
-
-    /// Read one complete CRSF frame, validate CRC, and parse the payload.
-    ///
-    /// Blocks until a valid frame is received. Invalid frames (bad CRC,
-    /// wrong address, too long) are silently discarded and the next frame
-    /// is attempted.
-    pub async fn read_frame(&mut self) -> Result<CrsfEvent, Error<RW::Error>> {
-        let mut buf = [0u8; CRSF_FRAME_SIZE_MAX];
-        loop {
-            // 1. Sync: read bytes until we see a valid address byte
-            let addr = loop {
-                let mut b = [0u8; 1];
-                self.rw.read_exact(&mut b).await.map_err(map_read_err)?;
-                if b[0] == CRSF_ADDRESS_FLIGHT_CONTROLLER || b[0] == CRSF_ADDRESS_BROADCAST {
-                    break b[0];
-                }
-            };
-
-            // 2. Read frame length byte
-            let mut len_byte = [0u8; 1];
-            self.rw
-                .read_exact(&mut len_byte)
-                .await
-                .map_err(map_read_err)?;
-            let frame_len = len_byte[0] as usize;
-
-            // Validate length: must be at least 2 (type + CRC), at most 62
-            if frame_len < 2 || frame_len > CRSF_FRAME_SIZE_MAX - 2 {
-                continue;
-            }
-
-            // 3. Read the rest: type + payload + CRC
-            self.rw
-                .read_exact(&mut buf[..frame_len])
-                .await
-                .map_err(map_read_err)?;
-
-            // 4. CRC check: CRC covers type + payload (NOT addr, NOT len)
-            let crc_idx = frame_len - 1;
-            let expected_crc = buf[crc_idx];
-            let computed_crc = crc8_dvb_s2_buf(&buf[..crc_idx]);
-            if computed_crc != expected_crc {
-                continue;
-            }
-
-            let frame_type = buf[0];
-            let payload = &buf[1..crc_idx];
-
-            // 5. Parse by frame type
-            match frame_type {
-                CRSF_FRAMETYPE_RC_CHANNELS_PACKED => {
-                    if payload.len() < CRSF_FRAME_RC_CHANNELS_PAYLOAD_SIZE {
-                        continue;
-                    }
-                    return Ok(CrsfEvent::RcChannelsPacked(
-                        Self::unpack_rc_channels_packed(payload),
-                    ));
-                }
-                CRSF_FRAMETYPE_SUBSET_RC_CHANNELS_PACKED => {
-                    if payload.is_empty() {
-                        continue;
-                    }
-                    return Ok(CrsfEvent::SubsetRcChannels(
-                        Self::unpack_subset_rc_channels(payload, frame_len),
-                    ));
-                }
-                CRSF_FRAMETYPE_LINK_STATISTICS => {
-                    if payload.len() < CRSF_FRAME_LINK_STATISTICS_PAYLOAD_SIZE {
-                        continue;
-                    }
-                    return Ok(CrsfEvent::LinkStatistics(Self::parse_link_stats(payload)));
-                }
-                CRSF_FRAMETYPE_LINK_STATISTICS_TX => {
-                    if payload.len() < CRSF_FRAME_LINK_STATISTICS_TX_PAYLOAD_SIZE {
-                        continue;
-                    }
-                    return Ok(CrsfEvent::LinkStatisticsTx(Self::parse_link_stats_tx(
-                        payload,
-                    )));
-                }
-                CRSF_FRAMETYPE_COMMAND => {
-                    if let Some(evt) = self.parse_command(&buf, frame_len, addr) {
-                        return Ok(evt);
-                    }
-                    continue;
-                }
-                _ => {
-                    return Ok(CrsfEvent::Other { frame_type });
-                }
-            }
-        }
-    }
 
     // -----------------------------------------------------------------------
     // Command frame parsing (V3 speed negotiation, bind, etc.)
     // -----------------------------------------------------------------------
 
     /// Parse a command frame. Returns Some(event) if it's a speed proposal.
-    fn parse_command(&mut self, data: &[u8], frame_len: usize, _addr: u8) -> Option<CrsfEvent> {
+    pub(crate) fn parse_command_body(
+        data: &[u8],
+        frame_len: usize,
+        _addr: u8,
+    ) -> Option<CrsfEvent> {
         // Command frame: [type, dest, origin, subcmd_id, subcmd, ...payload, cmd_crc, frame_crc]
         // cmd_crc uses poly 0xBA over type..payload (excluding frame_crc)
         if frame_len < 6 {
@@ -450,6 +608,42 @@ where
 
         None
     }
+}
+
+// -----------------------------------------------------------------------
+// Driver methods requiring Read + Write
+// -----------------------------------------------------------------------
+
+impl<RW> Crsf<RW>
+where
+    RW: Read + Write,
+{
+    pub fn new(rw: RW) -> Self {
+        Self {
+            rw,
+            parser: CrsfParser::new(),
+            new_baudrate: None,
+        }
+    }
+
+    /// Returns and clears the pending baudrate hint (set after V3 negotiation).
+    pub fn take_baudrate_hint(&mut self) -> Option<u32> {
+        self.new_baudrate.take()
+    }
+
+    /// Read one complete CRSF frame, validate CRC, and parse the payload.
+    ///
+    /// Uses [`CrsfParser`] sliding-window sync so false sync bytes or `0x00`
+    /// inside an earlier corrupted frame never swallow a subsequent valid frame.
+    pub async fn read_frame(&mut self) -> Result<CrsfEvent, Error<RW::Error>> {
+        let mut b = [0u8; 1];
+        loop {
+            self.rw.read_exact(&mut b).await.map_err(map_read_err)?;
+            if let Some(evt) = self.parser.feed(b[0]) {
+                return Ok(evt);
+            }
+        }
+    }
 
     // -----------------------------------------------------------------------
     // Telemetry frame builders (all big-endian, matching BF)
@@ -461,18 +655,7 @@ where
         frame_type: u8,
         payload: &[u8],
     ) -> Result<(), Error<RW::Error>> {
-        let frame_len = 1 + payload.len() + 1; // type + payload + CRC
-        let mut frame = [0u8; CRSF_FRAME_SIZE_MAX];
-        frame[0] = CRSF_SYNC_BYTE;
-        frame[1] = frame_len as u8;
-        frame[2] = frame_type;
-        frame[3..3 + payload.len()].copy_from_slice(payload);
-
-        // CRC over type + payload
-        let crc = crc8_dvb_s2_buf(&frame[2..3 + payload.len()]);
-        frame[3 + payload.len()] = crc;
-
-        let total = 2 + frame_len; // addr + len + (type + payload + CRC)
+        let (frame, total) = encode_frame(frame_type, payload);
         self.rw
             .write_all(&frame[..total])
             .await
@@ -487,26 +670,7 @@ where
         origin: u8,
         cmd_payload: &[u8],
     ) -> Result<(), Error<RW::Error>> {
-        // Frame: [sync, len, type=0x32, dest, origin, ...cmd_payload, cmd_crc, frame_crc]
-        let inner_len = 1 + 2 + cmd_payload.len() + 1 + 1; // type + dest/origin + payload + cmd_crc + frame_crc
-        let mut frame = [0u8; CRSF_FRAME_SIZE_MAX];
-        frame[0] = CRSF_SYNC_BYTE;
-        frame[1] = inner_len as u8;
-        frame[2] = CRSF_FRAMETYPE_COMMAND;
-        frame[3] = dest;
-        frame[4] = origin;
-        frame[5..5 + cmd_payload.len()].copy_from_slice(cmd_payload);
-
-        // Command CRC (poly 0xBA) over type + dest + origin + cmd_payload
-        let cmd_crc_end = 5 + cmd_payload.len();
-        let cmd_crc = crc8_poly_0xba_buf(&frame[2..cmd_crc_end]);
-        frame[cmd_crc_end] = cmd_crc;
-
-        // Frame CRC (DVB-S2) over type + dest + origin + cmd_payload + cmd_crc
-        let frame_crc = crc8_dvb_s2_buf(&frame[2..cmd_crc_end + 1]);
-        frame[cmd_crc_end + 1] = frame_crc;
-
-        let total = 2 + inner_len;
+        let (frame, total) = encode_command_frame(dest, origin, cmd_payload);
         self.rw
             .write_all(&frame[..total])
             .await
@@ -547,31 +711,20 @@ where
         roll_rad: f32,
         yaw_rad: f32,
     ) -> Result<(), Error<RW::Error>> {
-        let mut payload = [0u8; CRSF_FRAME_ATTITUDE_PAYLOAD_SIZE];
-        let pitch = (pitch_rad * 10000.0) as i16;
-        let roll = (roll_rad * 10000.0) as i16;
-        let yaw = (yaw_rad * 10000.0) as i16;
-        payload[0..2].copy_from_slice(&pitch.to_be_bytes());
-        payload[2..4].copy_from_slice(&roll.to_be_bytes());
-        payload[4..6].copy_from_slice(&yaw.to_be_bytes());
-        self.write_frame(CRSF_FRAMETYPE_ATTITUDE, &payload).await
+        let (frame, total) = encode_attitude_frame(pitch_rad, roll_rad, yaw_rad);
+        self.rw.write_all(&frame[..total]).await.map_err(Error::Io)
     }
 
     /// Send flight mode telemetry (type 0x21, variable-length null-terminated string).
     pub async fn write_flight_mode(&mut self, mode: &[u8]) -> Result<(), Error<RW::Error>> {
-        // Payload: mode string + null terminator
-        let len = mode.len().min(CRSF_FRAME_SIZE_MAX - 6); // leave room for framing
-        let mut payload = [0u8; 32];
-        payload[..len].copy_from_slice(&mode[..len]);
-        payload[len] = 0; // null terminator
-        self.write_frame(CRSF_FRAMETYPE_FLIGHT_MODE, &payload[..len + 1])
-            .await
+        let (frame, total) = encode_flight_mode_frame(mode);
+        self.rw.write_all(&frame[..total]).await.map_err(Error::Io)
     }
 
     /// Send heartbeat (type 0x0B, 2 bytes payload).
     pub async fn write_heartbeat(&mut self) -> Result<(), Error<RW::Error>> {
-        let payload = (CRSF_ADDRESS_FLIGHT_CONTROLLER as u16).to_be_bytes();
-        self.write_frame(CRSF_FRAMETYPE_HEARTBEAT, &payload).await
+        let (frame, total) = encode_heartbeat_frame();
+        self.rw.write_all(&frame[..total]).await.map_err(Error::Io)
     }
 
     /// Send GPS telemetry (type 0x02, 15 bytes payload).
@@ -633,18 +786,8 @@ where
         port_id: u8,
         accept: bool,
     ) -> Result<(), Error<RW::Error>> {
-        let cmd_payload = [
-            CRSF_COMMAND_SUBCMD_GENERAL,
-            CRSF_COMMAND_SUBCMD_GENERAL_CRSF_SPEED_RESPONSE,
-            port_id,
-            accept as u8,
-        ];
-        self.write_command_frame(
-            CRSF_ADDRESS_CRSF_RECEIVER,
-            CRSF_ADDRESS_FLIGHT_CONTROLLER,
-            &cmd_payload,
-        )
-        .await
+        let (frame, total) = encode_speed_response_frame(port_id, accept);
+        self.rw.write_all(&frame[..total]).await.map_err(Error::Io)
     }
 
     /// Send device info response (type 0x29).
@@ -754,5 +897,78 @@ mod tests {
                 pwm
             );
         }
+    }
+
+    #[test]
+    fn test_crsf_parser_midstream_recovery_and_encoders() {
+        extern crate alloc;
+        use alloc::vec::Vec;
+
+        let mut payload = [0u8; 22];
+        let mut bit_offset = 0usize;
+        for _ in 0..16 {
+            let byte_idx = bit_offset / 8;
+            let bit_idx = bit_offset % 8;
+            let val = 992u32 << bit_idx;
+            payload[byte_idx] |= val as u8;
+            if byte_idx + 1 < 22 {
+                payload[byte_idx + 1] |= (val >> 8) as u8;
+            }
+            if byte_idx + 2 < 22 {
+                payload[byte_idx + 2] |= (val >> 16) as u8;
+            }
+            bit_offset += 11;
+        }
+        let (rc_frame, rc_len) = encode_frame(CRSF_FRAMETYPE_RC_CHANNELS_PACKED, &payload);
+
+        // Prepend mid-frame noise containing 0x00 and a false 0xC8 header whose length
+        // would have consumed the beginning of rc_frame under blocking read_exact sync!
+        let mut stream = Vec::new();
+        stream.extend_from_slice(&[0x00, 0x18, 0x16, 0x00, CRSF_ADDRESS_FLIGHT_CONTROLLER, 24, 0x16, 0x01]);
+        stream.extend_from_slice(&rc_frame[..rc_len]);
+
+        // Also test link statistics and telemetry encoders
+        let ls_payload = [48u8, 52, 99, (-4i8) as u8, 0, 2, 100, 0, 1, 1];
+        let (ls_frame, ls_len) = encode_frame(CRSF_FRAMETYPE_LINK_STATISTICS, &ls_payload);
+        stream.extend_from_slice(&ls_frame[..ls_len]);
+
+        let mut parser = CrsfParser::new();
+        let mut got_rc = false;
+        let mut got_ls = false;
+        for &b in &stream {
+            match parser.feed(b) {
+                Some(CrsfEvent::RcChannelsPacked(ch)) => {
+                    got_rc = true;
+                    assert!((1500..=1501).contains(&ch.channels[0]));
+                }
+                Some(CrsfEvent::LinkStatistics(ls)) => {
+                    got_ls = true;
+                    assert_eq!(ls.link_quality, 99);
+                    assert_eq!(ls.rssi_dbm, -48);
+                }
+                _ => {}
+            }
+        }
+        assert!(got_rc, "expected RC frame recovery after false 0xC8/0x00 bytes");
+        assert!(got_ls, "expected LinkStatistics frame");
+        assert!(parser.take_crc_errors() >= 1);
+        assert_eq!(parser.take_crc_errors(), 0);
+
+        let (hb, hb_len) = encode_heartbeat_frame();
+        assert_eq!(hb[0], CRSF_SYNC_BYTE);
+        assert_eq!(hb[2], CRSF_FRAMETYPE_HEARTBEAT);
+        assert_eq!(hb_len, 6);
+
+        let (att, att_len) = encode_attitude_frame(0.1, -0.2, 0.3);
+        assert_eq!(att[2], CRSF_FRAMETYPE_ATTITUDE);
+        assert_eq!(att_len, 10);
+
+        let (fm, fm_len) = encode_flight_mode_frame(b"ACRO");
+        assert_eq!(fm[2], CRSF_FRAMETYPE_FLIGHT_MODE);
+        assert_eq!(fm_len, 9);
+
+        let (spd, spd_len) = encode_speed_response_frame(1, true);
+        assert_eq!(spd[2], CRSF_FRAMETYPE_COMMAND);
+        assert_eq!(spd_len, 11);
     }
 }
