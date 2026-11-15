@@ -17,8 +17,6 @@
 //!     generic WS2812 retarget is a follow-up (see docs/architecture.md TODO).
 
 use cybflight_drivers::baro::spl06::Spl06;
-#[cfg(feature = "est_pos_gps")]
-use cybflight_drivers::gps::GpsDriver;
 use cybflight_drivers::imu::bmi270::Bmi270;
 use cybflight_drivers::led::Led;
 use cybflight_drivers::mag::Qmc5883l;
@@ -28,8 +26,6 @@ use embassy_executor::{SendSpawner, Spawner};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::Timer;
-#[cfg(feature = "est_pos_gps")]
-use embassy_time::{Duration, with_timeout};
 use static_cell::StaticCell;
 
 use crate::bsp;
@@ -37,7 +33,7 @@ use crate::hal;
 use crate::motors::{DshotQuadConfig, MotorTimerConfig};
 use crate::sensors::baro::BaroReader;
 #[cfg(feature = "est_pos_gps")]
-use crate::sensors::gps::{GPS_HEALTH, GpsHealth, GpsRunner, err_kind};
+use crate::sensors::gps::{GPS_HEALTH, GpsHealth};
 use crate::sensors::imu::{ImuReader, SpiBusMtx, bmi270_reader_task};
 use crate::sensors::mag::{I2cBusMtx, MagReader};
 use crate::sensors::power::{AdcInput, PowerMonitor, power_task};
@@ -274,29 +270,11 @@ pub async fn init(
                     uart_config,
                 ) {
                     Ok(uart) => {
-                        let mut delay = embassy_time::Delay;
-                        match with_timeout(
-                            Duration::from_secs(30),
-                            GpsDriver::new(uart, &mut delay),
-                        )
-                        .await
+                        if let Err(e) =
+                            spawner.spawn(crate::sensors::gps::gps_init_and_run_task(uart, 30))
                         {
-                            Ok(Ok(gps)) => {
-                                defmt::info!("GPS u-blox init OK");
-                                spawner
-                                    .spawn(crate::sensors::gps::gps_task(GpsRunner::new(gps)))
-                                    .unwrap_or_else(|e| {
-                                        defmt::error!("Failed to spawn GPS task: {}", e)
-                                    });
-                            }
-                            Ok(Err(e)) => {
-                                GPS_HEALTH.lock(|c| c.set(GpsHealth::InitFailed(err_kind(&e))));
-                                defmt::warn!("GPS init failed: {}", e);
-                            }
-                            Err(_) => {
-                                GPS_HEALTH.lock(|c| c.set(GpsHealth::InitTimedOut));
-                                defmt::warn!("GPS init timed out (no module?)");
-                            }
+                            GPS_HEALTH.lock(|c| c.set(GpsHealth::UartInitFailed));
+                            defmt::error!("Failed to spawn GPS task: {}", e);
                         }
                     }
                     Err(e) => {

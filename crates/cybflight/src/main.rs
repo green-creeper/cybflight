@@ -171,6 +171,24 @@ async fn main(spawner: embassy_executor::Spawner) {
         )
     };
 
+    // --- IWDG + PVD brown-out protection (start BEFORE `board_init::init`) ---
+    // Start IWDG and its feeder before awaiting SPI/I2C/UART init so `STARTED`
+    // is live before flash parameter recovery and `iwdg_feed_task` keeps
+    // feeding if a warm reset (`reboot` / DFU `:leave`) left IWDG running.
+    cybflight::watchdog::init();
+    #[cfg(feature = "postmortem")]
+    {
+        use cybflight::hal::interrupt::{self, InterruptExt, Priority};
+        #[cfg(feature = "board_flywoof745")]
+        interrupt::PVD.set_priority(Priority::P0);
+        #[cfg(not(feature = "board_flywoof745"))]
+        interrupt::PVD_AVD.set_priority(Priority::P0);
+        cybflight::postmortem::fault::enable_pvd_brownout();
+    }
+    spawner
+        .spawn(cybflight::watchdog::iwdg_feed_task())
+        .unwrap_or_else(|_| defmt::panic!("failed to spawn IWDG feed task"));
+
     // --- Board-specific init ---
     //
     // board_init spawns:
@@ -197,22 +215,6 @@ async fn main(spawner: embassy_executor::Spawner) {
     cybflight::sensors::rc::init_arm_config();
     cybflight::control::failsafe::init_fs_config();
 
-    // --- IWDG: system-level safety net ---
-    cybflight::watchdog::init();
-    // Arm PVD after IWDG so a brownout handler parking in `wfi()` can never
-    // wedge the MCU indefinitely if VDD recovers before BOR.
-    #[cfg(feature = "postmortem")]
-    {
-        use cybflight::hal::interrupt::{self, InterruptExt, Priority};
-        #[cfg(feature = "board_flywoof745")]
-        interrupt::PVD.set_priority(Priority::P0);
-        #[cfg(not(feature = "board_flywoof745"))]
-        interrupt::PVD_AVD.set_priority(Priority::P0);
-        cybflight::postmortem::fault::enable_pvd_brownout();
-    }
-    spawner
-        .spawn(cybflight::watchdog::iwdg_feed_task())
-        .unwrap_or_else(|_| defmt::panic!("failed to spawn IWDG feed task"));
     spawner
         .spawn(cybflight::control::rc_interpreter::rc_interpreter_task())
         .unwrap_or_else(|_| defmt::panic!("failed to spawn RC interpreter task"));

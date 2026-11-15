@@ -410,6 +410,26 @@ impl GpsRunner {
 }
 
 #[embassy_executor::task]
-pub async fn gps_task(mut runner: GpsRunner) {
-    runner.run().await;
+pub async fn gps_init_and_run_task(uart: GpsUart, timeout_secs: u64) {
+    let mut delay = embassy_time::Delay;
+    match embassy_time::with_timeout(
+        embassy_time::Duration::from_secs(timeout_secs),
+        GpsDriver::new(uart, &mut delay),
+    )
+    .await
+    {
+        Ok(Ok(gps)) => {
+            GPS_DETECTED_BAUD.store(115_200, Ordering::Relaxed);
+            defmt::info!("GPS receiver init OK");
+            GpsRunner::new(gps).run().await;
+        }
+        Ok(Err(e)) => {
+            GPS_HEALTH.lock(|c| c.set(GpsHealth::InitFailed(err_kind(&e))));
+            defmt::warn!("GPS init failed: {}", e);
+        }
+        Err(_) => {
+            GPS_HEALTH.lock(|c| c.set(GpsHealth::InitTimedOut));
+            defmt::warn!("GPS init timed out (no module?)");
+        }
+    }
 }

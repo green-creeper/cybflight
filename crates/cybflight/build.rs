@@ -23,6 +23,44 @@ fn main() {
     let tables = bake_thrust_tables(&PathBuf::from(&out));
     let missions = bake_missions(&PathBuf::from(&out));
     vehicle_bake::run(&PathBuf::from(&out), &tables, &missions);
+    emit_build_metadata();
+}
+
+fn emit_build_metadata() {
+    let git_head = Path::new("../../.git/HEAD");
+    if git_head.exists() {
+        println!("cargo:rerun-if-changed={}", git_head.display());
+        if let Ok(head_contents) = fs::read_to_string(git_head) {
+            if let Some(ref_rel) = head_contents.trim().strip_prefix("ref: ") {
+                let ref_path = Path::new("../../.git").join(ref_rel.trim());
+                if ref_path.exists() {
+                    println!("cargo:rerun-if-changed={}", ref_path.display());
+                }
+            }
+        }
+    }
+    if let Ok(out) = std::process::Command::new("git")
+        .args(["rev-parse", "--short=7", "HEAD"])
+        .output()
+    {
+        if out.status.success() {
+            let hash = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if !hash.is_empty() {
+                println!("cargo:rustc-env=GIT_HASH={hash}");
+            }
+        }
+    }
+    if let Ok(out) = std::process::Command::new("date")
+        .args(["-u", "+%Y-%m-%d %H:%MZ"])
+        .output()
+    {
+        if out.status.success() {
+            let ts = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if !ts.is_empty() {
+                println!("cargo:rustc-env=BUILD_TIMESTAMP={ts}");
+            }
+        }
+    }
 }
 
 /// Parse every mission YAML under `missions/` (workspace root), validate

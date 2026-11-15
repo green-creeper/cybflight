@@ -1,6 +1,4 @@
 use cybflight_drivers::baro::dps310::Dps310;
-#[cfg(feature = "est_pos_gps")]
-use cybflight_drivers::gps::GpsDriver;
 use cybflight_drivers::imu::icm426xx::Icm426xx;
 use cybflight_drivers::imu::mpu6x00::Mpu6x00;
 use cybflight_drivers::imu::{DetectedImu, ReadImu, probe_imu_raw};
@@ -12,8 +10,6 @@ use embassy_executor::{SendSpawner, Spawner};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::Timer;
-#[cfg(feature = "est_pos_gps")]
-use embassy_time::{Duration, with_timeout};
 use static_cell::StaticCell;
 
 use crate::bsp;
@@ -21,7 +17,7 @@ use crate::hal;
 use crate::motors::{DshotQuadConfig, MotorTimerConfig};
 use crate::sensors::baro::BaroReader;
 #[cfg(feature = "est_pos_gps")]
-use crate::sensors::gps::GpsRunner;
+use crate::sensors::gps::{GPS_HEALTH, GpsHealth};
 use crate::sensors::imu::{ImuReader, SpiBusMtx, icm_reader_task, mpu_reader_task};
 use crate::sensors::mag::{I2cBusMtx, MagReader};
 use crate::sensors::power::{PowerMonitor, power_task};
@@ -274,46 +270,46 @@ pub async fn init(
     // Gated on `est_pos_gps` so non-GPS builds skip UART setup and the
     // 3-second u-blox-init timeout entirely.
     #[cfg(feature = "est_pos_gps")]
-    match bsp::PORT_GPS {
-        bsp::SerialPortId::Uart4 => {
-            defmt::info!("GPS: starting UART4 init");
-            static GPS_TX_BUF: StaticCell<[u8; 256]> = StaticCell::new();
-            static GPS_RX_BUF: StaticCell<[u8; 256]> = StaticCell::new();
-            let tx_buf = &mut GPS_TX_BUF.init([0u8; 256])[..];
-            let rx_buf = &mut GPS_RX_BUF.init([0u8; 256])[..];
-            let mut uart_config = hal::usart::Config::default();
-            uart_config.baudrate = 115_200;
-            match hal::usart::BufferedUart::new(
-                board.serial.uart4,
-                board.serial.uart4_rx,
-                board.serial.uart4_tx,
-                tx_buf,
-                rx_buf,
-                SerialIrqs,
-                uart_config,
-            ) {
-                Ok(uart) => {
-                    defmt::info!("GPS: UART4 OK, sending CFG-VALSET...");
-                    let mut delay = embassy_time::Delay;
-                    match with_timeout(Duration::from_secs(3), GpsDriver::new(uart, &mut delay))
-                        .await
-                    {
-                        Ok(Ok(gps)) => {
-                            defmt::info!("GPS u-blox init OK");
-                            spawner
-                                .spawn(crate::sensors::gps::gps_task(GpsRunner::new(gps)))
-                                .unwrap_or_else(|e| {
-                                    defmt::error!("Failed to spawn GPS task: {}", e)
-                                });
+    {
+        GPS_HEALTH.lock(|c| c.set(GpsHealth::Initializing));
+        match bsp::PORT_GPS {
+            bsp::SerialPortId::Uart4 => {
+                defmt::info!("GPS: starting UART4 init");
+                static GPS_TX_BUF: StaticCell<[u8; 256]> = StaticCell::new();
+                static GPS_RX_BUF: StaticCell<[u8; 256]> = StaticCell::new();
+                let tx_buf = &mut GPS_TX_BUF.init([0u8; 256])[..];
+                let rx_buf = &mut GPS_RX_BUF.init([0u8; 256])[..];
+                let mut uart_config = hal::usart::Config::default();
+                uart_config.baudrate = 115_200;
+                match hal::usart::BufferedUart::new(
+                    board.serial.uart4,
+                    board.serial.uart4_rx,
+                    board.serial.uart4_tx,
+                    tx_buf,
+                    rx_buf,
+                    SerialIrqs,
+                    uart_config,
+                ) {
+                    Ok(uart) => {
+                        defmt::info!("GPS: UART4 ready, spawning init task...");
+                        if let Err(e) =
+                            spawner.spawn(crate::sensors::gps::gps_init_and_run_task(uart, 3))
+                        {
+                            GPS_HEALTH.lock(|c| c.set(GpsHealth::UartInitFailed));
+                            defmt::error!("Failed to spawn GPS task: {}", e);
                         }
-                        Ok(Err(e)) => defmt::warn!("GPS init failed: {}", e),
-                        Err(_) => defmt::warn!("GPS init timed out (no module?)"),
+                    }
+                    Err(e) => {
+                        GPS_HEALTH.lock(|c| c.set(GpsHealth::UartInitFailed));
+                        defmt::error!("GPS UART4 init failed: {}", e);
                     }
                 }
-                Err(e) => defmt::error!("GPS UART4 init failed: {}", e),
+            }
+            _ => {
+                GPS_HEALTH.lock(|c| c.set(GpsHealth::UartInitFailed));
+                defmt::warn!("GPS: PORT_GPS is not a supported GPS port on this board");
             }
         }
-        _ => defmt::warn!("GPS: PORT_GPS is not a supported GPS port on this board"),
     }
 
     // --- I2C1 shared bus (PB8 SCL, PB9 SDA) for DPS310 baro + QMC5883L ---

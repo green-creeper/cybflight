@@ -15,7 +15,7 @@
 //! - Battery VBAT (`PC3`, `ADC3_IN13`) & Current (`PC2`, `ADC3_IN12`).
 
 use cybflight_drivers::baro::spl06::Spl06;
-#[cfg(feature = "est_pos_gps")]
+#[cfg(all(feature = "est_pos_gps", not(feature = "gps_unicore")))]
 use cybflight_drivers::gps::GpsDriver;
 use cybflight_drivers::imu::bmi270::Bmi270;
 use cybflight_drivers::imu::icm426xx::Icm426xx;
@@ -29,7 +29,7 @@ use embassy_executor::{InterruptExecutor, SendSpawner, Spawner};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::{Duration, Timer};
-#[cfg(feature = "est_pos_gps")]
+#[cfg(all(feature = "est_pos_gps", not(feature = "gps_unicore")))]
 use embassy_time::with_timeout;
 use static_cell::StaticCell;
 
@@ -37,7 +37,7 @@ use crate::bsp;
 use crate::hal;
 use crate::motors::{DshotQuadConfig, MotorTimerConfig};
 use crate::sensors::baro::BaroReader;
-#[cfg(feature = "est_pos_gps")]
+#[cfg(all(feature = "est_pos_gps", not(feature = "gps_unicore")))]
 use crate::sensors::gps::GpsRunner;
 use crate::sensors::imu::{
     ImuReader, SpiBusMtx, bmi270_reader_task, icm_reader_task, mpu_reader_task,
@@ -382,7 +382,17 @@ pub async fn init(
                     SerialIrqs,
                     uart_config,
                 ) {
-                    Ok(uart) => init_gps_uart(uart, spawner).await,
+                    Ok(uart) => {
+                        #[cfg(not(feature = "gps_unicore"))]
+                        let spawn_res = spawner.spawn(gps_autobaud_task(uart));
+                        #[cfg(feature = "gps_unicore")]
+                        let spawn_res =
+                            spawner.spawn(crate::sensors::gps::gps_init_and_run_task(uart, 3));
+                        if let Err(e) = spawn_res {
+                            GPS_HEALTH.lock(|c| c.set(GpsHealth::UartInitFailed));
+                            defmt::error!("Failed to spawn GPS task: {}", e);
+                        }
+                    }
                     Err(e) => {
                         GPS_HEALTH.lock(|c| c.set(GpsHealth::UartInitFailed));
                         defmt::error!("GPS USART6 init failed: {}", e);
@@ -677,7 +687,8 @@ pub async fn init(
 }
 
 #[cfg(all(feature = "est_pos_gps", not(feature = "gps_unicore")))]
-async fn init_gps_uart(mut uart: hal::usart::BufferedUart<'static>, spawner: &Spawner) {
+#[embassy_executor::task]
+async fn gps_autobaud_task(mut uart: hal::usart::BufferedUart<'static>) {
     use core::sync::atomic::Ordering;
     use crate::sensors::gps::{
         GPS_DETECTED_BAUD, GPS_HEALTH, GPS_PROBE_RX_BYTES, GpsHealth, err_kind,
@@ -738,12 +749,7 @@ async fn init_gps_uart(mut uart: hal::usart::BufferedUart<'static>, spawner: &Sp
             Ok(Ok(())) => {
                 GPS_DETECTED_BAUD.store(baud, Ordering::Relaxed);
                 defmt::info!("GPS u-blox init OK at {} baud", baud);
-                spawner
-                    .spawn(crate::sensors::gps::gps_task(GpsRunner::new(
-                        GpsDriver::from_configured(uart),
-                    )))
-                    .unwrap_or_else(|e| defmt::error!("Failed to spawn GPS task: {}", e));
-                return;
+                GpsRunner::new(GpsDriver::from_configured(uart)).run().await
             }
             Ok(Err(e)) => {
                 last_err = Some(err_kind(&e));
@@ -761,28 +767,6 @@ async fn init_gps_uart(mut uart: hal::usart::BufferedUart<'static>, spawner: &Sp
             "GPS init timed out across all baudrates (rx_bytes={})",
             GPS_PROBE_RX_BYTES.load(Ordering::Relaxed)
         );
-    }
-}
-
-#[cfg(all(feature = "est_pos_gps", feature = "gps_unicore"))]
-async fn init_gps_uart(uart: hal::usart::BufferedUart<'static>, spawner: &Spawner) {
-    use core::sync::atomic::Ordering;
-    use crate::sensors::gps::{GPS_DETECTED_BAUD, GPS_HEALTH, GpsHealth, err_kind};
-    let mut delay = embassy_time::Delay;
-    match with_timeout(Duration::from_secs(3), GpsDriver::new(uart, &mut delay)).await {
-        Ok(Ok(gps)) => {
-            GPS_DETECTED_BAUD.store(115_200, Ordering::Relaxed);
-            defmt::info!("GPS Unicore init OK at 115200 baud");
-            spawner
-                .spawn(crate::sensors::gps::gps_task(GpsRunner::new(gps)))
-                .unwrap_or_else(|e| defmt::error!("Failed to spawn GPS task: {}", e));
-        }
-        Ok(Err(e)) => {
-            GPS_HEALTH.lock(|c| c.set(GpsHealth::InitFailed(err_kind(&e))));
-        }
-        Err(_) => {
-            GPS_HEALTH.lock(|c| c.set(GpsHealth::InitTimedOut));
-        }
     }
 }
 

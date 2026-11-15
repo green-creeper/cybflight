@@ -14,6 +14,7 @@ pub fn enable_icache() {
 
 /// Trigger an immediate software system reset via the Cortex-M SCB AIRCR.
 pub fn sys_reboot() -> ! {
+    crate::watchdog::feed();
     cortex_m::peripheral::SCB::sys_reset()
 }
 
@@ -47,6 +48,11 @@ fn unlock_backup_domain() {
 
 #[cortex_m_rt::pre_init]
 unsafe fn pre_init() {
+    // Feed IWDG immediately: a warm reset or DFU `:leave` leaves an already-
+    // started hardware watchdog counting through reset and startup; harmless
+    // no-op when IWDG is stopped on cold POR.
+    crate::watchdog::feed();
+
     // ── Reset-cause capture ────────────────────────────────────────────
     //
     // Read RCC.RSR + PWR.CSR1 into a `.uninit` static **before** any
@@ -96,5 +102,7 @@ pub fn enter_dfu() -> ! {
     unlock_backup_domain();
     unsafe { bkpr0.write_volatile(DFU_MAGIC) };
     cortex_m::asm::dsb();
+    // Give the ROM DFU bootloader its full ~8.1 s window during USB enumeration.
+    crate::watchdog::extend_timeout();
     sys_reboot()
 }
