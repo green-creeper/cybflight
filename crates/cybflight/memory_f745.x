@@ -6,8 +6,8 @@ MEMORY {
     /* 64 KB 0-wait-state 64-bit DTCM-RAM dedicated to MSP + interrupt executor stacks.
        Stack overflow below 0x2000_0000 triggers a clean BusFault instead of corrupting .bss. */
     DTCM    : ORIGIN = 0x20000000, LENGTH = 64K
-    /* 256 KB SRAM1 + SRAM2 (240K + 16K) for .data / .bss / .uninit and AHB DMA buffers. */
-    RAM     : ORIGIN = 0x20010000, LENGTH = 256K
+    /* 240 KB SRAM1 only — stay strictly inside contiguous SRAM1 without straddling 0x2004_C000. */
+    RAM     : ORIGIN = 0x20010000, LENGTH = 240K
     /* STM32F745 4 KiB backup SRAM. */
     BKPSRAM : ORIGIN = 0x40024000, LENGTH = 4K
 }

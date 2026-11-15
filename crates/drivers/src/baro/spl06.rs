@@ -22,7 +22,6 @@
 
 use embedded_hal_async::delay::DelayNs;
 use embedded_hal_async::i2c::I2c;
-use embedded_hal_async::spi::SpiDevice;
 
 use super::{BaroReading, ReadBaro};
 
@@ -91,28 +90,6 @@ pub trait Spl06Bus {
     type Error;
     async fn read_reg(&mut self, reg: u8, buf: &mut [u8]) -> Result<(), Self::Error>;
     async fn write_reg(&mut self, reg: u8, val: u8) -> Result<(), Self::Error>;
-}
-
-pub struct SpiBusWrapper<SPI> {
-    spi: SPI,
-}
-
-impl<SPI: SpiDevice> Spl06Bus for SpiBusWrapper<SPI> {
-    type Error = SPI::Error;
-
-    async fn read_reg(&mut self, reg: u8, buf: &mut [u8]) -> Result<(), Self::Error> {
-        let cmd = [reg | 0x80];
-        self.spi
-            .transaction(&mut [
-                embedded_hal_async::spi::Operation::Write(&cmd),
-                embedded_hal_async::spi::Operation::Read(buf),
-            ])
-            .await
-    }
-
-    async fn write_reg(&mut self, reg: u8, val: u8) -> Result<(), Self::Error> {
-        self.spi.write(&[reg, val]).await
-    }
 }
 
 pub struct I2cBusWrapper<I2C> {
@@ -198,37 +175,6 @@ fn sign_extend(val: i32, bits: u32) -> i32 {
 pub struct Spl06<B> {
     bus: B,
     coefs: Spl06Coefs,
-}
-
-impl<SPI: SpiDevice> Spl06<SpiBusWrapper<SPI>> {
-    /// Probe for an SPL06 via SPI. Returns true if WHO_AM_I matches (with a
-    /// few retries to absorb the dual-protocol cold-start).
-    pub async fn probe_spi(spi: &mut SPI) -> bool {
-        for _ in 0..5 {
-            let mut read = [0u8];
-            if spi
-                .transaction(&mut [
-                    embedded_hal_async::spi::Operation::Write(&[REG_PRODUCT_ID | 0x80]),
-                    embedded_hal_async::spi::Operation::Read(&mut read),
-                ])
-                .await
-                .is_ok()
-                && read[0] == PRODUCT_ID
-            {
-                return true;
-            }
-        }
-        false
-    }
-
-    /// Create a new SPL06 over SPI.
-    pub async fn new_spi(
-        spi: SPI,
-        delay: &mut impl DelayNs,
-    ) -> Result<Spl06<SpiBusWrapper<SPI>>, Error<SPI::Error>> {
-        let bus = SpiBusWrapper { spi };
-        Spl06::init(bus, delay).await
-    }
 }
 
 impl<I2C: I2c> Spl06<I2cBusWrapper<I2C>> {

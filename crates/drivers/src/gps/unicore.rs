@@ -47,20 +47,6 @@ where
         }
     }
 
-    /// Read the next position fix. Blocks until a `BESTNAV` frame arrives,
-    /// skipping `UNIHEADING`/other logs and silently dropping corrupt frames
-    /// (the wired bus is trusted, matching the u-blox driver's behaviour).
-    pub async fn read_fix(&mut self) -> Result<NavPvt, Error<RW::Error>> {
-        loop {
-            match self.inner.read_message().await {
-                Ok((_hdr, Message::BestNav(b))) => return Ok(bestnav_to_navpvt(&b)),
-                Ok(_) => {}                       // read_fix only returns position fixes
-                Err(um982::Error::BadCrc) => {}   // drop corrupt frame, keep reading
-                Err(e) => return Err(map_err(e)), // real I/O error — surface it
-            }
-        }
-    }
-
     /// Read the next driver event — a `BESTNAV` fix or a `UNIHEADING` heading.
     /// Corrupt frames are skipped (`Other`); only real I/O errors surface.
     pub async fn read_event(&mut self) -> Result<super::GpsEvent, Error<RW::Error>> {

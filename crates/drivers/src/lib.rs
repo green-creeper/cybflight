@@ -1,7 +1,6 @@
 #![cfg_attr(not(test), no_std)]
 
 pub mod baro;
-pub mod beeper;
 pub mod blackbox_storage;
 pub mod dshot;
 pub mod gps;

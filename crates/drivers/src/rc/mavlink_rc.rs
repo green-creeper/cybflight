@@ -10,7 +10,7 @@
 //! - Provides [`encode_heartbeat_v2`] so an ExpressLRS MAVLink receiver sees an
 //!   active flight controller heartbeat (1 Hz, sysid=1, compid=1) and streams RC + link status.
 
-use super::{LinkStatistics, MAX_CHANNELS, RcChannels};
+use super::{LinkStatistics, MAX_CHANNELS, RcChannels, SAFE_DEFAULT_CHANNELS_US};
 
 pub const MAVLINK2_STX: u8 = 0xFD;
 pub const MAVLINK1_STX: u8 = 0xFE;
@@ -152,8 +152,8 @@ impl MavlinkRcParser {
         Self {
             buf: [0u8; MAX_FRAME_BYTES],
             len: 0,
-            last_channels: [1500; MAX_CHANNELS],
-            last_channel_count: 8,
+            last_channels: SAFE_DEFAULT_CHANNELS_US,
+            last_channel_count: 0,
             crc_errors: 0,
         }
     }
@@ -298,7 +298,9 @@ impl MavlinkRcParser {
                     &self.buf[MAVLINK2_HEADER_LEN..crc_end],
                 );
                 self.consume(total_len);
-                return Some(event);
+                if let Some(event) = event {
+                    return Some(event);
+                }
             } else if stx == MAVLINK1_STX {
                 if self.len < MAVLINK1_HEADER_LEN {
                     return None;
@@ -345,7 +347,9 @@ impl MavlinkRcParser {
                     &self.buf[MAVLINK1_HEADER_LEN..crc_end],
                 );
                 self.consume(total_len);
-                return Some(event);
+                if let Some(event) = event {
+                    return Some(event);
+                }
             } else {
                 self.shift_one();
             }
@@ -359,9 +363,9 @@ impl MavlinkRcParser {
         sysid: u8,
         compid: u8,
         payload: &[u8],
-    ) -> MavlinkRcEvent {
+    ) -> Option<MavlinkRcEvent> {
         match msgid {
-            MAVLINK_MSG_ID_HEARTBEAT => MavlinkRcEvent::Heartbeat { sysid, compid },
+            MAVLINK_MSG_ID_HEARTBEAT => Some(MavlinkRcEvent::Heartbeat { sysid, compid }),
 
             MAVLINK_MSG_ID_RC_CHANNELS_OVERRIDE => {
                 // Undo MAVLink2 trailing-zero trimming by copying into zero-initialized 38-byte struct.
@@ -370,31 +374,24 @@ impl MavlinkRcParser {
                 raw[..n].copy_from_slice(&payload[..n]);
 
                 // Wire order: chan1..8 (0..16), target_system (16), target_component (17),
-                // chan9..18 (18..38).
+                // chan9..18 (18..38). Per MAVLink spec, 0 / UINT16_MAX = ignore, UINT16_MAX-1 = release.
                 let mut highest_active = 0usize;
-                for i in 0..8 {
-                    let val = u16::from_le_bytes([raw[i * 2], raw[i * 2 + 1]]);
-                    if val != 0 && val != u16::MAX {
-                        last_channels[i] = val.clamp(800, 2200);
-                        highest_active = i + 1;
-                    }
-                }
-                for i in 8..16 {
-                    let off = 18 + (i - 8) * 2;
+                for i in 0..16 {
+                    let off = if i < 8 { i * 2 } else { 18 + (i - 8) * 2 };
                     let val = u16::from_le_bytes([raw[off], raw[off + 1]]);
-                    // Per MAVLink spec, 0 / UINT16_MAX = ignore, UINT16_MAX-1 = release
-                    if val != 0 && val != u16::MAX && val != u16::MAX - 1 {
+                    if val > 0 && val < u16::MAX - 1 {
                         last_channels[i] = val.clamp(800, 2200);
                         highest_active = i + 1;
                     }
                 }
-                if highest_active > 0 {
-                    *last_channel_count = (*last_channel_count).max(highest_active as u8).max(8);
+                if highest_active == 0 {
+                    return None;
                 }
-                MavlinkRcEvent::RcChannels(RcChannels {
+                *last_channel_count = (*last_channel_count).max(highest_active as u8).max(8);
+                Some(MavlinkRcEvent::RcChannels(RcChannels {
                     channels: *last_channels,
                     channel_count: *last_channel_count,
-                })
+                }))
             }
 
             MAVLINK_MSG_ID_RC_CHANNELS => {
@@ -402,21 +399,23 @@ impl MavlinkRcParser {
                 let n = payload.len().min(42);
                 raw[..n].copy_from_slice(&payload[..n]);
                 let chancount = raw[40].min(MAX_CHANNELS as u8);
-                if chancount == 0 {
-                    return MavlinkRcEvent::Failsafe;
-                }
+                let mut highest_active = 0usize;
                 for i in 0..(chancount as usize) {
                     let off = 4 + i * 2;
                     let val = u16::from_le_bytes([raw[off], raw[off + 1]]);
-                    if val != 0 && val != u16::MAX {
+                    if val > 0 && val < u16::MAX - 1 {
                         last_channels[i] = val.clamp(800, 2200);
+                        highest_active = i + 1;
                     }
                 }
+                if chancount == 0 || highest_active == 0 {
+                    return None;
+                }
                 *last_channel_count = chancount;
-                MavlinkRcEvent::RcChannels(RcChannels {
+                Some(MavlinkRcEvent::RcChannels(RcChannels {
                     channels: *last_channels,
                     channel_count: chancount,
-                })
+                }))
             }
 
             MAVLINK_MSG_ID_RADIO_RC_CHANNELS => {
@@ -427,11 +426,11 @@ impl MavlinkRcParser {
                 raw[..n].copy_from_slice(&payload[..n]);
                 let flags = u16::from_le_bytes([raw[4], raw[5]]);
                 if flags & RADIO_RC_CHANNELS_FLAGS_FAILSAFE != 0 {
-                    return MavlinkRcEvent::Failsafe;
+                    return Some(MavlinkRcEvent::Failsafe);
                 }
                 let count = raw[8].min(MAX_CHANNELS as u8);
                 if count == 0 {
-                    return MavlinkRcEvent::Failsafe;
+                    return Some(MavlinkRcEvent::Failsafe);
                 }
                 for i in 0..(count as usize) {
                     let off = 9 + i * 2;
@@ -440,10 +439,10 @@ impl MavlinkRcParser {
                     last_channels[i] = pwm;
                 }
                 *last_channel_count = count;
-                MavlinkRcEvent::RcChannels(RcChannels {
+                Some(MavlinkRcEvent::RcChannels(RcChannels {
                     channels: *last_channels,
                     channel_count: count,
-                })
+                }))
             }
 
             MAVLINK_MSG_ID_RADIO_STATUS => {
@@ -455,11 +454,12 @@ impl MavlinkRcParser {
                 let rssi = raw[4];
                 let remrssi = raw[5];
 
-                // ArduPilot GCS_Common::telemetry_radio_rssi(): rssi / 254.0 (255 = invalid).
-                // On ELRS MAVLink, `rssi` holds scaled LQ/RSSI [0..254] (or 255 unknown).
-                let sig = if rssi != 255 && rssi != 0 {
+                // ArduPilot GCS_Common::telemetry_radio_rssi(): rssi / 254.0 (255 = invalid/unknown).
+                // On ELRS MAVLink, `rssi == 0` indicates zero local signal — only fall back
+                // to `remrssi` when `rssi == u8::MAX` (unknown sentinel).
+                let sig = if rssi != u8::MAX {
                     rssi
-                } else if remrssi != 255 && remrssi != 0 {
+                } else if remrssi != u8::MAX {
                     remrssi
                 } else {
                     0
@@ -475,20 +475,20 @@ impl MavlinkRcParser {
                     -120 + ((link_quality as i16 * 70) / 100)
                 };
 
-                MavlinkRcEvent::LinkStats(LinkStatistics {
+                Some(MavlinkRcEvent::LinkStats(LinkStatistics {
                     rssi_dbm,
                     link_quality,
                     snr: 0,
                     rf_mode: 0,
                     tx_power_dbm: 0,
-                })
+                }))
             }
 
-            _ => MavlinkRcEvent::Other {
+            _ => Some(MavlinkRcEvent::Other {
                 msgid,
                 sysid,
                 compid,
-            },
+            }),
         }
     }
 }
@@ -661,5 +661,94 @@ mod tests {
         assert_eq!(s.rssi_dbm, -50);
         assert!(parser.take_crc_errors() >= 1);
         assert_eq!(parser.take_crc_errors(), 0);
+    }
+
+    #[test]
+    fn rc_override_ignores_65534_on_chan1_to_8_and_drops_empty_frames() {
+        let mut parser = MavlinkRcParser::new();
+
+        // All zeros #70 -> None (no fake RC event when ELRS TX is off).
+        let zero_payload = [0u8; 38];
+        let zero_pkt = build_mavlink2_frame(MAVLINK_MSG_ID_RC_CHANNELS_OVERRIDE, 255, 190, &zero_payload);
+        for &b in &zero_pkt {
+            assert!(parser.feed(b).is_none());
+        }
+
+        // All 65535 #70 -> None.
+        let max_payload = [0xFFu8; 38];
+        let max_pkt = build_mavlink2_frame(MAVLINK_MSG_ID_RC_CHANNELS_OVERRIDE, 255, 190, &max_payload);
+        for &b in &max_pkt {
+            assert!(parser.feed(b).is_none());
+        }
+
+        // Empty #65 (chancount == 0) -> None.
+        let empty_rc = [0u8; 42];
+        let empty_rc_pkt = build_mavlink2_frame(MAVLINK_MSG_ID_RC_CHANNELS, 1, 1, &empty_rc);
+        for &b in &empty_rc_pkt {
+            assert!(parser.feed(b).is_none());
+        }
+
+        // #70 with valid CH1=1515, CH3=65534 (ignored, must remain 988 safe default!), CH5=65534 (must remain 988).
+        let mut payload = [0u8; 38];
+        payload[0..2].copy_from_slice(&1515u16.to_le_bytes());
+        payload[4..6].copy_from_slice(&(u16::MAX - 1).to_le_bytes()); // CH3 = 65534
+        payload[8..10].copy_from_slice(&(u16::MAX - 1).to_le_bytes()); // CH5 = 65534
+        let pkt = build_mavlink2_frame(MAVLINK_MSG_ID_RC_CHANNELS_OVERRIDE, 255, 190, &payload);
+        let mut evt = None;
+        for &b in &pkt {
+            if let Some(r) = parser.feed(b) {
+                evt = Some(r);
+            }
+        }
+        match evt {
+            Some(MavlinkRcEvent::RcChannels(rc)) => {
+                assert_eq!(rc.channels[0], 1515);
+                assert_eq!(rc.channels[2], 988, "65534 on CH3 must not clamp to 2200");
+                assert_eq!(rc.channels[4], 988, "65534 on CH5 must not arm or clamp to 2200");
+            }
+            other => panic!("expected RcChannels, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn radio_status_rssi_zero_does_not_spoof_remrssi() {
+        let mut parser = MavlinkRcParser::new();
+
+        // rssi = 0 (zero local signal), remrssi = 200 -> must stay 0% LQ, -120 dBm.
+        let mut zero_rssi = [0u8; 9];
+        zero_rssi[4] = 0;
+        zero_rssi[5] = 200;
+        let pkt0 = build_mavlink2_frame(MAVLINK_MSG_ID_RADIO_STATUS, 3, 68, &zero_rssi);
+        let mut evt0 = None;
+        for &b in &pkt0 {
+            if let Some(r) = parser.feed(b) {
+                evt0 = Some(r);
+            }
+        }
+        match evt0 {
+            Some(MavlinkRcEvent::LinkStats(s)) => {
+                assert_eq!(s.link_quality, 0);
+                assert_eq!(s.rssi_dbm, -120);
+            }
+            other => panic!("expected LinkStats, got {other:?}"),
+        }
+
+        // rssi = 255 (u8::MAX unknown sentinel), remrssi = 200 -> falls back to remrssi.
+        let mut unknown_rssi = [0u8; 9];
+        unknown_rssi[4] = u8::MAX;
+        unknown_rssi[5] = 200;
+        let pkt_unk = build_mavlink2_frame(MAVLINK_MSG_ID_RADIO_STATUS, 3, 68, &unknown_rssi);
+        let mut evt_unk = None;
+        for &b in &pkt_unk {
+            if let Some(r) = parser.feed(b) {
+                evt_unk = Some(r);
+            }
+        }
+        match evt_unk {
+            Some(MavlinkRcEvent::LinkStats(s)) => {
+                assert_eq!(s.link_quality, ((200u16 * 100 + 127) / 254) as u8);
+            }
+            other => panic!("expected LinkStats fallback, got {other:?}"),
+        }
     }
 }

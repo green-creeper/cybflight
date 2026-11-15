@@ -250,6 +250,8 @@ pub const IMU_DECIM_DIV: u32 = {
 compile_error!(
     "imu_1khz applies to ICM426xx boards; micoair743v2 (BMI270) runs at its native 3.2 kHz"
 );
+#[cfg(all(feature = "board_flywoof745", feature = "imu_1khz"))]
+compile_error!("imu_1khz is not supported on board_flywoof745");
 
 // This crate only ever builds for thumbv7em, so a `#[cfg(test)]` module here
 // would never run. These are const assertions instead: they are checked on

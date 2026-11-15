@@ -3,7 +3,6 @@
 # suppressing diagnostics in user code. Override to the host target for editing.
 [cargo]
 target = "x86_64-unknown-linux-gnu"
-features = ["std"]
 
 [check]
 allTargets = false

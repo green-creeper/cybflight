@@ -331,11 +331,6 @@ where
         3200.0
     }
 
-    /// Gyro hardware filter is normal-mode at 3200 Hz ODR ⇒ ~751 Hz -3dB.
-    fn hardware_lpf_cutoff_hz(&self) -> Option<f32> {
-        Some(751.0)
-    }
-
     async fn read(&mut self) -> Result<ImuReading, Self::Error> {
         // Wait for data-ready rising edge (INT1, non-latched ⇒ pulsed).
         self.drdy.wait_for_rising_edge().await.ok();

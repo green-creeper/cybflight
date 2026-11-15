@@ -80,7 +80,6 @@ impl<E: defmt::Format> defmt::Format for Error<E> {
 pub struct Mpu6x00<SPI: SpiDevice, DRDY: Wait> {
     spi: SPI,
     drdy: DRDY,
-    variant: Variant,
     temp_scale: f32,
     temp_offset: f32,
 }
@@ -96,7 +95,6 @@ impl<SPI: SpiDevice, DRDY: Wait> Mpu6x00<SPI, DRDY> {
         let mut drv = Self {
             spi,
             drdy,
-            variant: Variant::Mpu6000,
             temp_scale: 0.0,
             temp_offset: 0.0,
         };
@@ -124,8 +122,6 @@ impl<SPI: SpiDevice, DRDY: Wait> Mpu6x00<SPI, DRDY> {
             WHOAMI_MPU6500 => Variant::Mpu6500,
             _ => return Err(Error::UnknownChip(whoami)),
         };
-
-        drv.variant = variant;
 
         defmt::info!(
             "MPU6x00: detected {:?} (WHO_AM_I={=u8:#x})",
@@ -235,11 +231,6 @@ impl<SPI: SpiDevice, DRDY: Wait> Mpu6x00<SPI, DRDY> {
         }
 
         Ok(drv)
-    }
-
-    /// Returns the detected chip variant.
-    pub fn variant(&self) -> Variant {
-        self.variant
     }
 
     // -----------------------------------------------------------------------

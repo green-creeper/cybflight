@@ -9,7 +9,7 @@
 // from MotorParams produces the same achieved pseudo-controls as the NED reference
 // after frame transformation.
 //
-// Run: cargo test -p cybflight-core --target x86_64-unknown-linux-gnu --features std --test indi_golden
+// Run: cargo test -p cybflight-core --target x86_64-unknown-linux-gnu --test indi_golden
 
 use air_filters::Filter;
 use air_filters::iir::biquad::{

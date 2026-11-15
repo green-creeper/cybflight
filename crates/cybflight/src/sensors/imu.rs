@@ -442,6 +442,11 @@ impl<D: ReadImu> ImuReader<D> {
                         }
                     }
 
+                    if !(gyro.iter().all(|v| v.is_finite()) && accel.iter().all(|v| v.is_finite()))
+                    {
+                        continue;
+                    }
+
                     let af = self.accel_filter.apply(accel.into());
                     let gf = self.gyro_filter.apply(gyro.into());
 

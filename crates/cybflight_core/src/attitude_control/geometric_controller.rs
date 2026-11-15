@@ -6,6 +6,7 @@ use crate::rotation::vee;
 use nalgebra as na;
 use num_traits::{NumCast, float::FloatCore};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttitudeErrorLaw {
     GeometricSO3,
     QuaternionBased,
@@ -178,7 +179,7 @@ impl<T: na::RealField + Copy + NumCast + FloatCore> GeometricAttitudeController<
                 // the paper exactly.
                 let rot_des = q_des.to_rotation_matrix();
 
-                let angle_error = evaluate_attitude_error(q, q_des, AttitudeErrorLaw::GeometricSO3);
+                let angle_error = evaluate_attitude_error(q, q_des, self.attitude_error_law);
 
                 // May be used as a computed 'body_rate_setpoint', e.g., in
                 // mavros_controllers. In this case the body_rate field in ref is ignored
@@ -624,5 +625,40 @@ mod tracking_tests {
             ff.bodyrates
         );
         assert!(ff.bodyrates.x.abs() < 1e-6 && ff.bodyrates.z.abs() < 1e-6);
+    }
+}
+
+#[cfg(test)]
+mod attitude_error_law_tests {
+    use super::*;
+
+    #[test]
+    fn tilt_prioritizing_differs_from_geometric_so3_under_large_yaw_and_tilt() {
+        let k_rate = na::Vector3::new(6.0_f32, 6.0, 2.0);
+        let k_torque = na::Vector3::new(1.0_f32, 1.0, 0.5);
+        let ctrl_so3 = GeometricAttitudeController::new(k_rate, k_torque)
+            .with_attitude_error_law(AttitudeErrorLaw::GeometricSO3);
+        let ctrl_tilt = GeometricAttitudeController::new(k_rate, k_torque)
+            .with_attitude_error_law(AttitudeErrorLaw::TiltPrioritizing);
+
+        let state = AttitudeControlState {
+            attitude_quaternion: na::UnitQuaternion::identity(),
+            body_rate_rad_s: na::Vector3::zeros(),
+        };
+        let sp = AttitudeControlSetpoint {
+            attitude_quaternion: Some(na::UnitQuaternion::from_euler_angles(0.4, -0.3, 1.5)),
+            body_rate_rad_s: na::Vector3::zeros(),
+            angular_accel_rad_s2: na::Vector3::zeros(),
+        };
+
+        let out_so3 = ctrl_so3.compute(&state, &sp);
+        let out_tilt = ctrl_tilt.compute(&state, &sp);
+
+        assert!(
+            (out_so3.body_rate_rad_s - out_tilt.body_rate_rad_s).norm() > 1e-2,
+            "expected distinct outputs for GeometricSO3 vs TiltPrioritizing: so3={:?}, tilt={:?}",
+            out_so3.body_rate_rad_s,
+            out_tilt.body_rate_rad_s
+        );
     }
 }

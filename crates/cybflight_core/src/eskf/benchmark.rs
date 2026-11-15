@@ -8,7 +8,7 @@
 //! avoids structurally-zero work in the same SIMD-able loops.
 //!
 //! Run: `cargo test -p cybflight-core --target x86_64-unknown-linux-gnu \
-//!       --features std --release --lib eskf::benchmark -- --nocapture`
+//!       --release --lib eskf::benchmark -- --nocapture`
 //!
 //! `--release` is essential — a debug build hides the optimizer wins
 //! the sparse path is meant to expose.

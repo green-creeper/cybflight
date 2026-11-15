@@ -6,9 +6,6 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
-[features]
-std = ["nalgebra/std"]
-
 [dependencies]
 cybflight-params-derive = { path = "../params_derive" }
 crc32fast = { version = "1.5", default-features = false }

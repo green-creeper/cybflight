@@ -63,7 +63,6 @@ pub mod offline_mission;
 #[cfg(feature = "outer_mpc")]
 pub mod outer_loop;
 pub mod rc_interpreter;
-pub mod rl_policy_task;
 pub use msgs::{
     TRACKING_ERROR_SOURCE_CASCADE, TRACKING_ERROR_SOURCE_INDI, TRACKING_ERROR_SOURCE_MPC,
     TrackingError,
@@ -95,9 +94,6 @@ pub static OCP_SOLVER_OUTPUT: PubSubChannel<
 pub static MPC_COST_ADAPT: PubSubChannel<CriticalSectionRawMutex, msgs::MpcCostAdapt, 4, 2, 1> =
     PubSubChannel::new();
 
-pub static NMPC_SETPOINT: PubSubChannel<CriticalSectionRawMutex, msgs::NmpcSetpoint, 2, 2, 1> =
-    PubSubChannel::new();
-
 pub static ATTITUDE_CONTROL_SETPOINT: PubSubChannel<
     CriticalSectionRawMutex,
     msgs::AttitudeControlSetpoint,
@@ -122,8 +118,7 @@ pub static RATE_COMMAND: Signal<CriticalSectionRawMutex, msgs::AttitudeControlSe
 ///
 /// When `true` in `outer_rate` mode:
 /// - `rc_interpreter_task` pauses stick-to-`RATE_COMMAND` publishing so
-///   offboard UART commands (`esp_bridge_rx_task`) or the onboard RL policy
-///   (`rl_policy_task`) have exclusive authority.
+///   offboard UART commands (`esp_bridge_rx_task`) have exclusive authority.
 /// - `indi_task` accepts either `DIRECT_MOTOR_COMMAND` (direct 4-motor
 ///   normalized throttle `[m1, m2, m3, m4]`) or `RATE_COMMAND` (body rates +
 ///   collective thrust), guarded by the same 100 ms staleness watchdog.
@@ -133,7 +128,7 @@ pub static OFFBOARD_ACTIVE: core::sync::atomic::AtomicBool =
     core::sync::atomic::AtomicBool::new(false);
 
 /// Direct 4-motor command `[m0, m1, m2, m3]` in `[0.0, 1.0]` from Offboard
-/// UART (`WireActuatorMotors`) or the onboard RL policy (`rl_policy_task`).
+/// UART (`WireActuatorMotors`).
 ///
 /// Consumed by `indi_task` via `try_take()` when `OFFBOARD_ACTIVE` is true.
 pub static DIRECT_MOTOR_COMMAND: Signal<CriticalSectionRawMutex, msgs::ActuatorMotors> =

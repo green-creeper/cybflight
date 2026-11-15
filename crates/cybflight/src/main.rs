@@ -120,6 +120,11 @@ async fn main(spawner: embassy_executor::Spawner) {
     #[cfg(not(feature = "postmortem"))]
     let enter_safe_mode = false;
 
+    {
+        use cybflight::hal::interrupt::{self, InterruptExt, Priority};
+        interrupt::OTG_FS.set_priority(Priority::P12);
+    }
+
     if enter_safe_mode {
         defmt::error!(
             "SAFE MODE: prior boot crashed during startup — starting minimal USB CDC + LED only"
@@ -197,7 +202,14 @@ async fn main(spawner: embassy_executor::Spawner) {
     // Arm PVD after IWDG so a brownout handler parking in `wfi()` can never
     // wedge the MCU indefinitely if VDD recovers before BOR.
     #[cfg(feature = "postmortem")]
-    cybflight::postmortem::fault::enable_pvd_brownout();
+    {
+        use cybflight::hal::interrupt::{self, InterruptExt, Priority};
+        #[cfg(feature = "board_flywoof745")]
+        interrupt::PVD.set_priority(Priority::P0);
+        #[cfg(not(feature = "board_flywoof745"))]
+        interrupt::PVD_AVD.set_priority(Priority::P0);
+        cybflight::postmortem::fault::enable_pvd_brownout();
+    }
     spawner
         .spawn(cybflight::watchdog::iwdg_feed_task())
         .unwrap_or_else(|_| defmt::panic!("failed to spawn IWDG feed task"));
@@ -224,8 +236,7 @@ async fn main(spawner: embassy_executor::Spawner) {
     // `VEHICLE_ODOMETRY` under the same `ODOM_DECIMATION`, so both are
     // 1 kHz — in *every* build, since the predict is decimated to
     // ~1 kHz whether the IMU runs at 1 kHz or 8 kHz.
-    // Cross-executor communication (ESKF_GYRO_BIAS, ESKF_ACCEL_BIAS Signals and
-    // VEHICLE_ODOMETRY PubSub) is lock-free by construction.
+    // Cross-executor communication (`VEHICLE_ODOMETRY` PubSub) is lock-free by construction.
     #[cfg(feature = "est_pos_mocap")]
     spawner
         .spawn(cybflight::estimation::eskf_imu_mocap::estimation_task())

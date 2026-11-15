@@ -12,7 +12,7 @@
 //!    that pins down *both* answers.
 //!
 //! Run: `cargo test -p cybflight-core --target x86_64-unknown-linux-gnu \
-//!       --features std --test rotation_convention`
+//!       --test rotation_convention`
 
 use cybflight_core::rotation::{
     angle_axis_from_two_normals, euler_angles_rpy_to_quaternion,

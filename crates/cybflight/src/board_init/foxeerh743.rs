@@ -62,6 +62,19 @@ pub async fn init(
     high_spawner: &SendSpawner,
     board: bsp::Board,
 ) {
+    {
+        use hal::interrupt::{self, InterruptExt, Priority};
+        // Keep slow comms/I2C below P10 ctrl and EXTI DRDY at P5 (below P4 DMA, above P6 DShot).
+        interrupt::EXTI0.set_priority(Priority::P5);
+        interrupt::OTG_FS.set_priority(Priority::P12);
+        interrupt::USART1.set_priority(Priority::P12);
+        interrupt::USART2.set_priority(Priority::P12);
+        interrupt::UART4.set_priority(Priority::P12);
+        interrupt::USART6.set_priority(Priority::P12);
+        interrupt::I2C1_EV.set_priority(Priority::P12);
+        interrupt::I2C1_ER.set_priority(Priority::P12);
+    }
+
     // --- Load vehicle parameters from flash (or defaults) ---
     crate::params::init_from_flash(board.internal_flash);
 
@@ -438,7 +451,6 @@ pub async fn init(
                 dma_request: 23,
                 gpio_port: hal::pac::GPIOB,
                 gpio_pin: 4,
-                af_number: 2,
             }, // M1: PB4 TIM3_CH1
             MotorTimerConfig {
                 timer_regs: tim3_regs,
@@ -446,7 +458,6 @@ pub async fn init(
                 dma_request: 24,
                 gpio_port: hal::pac::GPIOB,
                 gpio_pin: 5,
-                af_number: 2,
             }, // M2: PB5 TIM3_CH2
             MotorTimerConfig {
                 timer_regs: tim3_regs,
@@ -454,7 +465,6 @@ pub async fn init(
                 dma_request: 25,
                 gpio_port: hal::pac::GPIOB,
                 gpio_pin: 0,
-                af_number: 2,
             }, // M3: PB0 TIM3_CH3
             MotorTimerConfig {
                 timer_regs: tim3_regs,
@@ -462,7 +472,6 @@ pub async fn init(
                 dma_request: 26,
                 gpio_port: hal::pac::GPIOB,
                 gpio_pin: 1,
-                af_number: 2,
             }, // M4: PB1 TIM3_CH4
         ],
         timers: [tim3_regs, tim3_regs], // Only 1 unique timer; timers[1] unused padding
@@ -486,14 +495,8 @@ pub async fn init(
         board.adc.adc3,
         board.adc.vbat,
         board.adc.curr,
-        crate::sensors::power::AdcInput {
-            gpioc_pin: 3,
-            channel: 1,
-        },
-        crate::sensors::power::AdcInput {
-            gpioc_pin: 2,
-            channel: 0,
-        },
+        crate::sensors::power::AdcInput { channel: 1 },
+        crate::sensors::power::AdcInput { channel: 0 },
         bsp::POWER_CAL,
     );
     spawner

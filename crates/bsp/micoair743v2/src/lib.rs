@@ -23,37 +23,20 @@ use hal::exti;
 use hal::gpio::{Level, Output, Pull, Speed};
 use hal::{Config, Peripherals, bind_interrupts};
 
-pub use bsp_types::{
-    DmaHint, MotorMeta, PowerCalibration, SensorAlign, SerialPortId, TimerChannel, TimerId,
-};
-pub use cybflight_drivers::beeper::Beeper;
+pub use bsp_types::{PowerCalibration, SensorAlign, SerialPortId};
 
 /// Board name from Betaflight target.
 pub const BOARD_NAME: &str = "MICOAIR743V2";
-/// Manufacturer ID from Betaflight target.
-pub const MANUFACTURER_ID: &str = "MICO";
-
-/// Betaflight target (`MICOAIR743` v1 and v2) marks the beeper inverted
-/// (active-low). The ArduPilot hwdef implies active-high — confirm on the
-/// bench; flip this if the buzzer is silent / stuck on.
-pub const BEEPER_INVERTED: bool = true;
 
 /// Single IMU wired: BMI270 (SPI3). The board also has a BMI088 on SPI2 that
 /// this BSP does not yet wire (matches Betaflight's v2 target).
 pub const IMU_COUNT: usize = 1;
 /// Single baro: SPL06 on I2C2.
 pub const BARO_COUNT: usize = 1;
-pub const HAS_MAG: bool = true;
-/// AT7456E OSD exists on SPI1 but we do not implement OSD.
-pub const HAS_OSD: bool = false;
-pub const HAS_FLASH: bool = false;
-pub const HAS_GPS: bool = true;
 pub const HAS_SDCARD: bool = true;
 /// Storage backend for the blackbox / flight-data-recorder pipeline — driven
 /// by the onboard microSD slot. `false` compiles out the recorder entirely.
 pub const HAS_BLACKBOX_STORAGE: bool = HAS_SDCARD;
-/// STM32H743 D3-domain backup SRAM is always present at the MCU level.
-pub const HAS_BACKUP_SRAM: bool = true;
 pub const LED_COUNT: usize = 3;
 
 pub type DshotDmaM1 = hal::peripherals::DMA1_CH0;
@@ -219,7 +202,6 @@ pub struct SensorPins {
     pub gyro1_align: SensorAlign,
 
     // Mag: QMC5883L on I2C1 addr 0x0D.
-    pub mag_i2c_addr: u8,
     pub mag_align: SensorAlign,
 }
 
@@ -235,7 +217,6 @@ bind_interrupts!(pub struct UsbIrqs {
 
 pub struct Board {
     pub leds: Leds,
-    pub beeper: Beeper<Output<'static>>,
 
     pub spi: SpiPins,
     pub i2c: I2cPins,
@@ -280,6 +261,8 @@ pub const APB1_TIMER_HZ: u32 = 240_000_000;
 /// PLL1: HSI (64 MHz) / M=4 * N=60 / P=2 = 480 MHz SYSCLK (VOS0).
 fn board_config() -> Config {
     let mut config = Config::default();
+    config.dma_interrupt_priority = hal::interrupt::Priority::P4;
+    config.bdma_interrupt_priority = hal::interrupt::Priority::P4;
     {
         use hal::rcc::*;
         config.rcc.pll1 = Some(Pll {
@@ -319,17 +302,9 @@ pub fn init() -> (Board, hal::usart::UartTx<'static, hal::mode::Blocking>) {
         led2: Output::new(p.PE4, Level::Low, Speed::Low),
     };
 
-    // Beeper (PD15), inverted => OFF should be High.
-    let beeper_pin = Output::new(
-        p.PD15,
-        if BEEPER_INVERTED {
-            Level::High
-        } else {
-            Level::Low
-        },
-        Speed::Low,
-    );
-    let beeper = Beeper::new(beeper_pin, BEEPER_INVERTED);
+    // Beeper (PD15), inverted => OFF should be High; forget to keep pin driven idle.
+    let beeper_pin = Output::new(p.PD15, Level::High, Speed::Low);
+    core::mem::forget(beeper_pin);
 
     // BMI270 CS (PA15), deasserted high. DRDY (PB7) as EXTI input.
     let gyro1_cs = Output::new(p.PA15, Level::High, Speed::VeryHigh);
@@ -428,7 +403,6 @@ pub fn init() -> (Board, hal::usart::UartTx<'static, hal::mode::Blocking>) {
         // pitch/yaw) handedness with a nose-down + roll-right tilt test.
         gyro1_align: SensorAlign::Cw0Deg,
 
-        mag_i2c_addr: sensors::MAG_I2C_ADDR,
         // QMC5883L internal compass: hwdef ROTATION_NONE, but ArduPilot bakes a
         // universal X/Z sign negation into its QMC driver. Reproduce it with a
         // flip about Y = (-x,y,-z) = Cw0DegFlip. VERIFY ON BENCH (mag cal).
@@ -445,7 +419,6 @@ pub fn init() -> (Board, hal::usart::UartTx<'static, hal::mode::Blocking>) {
     (
         Board {
             leds,
-            beeper,
             spi,
             i2c,
             serial,

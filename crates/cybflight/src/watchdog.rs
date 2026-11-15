@@ -58,26 +58,37 @@ pub fn feed() {
         .write(|w| w.set_key(pac::iwdg::vals::Key::RESET));
 }
 
-/// Temporarily extend the IWDG timeout to ~4 s for long-running blocking
+/// Temporarily extend the IWDG timeout for long-running blocking
 /// operations (e.g. flash sector erase). Feeds the counter immediately so
 /// the full extended period starts now.
+///
+/// Uses prescaler `/256` + reload `1500` (~8.1 s even at worst-case 47 kHz LSI),
+/// safely covering the ~4.0 s max 256 KB single-bank STM32F745 sector erase.
 ///
 /// The IWDG prescaler and reload registers can be modified while running by
 /// first writing the unlock key (0x5555) to KR.
 pub fn extend_timeout() {
     // No-op before `init`: there is no running watchdog to outlast the
-    // erase, and the PVU spin below requires LSI (started by IWDG START).
+    // erase, and the PVU/RVU spin below requires LSI (started by IWDG START).
     if !STARTED.load(Ordering::Acquire) {
         return;
     }
     let iwdg = IWDG_REGS;
     // Unlock PR/RLR
     iwdg.kr().write(|w| w.set_key(pac::iwdg::vals::Key::ENABLE));
-    // Prescaler /256 → 32 kHz / 256 = 125 Hz tick, reload 500 → 4 s
+    // Wait for any pending PR/RLR shadow register update before modifying them.
+    while {
+        let sr = iwdg.sr().read();
+        sr.pvu() || sr.rvu()
+    } {}
     iwdg.pr()
         .write(|w| w.set_pr(pac::iwdg::vals::Pr::DIVIDE_BY256));
-    // Wait for prescaler update to take effect
-    while iwdg.sr().read().pvu() {}
+    iwdg.rlr().write(|w| w.set_rl(1500));
+    // Wait for both prescaler and reload updates to propagate before feeding.
+    while {
+        let sr = iwdg.sr().read();
+        sr.pvu() || sr.rvu()
+    } {}
     feed();
 }
 
@@ -89,10 +100,18 @@ pub fn restore_timeout() {
     let iwdg = IWDG_REGS;
     // Unlock PR/RLR
     iwdg.kr().write(|w| w.set_key(pac::iwdg::vals::Key::ENABLE));
-    // Prescaler /32 → 1 kHz tick, reload 500 → 500 ms
+    while {
+        let sr = iwdg.sr().read();
+        sr.pvu() || sr.rvu()
+    } {}
+    // Prescaler /32 → 1 kHz nominal tick, reload 500 → ~500 ms
     iwdg.pr()
         .write(|w| w.set_pr(pac::iwdg::vals::Pr::DIVIDE_BY32));
-    while iwdg.sr().read().pvu() {}
+    iwdg.rlr().write(|w| w.set_rl(500));
+    while {
+        let sr = iwdg.sr().read();
+        sr.pvu() || sr.rvu()
+    } {}
     feed();
 }
 

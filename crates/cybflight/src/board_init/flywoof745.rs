@@ -28,7 +28,9 @@ use embassy_embedded_hal::shared_bus::asynch::spi::SpiDevice;
 use embassy_executor::{InterruptExecutor, SendSpawner, Spawner};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::mutex::Mutex;
-use embassy_time::{Duration, Timer, with_timeout};
+use embassy_time::{Duration, Timer};
+#[cfg(feature = "est_pos_gps")]
+use embassy_time::with_timeout;
 use static_cell::StaticCell;
 
 use crate::bsp;
@@ -91,6 +93,19 @@ pub async fn init(
 ) {
     let imu_spawner = {
         use hal::interrupt::{self, InterruptExt, Priority};
+        // NVIC priority tiers (lower number = higher urgency):
+        // P0: PVD | P4: DMA | P6: DShot | P7: IMU EXTI | P8: IMU task | P10: Ctrl | P12: slow IRQs
+        interrupt::EXTI1.set_priority(Priority::P7);
+        interrupt::OTG_FS.set_priority(Priority::P12);
+        interrupt::USART1.set_priority(Priority::P12);
+        interrupt::USART2.set_priority(Priority::P12);
+        interrupt::USART3.set_priority(Priority::P12);
+        interrupt::UART4.set_priority(Priority::P12);
+        interrupt::UART5.set_priority(Priority::P12);
+        interrupt::USART6.set_priority(Priority::P12);
+        interrupt::I2C1_EV.set_priority(Priority::P12);
+        interrupt::I2C1_ER.set_priority(Priority::P12);
+
         interrupt::CAN2_RX1.set_priority(Priority::P8);
         EXECUTOR_IMU.start(interrupt::CAN2_RX1)
     };
@@ -232,6 +247,13 @@ pub async fn init(
                     fast_cfg.mode = spi::MODE_3;
                     let _ = spi4_bus.lock().await.set_config(&fast_cfg);
                     defmt::info!("IMU1 init OK (BMI270 on SPI4 @ 6.75 MHz)");
+                    if imu1.sample_rate_hz() != crate::rates::IMU_ODR_HZ {
+                        defmt::warn!(
+                            "IMU1 ODR mismatch: BMI270 runs at {} Hz while rates::IMU_ODR_HZ is {} Hz",
+                            imu1.sample_rate_hz(),
+                            crate::rates::IMU_ODR_HZ
+                        );
+                    }
                     imu_spawner
                         .spawn(bmi270_reader_task(
                             ImuReader::new(
@@ -572,10 +594,14 @@ pub async fn init(
     let tim3_regs = timer3.regs_gp16();
     core::mem::forget(timer3);
 
-    // TIM1 is an advanced-control timer — enable BDTR.MOE so outputs are active.
+    // TIM1 is an advanced-control timer — enable BDTR.MOE + AOE so outputs are active
+    // and automatically re-armed after each update event.
     let timer1 = LLTimer::new(board.motors.tim1);
     let tim1_regs = timer1.regs_gp16();
-    timer1.regs_advanced().bdtr().modify(|w| w.set_moe(true));
+    timer1.regs_advanced().bdtr().modify(|w| {
+        w.set_moe(true);
+        w.set_aoe(true);
+    });
     core::mem::forget(timer1);
 
     let af = AfType::output(OutputType::PushPull, Speed::Low);
@@ -599,7 +625,6 @@ pub async fn init(
                 dma_request: 5, // DMA1 Stream 7 Channel 5 = TIM3_CH3
                 gpio_port: hal::pac::GPIOB,
                 gpio_pin: 0,
-                af_number: 2,
             },
             MotorTimerConfig {
                 timer_regs: tim3_regs,
@@ -607,7 +632,6 @@ pub async fn init(
                 dma_request: 5, // DMA1 Stream 2 Channel 5 = TIM3_CH4
                 gpio_port: hal::pac::GPIOB,
                 gpio_pin: 1,
-                af_number: 2,
             },
             MotorTimerConfig {
                 timer_regs: tim1_regs,
@@ -615,7 +639,6 @@ pub async fn init(
                 dma_request: 6, // DMA2 Stream 1 Channel 6 = TIM1_CH1
                 gpio_port: hal::pac::GPIOE,
                 gpio_pin: 9,
-                af_number: 1,
             },
             MotorTimerConfig {
                 timer_regs: tim1_regs,
@@ -623,7 +646,6 @@ pub async fn init(
                 dma_request: 6, // DMA2 Stream 2 Channel 6 = TIM1_CH2
                 gpio_port: hal::pac::GPIOE,
                 gpio_pin: 11,
-                af_number: 1,
             },
         ],
         timers: [tim3_regs, tim1_regs],
@@ -645,14 +667,8 @@ pub async fn init(
         board.adc.adc3,
         board.adc.vbat,
         board.adc.curr,
-        crate::sensors::power::AdcInput {
-            gpioc_pin: 3,
-            channel: 13,
-        },
-        crate::sensors::power::AdcInput {
-            gpioc_pin: 2,
-            channel: 12,
-        },
+        crate::sensors::power::AdcInput { channel: 13 },
+        crate::sensors::power::AdcInput { channel: 12 },
         bsp::POWER_CAL,
     );
     spawner

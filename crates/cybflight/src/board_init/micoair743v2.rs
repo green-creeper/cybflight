@@ -86,6 +86,22 @@ pub async fn init(
     high_spawner: &SendSpawner,
     board: bsp::Board,
 ) {
+    {
+        use hal::interrupt::{self, InterruptExt, Priority};
+        // Keep slow comms/I2C/SDMMC below P10 ctrl and EXTI7 DRDY at P5.
+        interrupt::EXTI9_5.set_priority(Priority::P5);
+        interrupt::OTG_FS.set_priority(Priority::P12);
+        interrupt::USART1.set_priority(Priority::P12);
+        interrupt::USART2.set_priority(Priority::P12);
+        interrupt::USART3.set_priority(Priority::P12);
+        interrupt::USART6.set_priority(Priority::P12);
+        interrupt::I2C1_EV.set_priority(Priority::P12);
+        interrupt::I2C1_ER.set_priority(Priority::P12);
+        interrupt::I2C2_EV.set_priority(Priority::P12);
+        interrupt::I2C2_ER.set_priority(Priority::P12);
+        interrupt::SDMMC1.set_priority(Priority::P12);
+    }
+
     // --- Load vehicle parameters from flash (or defaults) ---
     crate::params::init_from_flash(board.internal_flash);
 
@@ -408,13 +424,15 @@ pub async fn init(
     // --- DShot motor output (quad on TIM1, M1–M4) ---
     //
     // TIM1 is an advanced-control timer: its outputs are gated by BDTR.MOE,
-    // which the (general-purpose) DShot driver never sets. Enable it here once
-    // — it persists through the driver's per-frame reconfiguration (which only
-    // touches CCMR/CCER/CCR/DIER/CR1, never BDTR).
+    // which the (general-purpose) DShot driver never sets. Enable MOE + AOE
+    // here once — AOE automatically re-arms MOE on each update event (`egr.ug`).
     let timer1 = LLTimer::new(board.motors.tim1);
     let tim1_regs = timer1.regs_gp16();
-    timer1.regs_advanced().bdtr().modify(|w| w.set_moe(true));
-    core::mem::forget(timer1); // keep RCC clock + MOE alive
+    timer1.regs_advanced().bdtr().modify(|w| {
+        w.set_moe(true);
+        w.set_aoe(true);
+    });
+    core::mem::forget(timer1); // keep RCC clock + MOE/AOE alive
 
     // Configure GPIO as timer AF (PE9/11/13/14 → TIM1 CH1–CH4, AF1).
     let af = AfType::output(OutputType::PushPull, Speed::Low);
@@ -438,7 +456,6 @@ pub async fn init(
                 dma_request: 14, // TIM1_CH4
                 gpio_port: hal::pac::GPIOE,
                 gpio_pin: 14,
-                af_number: 1,
             }, // M1: PE14 TIM1_CH4
             MotorTimerConfig {
                 timer_regs: tim1_regs,
@@ -446,7 +463,6 @@ pub async fn init(
                 dma_request: 13, // TIM1_CH3
                 gpio_port: hal::pac::GPIOE,
                 gpio_pin: 13,
-                af_number: 1,
             }, // M2: PE13 TIM1_CH3
             MotorTimerConfig {
                 timer_regs: tim1_regs,
@@ -454,7 +470,6 @@ pub async fn init(
                 dma_request: 12, // TIM1_CH2
                 gpio_port: hal::pac::GPIOE,
                 gpio_pin: 11,
-                af_number: 1,
             }, // M3: PE11 TIM1_CH2
             MotorTimerConfig {
                 timer_regs: tim1_regs,
@@ -462,7 +477,6 @@ pub async fn init(
                 dma_request: 11, // TIM1_CH1
                 gpio_port: hal::pac::GPIOE,
                 gpio_pin: 9,
-                af_number: 1,
             }, // M4: PE9 TIM1_CH1
         ],
         timers: [tim1_regs, tim1_regs],
@@ -485,14 +499,8 @@ pub async fn init(
         board.adc.adc3,
         board.adc.vbat,
         board.adc.curr,
-        AdcInput {
-            gpioc_pin: 0,
-            channel: 10,
-        },
-        AdcInput {
-            gpioc_pin: 1,
-            channel: 11,
-        },
+        AdcInput { channel: 10 },
+        AdcInput { channel: 11 },
         bsp::POWER_CAL,
     );
     spawner

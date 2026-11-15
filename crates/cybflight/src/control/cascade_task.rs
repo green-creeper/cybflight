@@ -139,7 +139,9 @@ pub async fn cascade_task() {
         let mut got_odom = false;
         while let Some(o) = odom_sub.try_next_message_pure() {
             if odom_is_valid(&o) {
-                if o.timestamp <= now && now.duration_since(o.timestamp) <= odom_stale_timeout {
+                if o.timestamp <= now
+                    && now.saturating_duration_since(o.timestamp) <= odom_stale_timeout
+                {
                     pos_state.position = o.pose.position;
                     pos_state.velocity = o.twist.linear;
                     pos_state.attitude = o.pose.orientation;
@@ -165,6 +167,14 @@ pub async fn cascade_task() {
         } else {
             continue;
         };
+
+        if !(pos_setpoint.position.iter().all(|v| v.is_finite())
+            && pos_setpoint.velocity.iter().all(|v| v.is_finite())
+            && pos_setpoint.acceleration_ff.iter().all(|v| v.is_finite())
+            && pos_setpoint.yaw.is_finite())
+        {
+            continue;
+        }
 
         // Position controller → desired attitude + thrust.
         let pc_out = pc.compute(&pos_state, &pos_setpoint);
@@ -203,6 +213,16 @@ pub async fn cascade_task() {
             body_rate_rad_s: rate_ref,
             torque_n_m: Vector3::zeros(),
         };
+        if !(setpoint.collective_thrust_n.is_finite()
+            && setpoint.body_rate_rad_s.iter().all(|v| v.is_finite())
+            && setpoint
+                .attitude_quaternion
+                .coords
+                .iter()
+                .all(|v| v.is_finite()))
+        {
+            continue;
+        }
         super::RATE_COMMAND.signal(setpoint.clone());
         ctrl_sp_pub.publish_immediate(setpoint);
 

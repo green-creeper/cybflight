@@ -79,6 +79,11 @@ static mut POSTMORTEM_SLOT: MaybeUninit<PostmortemRecord> = MaybeUninit::uninit(
 #[unsafe(no_mangle)]
 static mut POSTMORTEM_PANIC_TEXT: MaybeUninit<[u32; PANIC_TEXT_WORDS]> = MaybeUninit::uninit();
 
+/// Static `.uninit` scratch buffer used by [`with_fault_scratch_mut`] so fatal
+/// handlers don't allocate a 2 KiB `PostmortemRecord` on an overflowing stack.
+#[unsafe(link_section = ".uninit")]
+static mut FAULT_SCRATCH: MaybeUninit<PostmortemRecord> = MaybeUninit::uninit();
+
 /// Idempotency latch: `enable()` is safe to call more than once, but
 /// the underlying RCC/PWR writes are best done once during init.
 static ENABLED: AtomicBool = AtomicBool::new(false);
@@ -217,6 +222,24 @@ pub fn with_record_mut<R>(f: impl FnOnce(&mut PostmortemRecord) -> R) -> R {
         out
     };
     res
+}
+
+/// Mutable access to the post-mortem record backed by static `.uninit` storage
+/// ([`FAULT_SCRATCH`]) instead of a 2 KiB stack allocation.
+///
+/// # Safety
+/// Caller must guarantee exclusive access (interrupts disabled or inside a
+/// non-reentrant fault handler with `FAULT_DEPTH == 1`), and [`enable`] must
+/// already have been called.
+pub unsafe fn with_fault_scratch_mut<R>(f: impl FnOnce(&mut PostmortemRecord) -> R) -> R {
+    let dst = (&raw mut FAULT_SCRATCH).cast::<u32>();
+    unsafe {
+        read_slot_words(dst);
+        let r = &mut *(&raw mut FAULT_SCRATCH).cast::<PostmortemRecord>();
+        let out = f(r);
+        write_slot_words((r as *const PostmortemRecord).cast::<u32>());
+        out
+    }
 }
 
 /// Convenience: write the entire record from a freshly-built value.

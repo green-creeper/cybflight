@@ -18,8 +18,6 @@ use super::{ImuReading, ReadImu};
 const REG_DEVICE_CONFIG: u8 = 0x11;
 const REG_INT_CONFIG: u8 = 0x14;
 const REG_TEMP_DATA1: u8 = 0x1D;
-#[allow(dead_code)]
-const REG_INT_STATUS: u8 = 0x2D;
 const REG_INTF_CONFIG1: u8 = 0x4D;
 const REG_PWR_MGMT0: u8 = 0x4E;
 const REG_GYRO_CONFIG0: u8 = 0x4F;
@@ -456,15 +454,6 @@ where
     /// The ODR programmed into GYRO_CONFIG0 / ACCEL_CONFIG0 at init.
     fn sample_rate_hz(&self) -> f32 {
         self.odr.hz()
-    }
-
-    /// In 1 kHz Low-Noise mode the on-chip UI filter is a 2nd-order 227 Hz
-    /// low-pass; at 8 kHz it is wide open (~2 kHz) and reported as `None`.
-    fn hardware_lpf_cutoff_hz(&self) -> Option<f32> {
-        match self.odr {
-            OutputDataRate::Odr8kHz => None,
-            OutputDataRate::Odr1kHzLowNoise => Some(227.0),
-        }
     }
 
     /// Wait for DRDY, then burst-read accel + gyro + temperature.

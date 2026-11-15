@@ -4,9 +4,6 @@
 //! Uses MINCO min-jerk representation with BFGS trust-region optimization.
 //! Yaw is assumed zero during planning (differential flatness at ψ=0).
 
-#[allow(unused_imports)]
-use num_traits::Float;
-
 use super::MAX_PLANNED_PIECES;
 use super::PlannerMinco;
 use super::bfgs_trust::{

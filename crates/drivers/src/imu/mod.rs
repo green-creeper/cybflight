@@ -41,16 +41,6 @@ pub trait ReadImu {
     /// Must match the rate at which `read()` produces samples so that the
     /// reader task can configure its software filter correctly.
     fn sample_rate_hz(&self) -> f32;
-
-    /// Cutoff frequency (Hz) of any onboard hardware low-pass filter applied
-    /// to the signal path before the data register is updated.
-    ///
-    /// When `Some`, the reader task can skip or reconfigure the software
-    /// Butterworth filter to avoid double-filtering. Returns `None` by
-    /// default (no hardware filter, or cutoff unknown).
-    fn hardware_lpf_cutoff_hz(&self) -> Option<f32> {
-        None
-    }
 }
 
 /// Result of probing the WHO_AM_I register on an SPI bus.

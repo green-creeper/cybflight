@@ -120,13 +120,6 @@ impl ShellLine {
             len: 0,
         }
     }
-    pub fn writer(&mut self) -> WriteBuf<'_> {
-        WriteBuf::new(&mut self.buf)
-    }
-
-    pub fn finish(&mut self, w: &WriteBuf<'_>) {
-        self.len = w.as_slice().len();
-    }
 
     /// Write into the line via a closure, then seal it in one borrow.
     pub fn format<F: FnOnce(&mut WriteBuf<'_>)>(&mut self, f: F) {

@@ -96,12 +96,9 @@ impl Pt1 {
     }
 }
 
-/// One ADC analog input: its GPIOC pin number (for analog-mode config) and its
-/// ADC3 channel number. Both are board-specific; see the BSP pinout.
+/// One ADC3 analog channel input (pin-to-channel mapping is board-specific).
 #[derive(Copy, Clone)]
 pub struct AdcInput {
-    /// GPIOC pin number (0-15) to switch into analog mode.
-    pub gpioc_pin: u8,
     /// ADC3 channel (INPx) this pin maps to.
     pub channel: u8,
 }
@@ -119,10 +116,10 @@ pub struct PowerMonitor {
 }
 
 impl PowerMonitor {
-    /// Construct the monitor. `vbat`/`curr` carry each input's GPIOC pin and
-    /// ADC3 channel; the pin `Peri` tokens are consumed to prevent reuse. All
-    /// inputs are on GPIOC and ADC3 across our boards.
-    pub fn new<VBAT: hal::PeripheralType, CURR: hal::PeripheralType>(
+    /// Construct the monitor. `vbat`/`curr` carry each input's ADC3 channel;
+    /// the pin `Peri` tokens are switched into analog mode via `Flex` and
+    /// forgotten to keep the Analog state and prevent pin reuse.
+    pub fn new<VBAT: hal::gpio::Pin, CURR: hal::gpio::Pin>(
         adc3: hal::Peri<'static, hal::peripherals::ADC3>,
         vbat_pin: hal::Peri<'static, VBAT>,
         curr_pin: hal::Peri<'static, CURR>,
@@ -130,14 +127,13 @@ impl PowerMonitor {
         curr: AdcInput,
         cal: PowerCalibration,
     ) -> Self {
-        // Ensure GPIO pins are in analog mode (MODER=0b11, which is also the
-        // reset default).  We consume the Peri tokens to prevent reuse.
-        hal::pac::GPIOC.moder().modify(|w| {
-            w.set_moder(vbat.gpioc_pin as _, hal::pac::gpio::vals::Moder::ANALOG);
-            w.set_moder(curr.gpioc_pin as _, hal::pac::gpio::vals::Moder::ANALOG);
-        });
-        core::mem::forget(vbat_pin);
-        core::mem::forget(curr_pin);
+        let mut vbat_flex = hal::gpio::Flex::new(vbat_pin);
+        vbat_flex.set_as_analog();
+        core::mem::forget(vbat_flex);
+
+        let mut curr_flex = hal::gpio::Flex::new(curr_pin);
+        curr_flex.set_as_analog();
+        core::mem::forget(curr_flex);
 
         // Embassy init: RCC enable, prescaler, voltage regulator, calibration.
         #[cfg(not(feature = "board_flywoof745"))]
@@ -184,9 +180,14 @@ impl PowerMonitor {
     fn read_channel(channel: u8) -> u16 {
         let regs = hal::pac::ADC3;
 
-        // Sample time (channels 0-9 → SMPR1 register).
-        regs.smpr(0)
-            .modify(|w| w.set_smp(channel as _, ADC_SAMPLE_TIME));
+        // Sample time: channels 0-9 live in SMPR1 (smpr(0)), channels 10-19 in SMPR2 (smpr(1)).
+        if channel < 10 {
+            regs.smpr(0)
+                .modify(|w| w.set_smp(channel as _, ADC_SAMPLE_TIME));
+        } else {
+            regs.smpr(1)
+                .modify(|w| w.set_smp((channel - 10) as _, ADC_SAMPLE_TIME));
+        }
 
         // Sequence: 1 conversion (L=0 means length 1), SQ1 = channel.
         regs.sqr1().modify(|w| {

@@ -233,6 +233,7 @@ const DECIM_ATTITUDE_CONTROL_SETPOINT: u32 = 4; //  25 Hz — outer_loop ref
 // OCP solver output and POSITION_CONTROL_SETPOINT producers run at 50 Hz;
 // decimate the downlink to 25 Hz to cut WiFi packet rate.
 const DECIM_OCP_SOLVER: u32 = 4; //  25 Hz — OCP solver output
+#[cfg(feature = "est_eskf")]
 const DECIM_POSITION_CONTROL_SETPOINT: u32 = 4; //  25 Hz — outer_loop pos ref
 const DECIM_RC_INPUT: u32 = 4; //  25 Hz — stick viz
 const DECIM_DSHOT_TELEM: u32 = 4; //  25 Hz — eRPM tuning

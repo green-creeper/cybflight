@@ -13,7 +13,6 @@
 //! falls back to boot-relative microseconds so telemetry still works.
 
 use core::cell::RefCell;
-use core::sync::atomic::{AtomicBool, Ordering};
 use critical_section::Mutex;
 use embassy_time::Instant;
 
@@ -31,9 +30,6 @@ struct SyncState {
     last_ping_rtt_us: u64,
     last_ping_clock_err_us: i64,
 }
-
-/// Whether at least one valid time sync has been received.
-static SYNCED: AtomicBool = AtomicBool::new(false);
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -109,11 +105,6 @@ pub fn to_utc_us(instant: Instant) -> i64 {
     })
 }
 
-/// Returns `true` once at least one valid sync has been received.
-pub fn is_synced() -> bool {
-    SYNCED.load(Ordering::Relaxed)
-}
-
 // ---------------------------------------------------------------------------
 // Processing incoming messages
 // ---------------------------------------------------------------------------
@@ -152,7 +143,6 @@ pub fn process_time_sync(rx_instant: Instant, esp_send_ntp_us: i64, prev_tx_comp
                     last_ping_rtt_us: 0,
                     last_ping_clock_err_us: 0,
                 });
-                SYNCED.store(true, Ordering::Relaxed);
                 defmt::info!("Time sync: first offset = {} us", raw_offset);
             }
             Some(state) => {

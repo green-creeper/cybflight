@@ -345,7 +345,7 @@ pub async fn gpsrtk_stream_task() {
                 write!(w, "GPSRTK no NAV-PVT yet\r\n").ok();
             }
             Some(p) => {
-                let age_ms = Instant::now().duration_since(p.timestamp).as_millis();
+                let age_ms = Instant::now().saturating_duration_since(p.timestamp).as_millis();
                 write!(
                     w,
                     "GPSRTK fix={} sv={} rtk={}({}) dgps={} h={}mm v={}mm s={}mm/s \
@@ -377,7 +377,7 @@ pub async fn gpsrtk_stream_task() {
             let mut hline = ShellLine::new();
             hline.format(|w| {
                 const RAD2DEG: f32 = 180.0 / core::f32::consts::PI;
-                let h_age = Instant::now().duration_since(hd.timestamp).as_millis();
+                let h_age = Instant::now().saturating_duration_since(hd.timestamp).as_millis();
                 let (sh, ch) = libm::sincosf(hd.heading_rad);
                 let (sp, cp) = libm::sincosf(hd.pitch_rad);
                 let b_world = Vector3::new(cp * sh, cp * ch, sp); // ENU (E,N,U), heading direction in the ENU frame
@@ -1025,7 +1025,7 @@ async fn dispatch<'d>(
                     write!(w, "GPS: no NAV-PVT received yet\r\n").ok();
                 }
                 Some(p) => {
-                    let age_ms = Instant::now().duration_since(p.timestamp).as_millis();
+                    let age_ms = Instant::now().saturating_duration_since(p.timestamp).as_millis();
                     let fix_str = match p.fix_type {
                         0 => "no-fix",
                         1 => "dead-reckoning",
@@ -1069,7 +1069,7 @@ async fn dispatch<'d>(
                     .ok();
                 }
                 Some(hd) => {
-                    let h_age = Instant::now().duration_since(hd.timestamp).as_millis();
+                    let h_age = Instant::now().saturating_duration_since(hd.timestamp).as_millis();
                     let (sh, ch) = libm::sincosf(hd.heading_rad);
                     let (sp, cp) = libm::sincosf(hd.pitch_rad);
                     let b_world = Vector3::new(cp * sh, cp * ch, sp); // ENU (E,N,U), heading direction in the ENU frame
@@ -1287,30 +1287,6 @@ async fn dispatch<'d>(
         }
         "health" => {
             // Read from the latest-frame cells populated by the RC task.
-            // A fresh RC_LINK_STATUS / RC_INPUT subscriber has no history —
-            // try_next_message_pure() on it returns None even when frames
-            // are arriving every ~10 ms, which shows up as link=inactive
-            // in the report.
-            let link = crate::sensors::rc::LATEST_RC_LINK_STATUS
-                .lock(|c| c.borrow().clone())
-                .map(|s| crate::health::LinkSnapshot {
-                    active: true,
-                    // saturating_: the RC task tags `s.timestamp` from its
-                    // own `Instant::now()`; it can read as ahead of the
-                    // shell's `Instant::now()` by a microsecond if the two
-                    // tasks are scheduled across a tick boundary. Bare
-                    // `duration_since` would panic on backwards subtraction
-                    // and boot-loop the firmware after every `health` call.
-                    age_ms: Instant::now()
-                        .saturating_duration_since(s.timestamp)
-                        .as_millis(),
-                    quality: s.link_quality,
-                })
-                .unwrap_or(crate::health::LinkSnapshot {
-                    active: false,
-                    age_ms: 0,
-                    quality: 0,
-                });
             let throttle = crate::sensors::rc::LATEST_RC_INPUT
                 .lock(|c| c.borrow().clone())
                 .and_then(|r| {
@@ -1323,7 +1299,7 @@ async fn dispatch<'d>(
                     }
                 });
 
-            let snap = crate::health::SystemHealth::snapshot(link, throttle);
+            let snap = crate::health::SystemHealth::capture_with_throttle(throttle);
             // Write the report in chunks so we don't blow the 256-byte
             // ShellLine buffer (the report is multi-line and easily
             // exceeds 256 bytes once attitude/faults are included).
@@ -1333,12 +1309,16 @@ async fn dispatch<'d>(
             write_all(class, w.as_slice()).await?;
         }
         "reboot" => {
-            write_all(class, b"rebooting...\r\n").await?;
-            platform::sys_reboot();
+            if !refuse_if_armed(class).await? {
+                write_all(class, b"rebooting...\r\n").await?;
+                platform::sys_reboot();
+            }
         }
         "reboot --dfu" => {
-            write_all(class, b"entering DFU mode...\r\n").await?;
-            platform::enter_dfu();
+            if !refuse_if_armed(class).await? {
+                write_all(class, b"entering DFU mode...\r\n").await?;
+                platform::enter_dfu();
+            }
         }
         line if line.starts_with("motor ") => {
             dispatch_motor(class, line).await?;
@@ -1602,6 +1582,9 @@ async fn dispatch_rcdiag<'d>(
     };
 
     if rescan {
+        if refuse_if_armed(class).await? {
+            return Ok(());
+        }
         request_rc_rescan();
         write_all(class, b"RC rescan requested\r\n").await?;
     }
@@ -1633,7 +1616,7 @@ async fn dispatch_rcdiag<'d>(
     let latest_rc = LATEST_RC_INPUT.lock(|c| c.borrow().clone());
     if let Some(rc) = latest_rc {
         let age_ms = embassy_time::Instant::now()
-            .duration_since(rc.timestamp)
+            .saturating_duration_since(rc.timestamp)
             .as_millis();
         let mut buf2 = [0u8; 160];
         let mut w2 = WriteBuf::new(&mut buf2);
@@ -2272,10 +2255,27 @@ fn blackbox_fat_reason(stage: crate::blackbox::fat::OpError) -> &'static str {
     }
 }
 
+async fn refuse_if_armed<'d>(
+    class: &mut CdcAcmClass<'d, UsbDriver<'d>>,
+) -> Result<bool, EndpointError> {
+    if crate::motors::IS_ARMED.load(Ordering::Acquire) {
+        write_all(
+            class,
+            "ERR: command refused while ARMED — disarm first\r\n".as_bytes(),
+        )
+        .await?;
+        return Ok(true);
+    }
+    Ok(false)
+}
+
 async fn dispatch_motor<'d>(
     class: &mut CdcAcmClass<'d, UsbDriver<'d>>,
     line: &str,
 ) -> Result<(), EndpointError> {
+    if refuse_if_armed(class).await? {
+        return Ok(());
+    }
     let mut parts = line.split_ascii_whitespace();
     parts.next(); // skip "motor"
     let idx_str = parts.next();

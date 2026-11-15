@@ -147,20 +147,6 @@ impl PiecewisePolynomial {
         count
     }
 
-    /// Get all boundary points as a Vec (std feature only).
-    #[cfg(feature = "std")]
-    pub fn get_points_vec(&self) -> Vec<Vec3> {
-        let mut pts = Vec::with_capacity(self.n + 1);
-        for i in 0..self.n {
-            pts.push(self.pieces[i].get_pos(0.0));
-        }
-        if self.n > 0 {
-            let last = &self.pieces[self.n - 1];
-            pts.push(last.get_pos(last.duration));
-        }
-        pts
-    }
-
     /// Get durations of all pieces as a fixed array.
     pub fn durations(&self, out: &mut [f32]) -> usize {
         for i in 0..self.n {

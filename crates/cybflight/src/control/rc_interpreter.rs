@@ -83,6 +83,12 @@ pub async fn rc_interpreter_task() {
     let mission_low_us = params_snapshot.rc.mission_low_us;
 
     let hover_thrust_n = params_snapshot.airframe.body.mass_kg * params_snapshot.site.gravity_m_s2;
+    let max_collective_thrust_n: f32 = params_snapshot
+        .airframe
+        .motors
+        .iter()
+        .map(|m| m.max_thrust_n)
+        .sum();
 
     // `None` = not yet synced (first RC frame seeds the confirmed level,
     // so a switch-high at boot or arm does NOT spuriously engage offboard).
@@ -174,8 +180,8 @@ pub async fn rc_interpreter_task() {
             pitch_cmd * max_rate_rp,
             yaw_cmd * max_rate_yaw,
         );
-        // Throttle 0→1 maps to 0→2×hover thrust (mid-stick ≈ hover).
-        let collective_thrust_n = throttle_cmd * 2.0 * hover_thrust_n;
+        let collective_thrust_n =
+            rate_stick_to_thrust_n(throttle_cmd, hover_thrust_n, max_collective_thrust_n);
 
         let setpoint = cybflight_msgs::AttitudeControlSetpoint {
             timestamp: Instant::now(),
@@ -186,6 +192,36 @@ pub async fn rc_interpreter_task() {
         };
         super::RATE_COMMAND.signal(setpoint.clone());
         ctrl_sp_pub.publish_immediate(setpoint);
+    }
+}
+
+/// Maps normalized rate-mode throttle (`0.0..=1.0`) to collective thrust [N].
+///
+/// Piecewise linear so `0.5` mid-stick commands exact `hover_thrust_n` and `1.0`
+/// full stick reaches `max_collective_thrust_n`. Falls back to `2 * hover_thrust_n`
+/// scaling if `max_collective_thrust_n` is non-finite or does not exceed `hover_thrust_n`.
+#[cfg_attr(not(feature = "outer_rate"), allow(dead_code))]
+pub(crate) fn rate_stick_to_thrust_n(
+    throttle_cmd: f32,
+    hover_thrust_n: f32,
+    max_collective_thrust_n: f32,
+) -> f32 {
+    if !throttle_cmd.is_finite() || throttle_cmd <= 0.0 {
+        return 0.0;
+    }
+    if !hover_thrust_n.is_finite() || hover_thrust_n <= 0.0 {
+        return 0.0;
+    }
+    let t = throttle_cmd.clamp(0.0, 1.0);
+    if !max_collective_thrust_n.is_finite()
+        || max_collective_thrust_n <= hover_thrust_n
+    {
+        return t * 2.0 * hover_thrust_n;
+    }
+    if t <= 0.5 {
+        (t * 2.0) * hover_thrust_n
+    } else {
+        hover_thrust_n + ((t - 0.5) * 2.0) * (max_collective_thrust_n - hover_thrust_n)
     }
 }
 
@@ -251,8 +287,11 @@ pub(crate) struct StickConfig {
     pub xy_deadband: f32,
     pub throttle_deadband: f32,
     pub throttle_land_us: u16,
+    #[cfg(feature = "outer_mpc")]
     pub mission_channel: usize,
+    #[cfg(feature = "outer_mpc")]
     pub mission_high_us: u16,
+    #[cfg(feature = "outer_mpc")]
     pub mission_low_us: u16,
     pub launch_us: u16,
     pub launch_confirm_frames: u8,
@@ -279,8 +318,11 @@ impl StickConfig {
         xy_deadband: 0.05,
         throttle_deadband: 0.12,
         throttle_land_us: 1100,
+        #[cfg(feature = "outer_mpc")]
         mission_channel: 4,
+        #[cfg(feature = "outer_mpc")]
         mission_high_us: 1700,
+        #[cfg(feature = "outer_mpc")]
         mission_low_us: 1300,
         launch_us: 1600,
         launch_confirm_frames: 5,
@@ -313,8 +355,11 @@ pub fn init_stick_config() {
             xy_deadband: p.rc.xy_deadband,
             throttle_deadband: p.rc.throttle_deadband,
             throttle_land_us: p.rc.throttle_land_us,
+            #[cfg(feature = "outer_mpc")]
             mission_channel: p.rc.mission_channel as usize,
+            #[cfg(feature = "outer_mpc")]
             mission_high_us: p.rc.mission_high_us,
+            #[cfg(feature = "outer_mpc")]
             mission_low_us: p.rc.mission_low_us,
             launch_us: p.rc.launch_us,
             launch_confirm_frames: p.rc.launch_confirm_frames,
@@ -810,7 +855,7 @@ pub async fn rc_interpreter_task() {
         // Bound dt to avoid one-shot giant drifts on the first frame after
         // a long pause (e.g. RC-loss recovery).
         let now = Instant::now();
-        let dt = now.duration_since(last_frame_time).as_micros() as f32 * 1e-6;
+        let dt = now.saturating_duration_since(last_frame_time).as_micros() as f32 * 1e-6;
         let dt = dt.clamp(0.0, MAX_FRAME_DT_S);
         last_frame_time = now;
 

@@ -1337,6 +1337,12 @@ pub async fn indi_task() {
         // not push a stale or non-finite value. Per docs/safety_protocol.md
         // rule 3, this stage degrades gracefully and never injects NaN
         // into the IMU signal.
+        if !(gyro_corrected.iter().all(|v| v.is_finite())
+            && accel_corrected.iter().all(|v| v.is_finite()))
+        {
+            continue;
+        }
+
         let (gyro_corrected, accel_corrected) = if rpm_notch_enabled {
             for i in 0..NU {
                 let raw_hz = match y_meas[i] {
@@ -1392,25 +1398,36 @@ pub async fn indi_task() {
             outer_counter = 0;
         }
         if let Some(cmd) = super::RATE_COMMAND.try_take() {
-            rate_ref = cmd.body_rate_rad_s;
-            collective_thrust_n = cmd.collective_thrust_n;
-            spf_sp_z = collective_thrust_n / mass_kg;
-            telem_attitude = cmd.attitude_quaternion;
-            // `outer_mpc_full` ships the raw model torque τ(u0) in
-            // `torque_n_m` (outer_loop publish step 9); hold it — the α
-            // pseudo-control is derived per-tick below with fresh gyro.
             #[cfg(feature = "outer_mpc_full")]
+            let torque_finite = cmd.torque_n_m.iter().all(|v| v.is_finite());
+            #[cfg(not(feature = "outer_mpc_full"))]
+            let torque_finite = true;
+            if cmd.body_rate_rad_s.iter().all(|v| v.is_finite())
+                && cmd.collective_thrust_n.is_finite()
+                && torque_finite
             {
-                torque_ref = cmd.torque_n_m;
+                rate_ref = cmd.body_rate_rad_s;
+                collective_thrust_n = cmd.collective_thrust_n;
+                spf_sp_z = collective_thrust_n / mass_kg;
+                telem_attitude = cmd.attitude_quaternion;
+                // `outer_mpc_full` ships the raw model torque τ(u0) in
+                // `torque_n_m` (outer_loop publish step 9); hold it — the α
+                // pseudo-control is derived per-tick below with fresh gyro.
+                #[cfg(feature = "outer_mpc_full")]
+                {
+                    torque_ref = cmd.torque_n_m;
+                }
+                last_cmd_time = Some(now);
+                // Receiving a rate command supersedes any held direct-motor command.
+                last_direct_motors = None;
             }
-            last_cmd_time = Some(now);
-            // Receiving a rate command supersedes any held direct-motor command.
-            last_direct_motors = None;
         }
         let offboard_active = super::OFFBOARD_ACTIVE.load(core::sync::atomic::Ordering::Acquire);
         if offboard_active {
             if let Some(direct) = super::DIRECT_MOTOR_COMMAND.try_take() {
-                last_direct_motors = Some((now, direct.motor_commands));
+                if direct.motor_commands.iter().all(|v| v.value().is_finite()) {
+                    last_direct_motors = Some((now, direct.motor_commands));
+                }
             }
         } else {
             last_direct_motors = None;
@@ -1418,11 +1435,13 @@ pub async fn indi_task() {
 
         // 5. Stale command while armed — go silent, let watchdog handle it.
         let cmd_fresh = match last_cmd_time {
-            Some(t) => now.duration_since(t) < CMD_STALE_TIMEOUT,
+            Some(t) => now.saturating_duration_since(t) < CMD_STALE_TIMEOUT,
             None => false,
         };
         let direct_motors_opt = match last_direct_motors {
-            Some((t, cmds)) if offboard_active && now.duration_since(t) < CMD_STALE_TIMEOUT => {
+            Some((t, cmds))
+                if offboard_active && now.saturating_duration_since(t) < CMD_STALE_TIMEOUT =>
+            {
                 Some(cmds)
             }
             _ => None,
@@ -1510,7 +1529,7 @@ pub async fn indi_task() {
         //        ignore voltage so this gate is suppressed for them; the
         //        failsafe also bounds how long a frozen reading can lie.
         let voltage_fresh = match last_voltage_time {
-            Some(t) => now.duration_since(t) < VOLTAGE_STALE_TIMEOUT,
+            Some(t) => now.saturating_duration_since(t) < VOLTAGE_STALE_TIMEOUT,
             None => false,
         };
         let voltage_v = last_voltage_v;
@@ -1545,7 +1564,7 @@ pub async fn indi_task() {
         if armed
             && matches!(crate::vehicle::BAKED_THRUST_MODEL, ThrustModel::Table(_))
             && voltage_stale_since
-                .map(|t0| now.duration_since(t0) >= VOLTAGE_FAILSAFE_TIMEOUT)
+                .map(|t0| now.saturating_duration_since(t0) >= VOLTAGE_FAILSAFE_TIMEOUT)
                 .unwrap_or(false)
         {
             if !VOLTAGE_FAILSAFE_TRIPPED.swap(true, core::sync::atomic::Ordering::Relaxed) {
@@ -1603,6 +1622,12 @@ pub async fn indi_task() {
         // NMPC, no rate gains anywhere in this path; with INDI disabled
         // (`build: indi: no`) this degrades to model-based static
         // inversion of α_d (the "NMPC w/o INDI" ablation).
+        if !(gyro_corrected.iter().all(|v| v.is_finite())
+            && accel_corrected.iter().all(|v| v.is_finite()))
+        {
+            continue;
+        }
+
         #[cfg(not(feature = "outer_mpc_full"))]
         let (output, _step_state) = indi.step(
             &gyro_corrected,
@@ -1621,7 +1646,11 @@ pub async fn indi_task() {
         #[cfg(feature = "outer_mpc_full")]
         let alpha_sp = {
             let g = &gyro_corrected;
-            inv_inertia * (torque_ref - g.cross(&(inertia * g)))
+            let a = inv_inertia * (torque_ref - g.cross(&(inertia * g)));
+            if !a.iter().all(|v| v.is_finite()) {
+                continue;
+            }
+            a
         };
         #[cfg(feature = "outer_mpc_full")]
         let (output, _step_state) = indi.step_alpha(
@@ -1682,6 +1711,9 @@ pub async fn indi_task() {
                 msgs::NormalizedThrottle::new_saturating(output.motor_commands[3]),
             ],
         };
+        if !motor_commands.iter().all(|v| v.value().is_finite()) {
+            continue;
+        }
         let publish_time = Instant::now();
         ACTUATOR_MOTORS.signal(msgs::ActuatorMotors {
             timestamp: publish_time,

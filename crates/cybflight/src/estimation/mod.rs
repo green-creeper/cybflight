@@ -5,7 +5,6 @@ use cybflight_core::eskf::EskfHealth;
 use cybflight_msgs as msgs;
 use embassy_sync::blocking_mutex::{Mutex, raw::CriticalSectionRawMutex};
 use embassy_sync::pubsub::PubSubChannel;
-use embassy_sync::signal::Signal;
 use embassy_time::Instant;
 use nalgebra::Vector3;
 
@@ -87,15 +86,13 @@ pub static ESTIMATOR_STATUS: Mutex<CriticalSectionRawMutex, Cell<EstimatorPhase>
 /// is ready (mirrors the `FAILSAFE_ACTIVE` pattern).
 pub static ESTIMATOR_READY: AtomicBool = AtomicBool::new(false);
 
-/// Current ESKF gyro bias estimate (rad/s).
-/// Written by estimation_task every predict step. Available for diagnostics
-/// and consumers that need the EKF-refined estimate.
-pub static ESKF_GYRO_BIAS: Signal<CriticalSectionRawMutex, Vector3<f32>> = Signal::new();
+/// `true` once the Mahony AHRS warmup has completed without a NaN reset.
+pub static MAHONY_READY: AtomicBool = AtomicBool::new(false);
 
-/// Current ESKF accel bias estimate (m/s²).
-/// Written by estimation_task every predict step, read by INDI task to
-/// bias-correct raw accel for specific force feedback.
-pub static ESKF_ACCEL_BIAS: Signal<CriticalSectionRawMutex, Vector3<f32>> = Signal::new();
+/// Latest finite Mahony Euler attitude `(roll, pitch, yaw)` in degrees,
+/// updated at the decimated Mahony publish cadence.
+pub static MAHONY_ATTITUDE_DEG: Mutex<CriticalSectionRawMutex, Cell<Option<(f32, f32, f32)>>> =
+    Mutex::new(Cell::new(None));
 
 /// Decimated bias telemetry for the blackbox recorder.
 ///

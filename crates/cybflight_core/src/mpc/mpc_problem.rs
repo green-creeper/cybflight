@@ -99,37 +99,6 @@ where
             .terminal_cost_hess_grad(x, x_ref, grad_x, hess_xx)
     }
 
-    /// Sum of stage state-cost + input-cost + constraint penalty over the
-    /// horizon, plus the terminal state cost. Used by the solver only for
-    /// debugging / line-search; the per-iteration cost is accumulated inside
-    /// `SqpSolver::solve` to avoid the second pass.
-    #[allow(dead_code)]
-    pub fn eval_cost(
-        &self,
-        x_bar: &[SVector<f32, NX>],
-        u_bar: &[SVector<f32, NU>],
-        x_refs: &[SVector<f32, NX>],
-        u_refs: &[SVector<f32, NU>],
-    ) -> f32 {
-        let n = self.n;
-        let mut gx = SVector::<f32, NX>::zeros();
-        let mut gu = SVector::<f32, NU>::zeros();
-        let mut gu_con = SVector::<f32, NU>::zeros();
-        let mut r_tmp = SVector::<f32, NU>::zeros();
-        let mut cost = 0.0;
-        for k in 0..n {
-            cost += self.model.state_cost_grad(&x_bar[k], &x_refs[k], &mut gx);
-            cost += self.model.input_cost_grad(&u_bar[k], &u_refs[k], &mut gu);
-            gu_con.fill(0.0);
-            r_tmp.fill(0.0);
-            cost += self
-                .model
-                .constraint_hess_grad(&u_bar[k], &mut gu_con, &mut r_tmp);
-        }
-        cost += self.model.state_cost_grad(&x_bar[n], &x_refs[n], &mut gx);
-        cost
-    }
-
     pub fn clamp(&self, u: &SVector<f32, NU>) -> SVector<f32, NU> {
         self.model.clamp_control(u)
     }

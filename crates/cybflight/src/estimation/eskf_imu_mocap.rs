@@ -280,14 +280,10 @@ pub async fn estimation_task() {
 
                 let gb = eskf.gyro_bias();
                 let ab = eskf.accel_bias();
-                super::ESKF_GYRO_BIAS.signal(gb);
-                super::ESKF_ACCEL_BIAS.signal(ab);
 
                 predict_count = predict_count.wrapping_add(1);
 
-                // Decimated mirror onto the bias telemetry channel
-                // (~10 Hz). Same predict_count counter — no extra
-                // state, no race with the Signals above.
+                // Decimated mirror onto the bias telemetry channel (~10 Hz).
                 if predict_count.is_multiple_of(super::BIAS_TELEM_DECIMATION) {
                     bias_pub.publish_immediate(msgs::EstimatorBias {
                         timestamp: Instant::now(),

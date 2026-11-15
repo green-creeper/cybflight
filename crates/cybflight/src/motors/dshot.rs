@@ -56,8 +56,7 @@ const DSHOT_IDLE_THROTTLE: u16 = DSHOT_MIN_THROTTLE + (DSHOT_THROTTLE_RANGE / 20
 
 use cybflight_msgs::{ActuatorMotors, DshotMotorTelemetry, DshotTelemetry};
 use embassy_futures::join::join4;
-use embassy_futures::select::{Either, select};
-use embassy_time::{Instant, Timer};
+use embassy_time::Instant;
 
 use super::{DSHOT600_ARR, DSHOT600_BIT_0, DSHOT600_BIT_1, DSHOT600_PSC, DshotQuadConfig};
 
@@ -128,7 +127,6 @@ pub async fn dshot_task(
         ccmr_no_preload[i][1] = CcmrOutputGp16(saved_ccmr[i][1].0 & !0x0808);
     }
 
-    let mut telem_motor: usize = 0;
     let mut dshot_throttle: [u16; 4] = [DSHOT_CMD_MOTOR_STOP; 4];
     let mut armed = false;
     let mut last_motor_cmd_time: Option<Instant> = None;
@@ -153,9 +151,7 @@ pub async fn dshot_task(
         }
 
         if armed {
-            if let Either::First(ActuatorMotors { motor_commands, .. }) =
-                select(ACTUATOR_MOTORS.wait(), Timer::after_micros(1)).await
-            {
+            if let Some(ActuatorMotors { motor_commands, .. }) = ACTUATOR_MOTORS.try_take() {
                 // When armed, 0.0 maps to DSHOT_IDLE_THROTTLE (not MOTOR_STOP).
                 // Only the disarm path sends MOTOR_STOP.
                 dshot_throttle = motor_commands.map(|nrm| {
@@ -170,7 +166,7 @@ pub async fn dshot_task(
             // will disarm after CTRL_TIMEOUT (500 ms). This just ensures we
             // don't hold stale throttle during the gap.
             if let Some(t) = last_motor_cmd_time {
-                if Instant::now().duration_since(t) > MOTOR_CMD_STALE {
+                if Instant::now().saturating_duration_since(t) > MOTOR_CMD_STALE {
                     dshot_throttle = [DSHOT_IDLE_THROTTLE; 4];
                 }
             }
@@ -183,8 +179,10 @@ pub async fn dshot_task(
 
         // ======================== A: Output DShot frame ========================
         let mut bufs = [[0u32; DSHOT_DMA_BUFFER_SIZE]; 4];
-        for (i, (buf, throttle)) in bufs.iter_mut().zip(dshot_throttle).enumerate() {
-            let telem_req = i == telem_motor;
+        for (buf, throttle) in bufs.iter_mut().zip(dshot_throttle) {
+            // Bidir DShot returns eRPM on every frame; setting the telemetry request
+            // bit tells BLHeli_32/AM32 to emit EDT/serial telemetry instead.
+            let telem_req = false;
             let frame = cybflight_drivers::dshot::frame::encode_packet(throttle, telem_req, true);
             cybflight_drivers::dshot::frame::packet_to_dma_buffer(
                 frame,
@@ -280,37 +278,41 @@ pub async fn dshot_task(
         // (pwm_output_dshot_hal.c:112-131). Minimise time FC drives the line
         // while ESC may be starting its GCR response.
 
-        // Step 1: GPIO → OUTPUT (drive HIGH, LOW speed) while reconfiguring timer
-        for m in 0..4 {
-            let gpio = config.motors[m].gpio_port;
-            let pin = config.motors[m].gpio_pin as usize;
-            gpio.bsrr().write(|w| w.set_bs(pin, true));
-            gpio.moder()
-                .modify(|w| w.set_moder(pin, gpio_vals::Moder::OUTPUT));
-        }
+        // Step 1..Step 3: Atomic turnaround (~30 CPU cycles) so higher-priority
+        // ISRs cannot stretch GPIO OUTPUT contention into the ESC's GCR window.
+        critical_section::with(|_| {
+            // Step 1: GPIO → OUTPUT (drive HIGH, LOW speed) while reconfiguring timer
+            for m in 0..4 {
+                let gpio = config.motors[m].gpio_port;
+                let pin = config.motors[m].gpio_pin as usize;
+                gpio.bsrr().write(|w| w.set_bs(pin, true));
+                gpio.moder()
+                    .modify(|w| w.set_moder(pin, gpio_vals::Moder::OUTPUT));
+            }
 
-        // Step 2: Reconfigure timer channels for IC mode
-        for i in 0..config.timer_count as usize {
-            config.timers[i].ccer().write_value(CcerGp16(0));
-            config.timers[i]
-                .ccmr_input(0)
-                .write_value(CcmrInput2ch(CCMR_IC));
-            config.timers[i]
-                .ccmr_input(1)
-                .write_value(CcmrInput2ch(CCMR_IC));
-            config.timers[i].ccer().write_value(CcerGp16(CCER_IC));
-        }
+            // Step 2: Reconfigure timer channels for IC mode
+            for i in 0..config.timer_count as usize {
+                config.timers[i].ccer().write_value(CcerGp16(0));
+                config.timers[i]
+                    .ccmr_input(0)
+                    .write_value(CcmrInput2ch(CCMR_IC));
+                config.timers[i]
+                    .ccmr_input(1)
+                    .write_value(CcmrInput2ch(CCMR_IC));
+                config.timers[i].ccer().write_value(CcerGp16(CCER_IC));
+            }
 
-        // Step 3: GPIO → AF immediately — release line to ESC BEFORE DMA setup.
-        // This matches BF's tight ISR sequence where GPIO→AF happens right after
-        // IC_Init, before DMA is configured. Any IC captures before DMA is ready
-        // are lost, but this prevents bus contention with the ESC.
-        for m in 0..4 {
-            let gpio = config.motors[m].gpio_port;
-            let pin = config.motors[m].gpio_pin as usize;
-            gpio.moder()
-                .modify(|w| w.set_moder(pin, gpio_vals::Moder::ALTERNATE));
-        }
+            // Step 3: GPIO → AF immediately — release line to ESC BEFORE DMA setup.
+            // This matches BF's tight ISR sequence where GPIO→AF happens right after
+            // IC_Init, before DMA is configured. Any IC captures before DMA is ready
+            // are lost, but this prevents bus contention with the ESC.
+            for m in 0..4 {
+                let gpio = config.motors[m].gpio_port;
+                let pin = config.motors[m].gpio_pin as usize;
+                gpio.moder()
+                    .modify(|w| w.set_moder(pin, gpio_vals::Moder::ALTERNATE));
+            }
+        });
 
         // Step 4: Now configure timer free-running + DMA (line is already released)
         for i in 0..config.timer_count as usize {
@@ -500,10 +502,16 @@ pub async fn dshot_task(
         ];
         for m in 0..4 {
             if edge_counts[m] >= MIN_GCR_EDGES {
-                if let Some(raw) = gcr::decode_telemetry_packet(
+                let tpb = gcr::detect_ticks_per_bit(
                     &edge_bufs[m][..edge_counts[m]],
                     edge_counts[m],
                     DSHOT600_GCR_TICKS_PER_BIT,
+                )
+                .unwrap_or(DSHOT600_GCR_TICKS_PER_BIT);
+                if let Some(raw) = gcr::decode_telemetry_packet(
+                    &edge_bufs[m][..edge_counts[m]],
+                    edge_counts[m],
+                    tpb,
                 ) {
                     telem.motors[m].raw = Some(raw);
                     telem.motors[m].value = telemetry::interpret(raw, false);
@@ -512,8 +520,6 @@ pub async fn dshot_task(
         }
 
         telem_pub.publish_immediate(telem);
-
-        telem_motor = (telem_motor + 1) % 4;
 
         // ======================== F: Wait for next frame ========================
         // Note: on 32.768 kHz `embassy-time` (30.52 µs/tick), `after_micros(30)`

@@ -45,9 +45,6 @@
 //! the reference maps above because they are differentiable by design
 //! and deliberately clamp where the reference maps refuse.
 
-#[allow(unused_imports)]
-use num_traits::Float;
-
 use nalgebra::{Matrix3, Rotation3, UnitQuaternion, Vector3};
 
 use super::types::Vec3;

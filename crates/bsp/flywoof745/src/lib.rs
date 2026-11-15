@@ -7,30 +7,16 @@ use hal::gpio::{Level, Output, Pull, Speed};
 use hal::time::Hertz;
 use hal::{Config, Peripherals, bind_interrupts};
 
-pub use bsp_types::{
-    DmaHint, MotorMeta, PowerCalibration, SensorAlign, SerialPortId, TimerChannel, TimerId,
-};
-pub use cybflight_drivers::beeper::Beeper;
+pub use bsp_types::{PowerCalibration, SensorAlign, SerialPortId};
 
 /// Board name matching Flywoo GOKU GN 745 AIO target.
 pub const BOARD_NAME: &str = "FLYWOOF745";
-/// Manufacturer ID from Betaflight target.
-pub const MANUFACTURER_ID: &str = "FLWO";
-
-/// Flywoo GOKU GN 745 AIO beeper on PD15 is active-high (not inverted).
-pub const BEEPER_INVERTED: bool = false;
 
 pub const IMU_COUNT: usize = 1;
 pub const BARO_COUNT: usize = 1;
-pub const HAS_MAG: bool = true;
-pub const HAS_OSD: bool = true;
-pub const HAS_FLASH: bool = true;
-pub const HAS_GPS: bool = true;
 pub const HAS_SDCARD: bool = false;
 /// SPI-NOR flash (W25Q128 on SPI1) is present, no SDMMC slot.
 pub const HAS_BLACKBOX_STORAGE: bool = false;
-/// STM32F745 has 4 KB backup SRAM at 0x4002_4000.
-pub const HAS_BACKUP_SRAM: bool = true;
 pub const LED_COUNT: usize = 1;
 
 /// Primary gyro native output data rate (Hz). MPU6000 / ICM42688P run at 8 kHz.
@@ -46,7 +32,9 @@ pub type DshotDmaM2 = hal::peripherals::DMA1_CH2;
 pub type DshotDmaM3 = hal::peripherals::DMA2_CH1;
 pub type DshotDmaM4 = hal::peripherals::DMA2_CH2;
 
-/// ADC calibration matching `goku_ardu_params.params` (`BATT_VOLT_MULT = 10.9`, `BATT_AMP_PERVLT = 28.5`).
+/// ADC calibration matching `goku_ardu_params.params`:
+/// `BATT_VOLT_MULT = 10.9` (`voltage_scale = 109` / `voltage_divider = 10`),
+/// `BATT_AMP_PERVLT = 28.5` (`10000 / 28.5 ≈ 351` in Betaflight 0.1 mV/A units).
 pub const POWER_CAL: PowerCalibration = PowerCalibration {
     voltage_scale: 109,
     voltage_divider: 10,
@@ -74,50 +62,6 @@ pub mod sensors {
     pub const MAG_I2C_ADDR: u8 = 0x0D;
 }
 
-/// Motor metadata table in Betaflight QuadX motor index order (M1..M4):
-/// - M1 (Rear-Right CW):  PB0  TIM3_CH3 AF2 (DMA1 Stream 7, Ch 5)
-/// - M2 (Front-Right CCW): PB1  TIM3_CH4 AF2 (DMA1 Stream 2, Ch 5)
-/// - M3 (Rear-Left CCW):  PE9  TIM1_CH1 AF1 (DMA2 Stream 1, Ch 6)
-/// - M4 (Front-Left CW):  PE11 TIM1_CH2 AF1 (DMA2 Stream 2, Ch 6)
-pub const MOTOR_META: [MotorMeta; 4] = [
-    MotorMeta {
-        timer: TimerId::Tim3,
-        channel: TimerChannel::Ch3,
-        af: 2,
-        dma: Some(DmaHint {
-            stream: 7,
-            request: 5,
-        }),
-    },
-    MotorMeta {
-        timer: TimerId::Tim3,
-        channel: TimerChannel::Ch4,
-        af: 2,
-        dma: Some(DmaHint {
-            stream: 2,
-            request: 5,
-        }),
-    },
-    MotorMeta {
-        timer: TimerId::Tim1,
-        channel: TimerChannel::Ch1,
-        af: 1,
-        dma: Some(DmaHint {
-            stream: 1,
-            request: 6,
-        }),
-    },
-    MotorMeta {
-        timer: TimerId::Tim1,
-        channel: TimerChannel::Ch2,
-        af: 1,
-        dma: Some(DmaHint {
-            stream: 2,
-            request: 6,
-        }),
-    },
-];
-
 // EXTI1 interrupt for Gyro DRDY on PE1:
 bind_interrupts!(pub struct ExtiIrqs {
     EXTI1 => exti::InterruptHandler<hal::interrupt::typelevel::EXTI1>;
@@ -128,18 +72,6 @@ pub struct Leds {
 }
 
 pub struct SpiPins {
-    // SPI1 (PA5 SCK / PA6 MISO / PA7 MOSI): W25Q128 16MB SPI flash (CS = PA4)
-    pub spi1: hal::Peri<'static, hal::peripherals::SPI1>,
-    pub spi1_sck: hal::Peri<'static, hal::peripherals::PA5>,
-    pub spi1_miso: hal::Peri<'static, hal::peripherals::PA6>,
-    pub spi1_mosi: hal::Peri<'static, hal::peripherals::PA7>,
-
-    // SPI2 (PB13 SCK / PB14 MISO / PB15 MOSI): AT7456E OSD (CS = PB12)
-    pub spi2: hal::Peri<'static, hal::peripherals::SPI2>,
-    pub spi2_sck: hal::Peri<'static, hal::peripherals::PB13>,
-    pub spi2_miso: hal::Peri<'static, hal::peripherals::PB14>,
-    pub spi2_mosi: hal::Peri<'static, hal::peripherals::PB15>,
-
     // SPI4 (PE2 SCK / PE5 MISO / PE6 MOSI): Primary IMU (CS = PE4, DRDY = PE1)
     // DMA2 Stream 4 (ch 5) TX, DMA2 Stream 0 (ch 4) RX
     pub spi4: hal::Peri<'static, hal::peripherals::SPI4>,
@@ -192,7 +124,6 @@ pub struct AdcPins {
     pub adc3: hal::Peri<'static, hal::peripherals::ADC3>,
     pub vbat: hal::Peri<'static, hal::peripherals::PC3>, // ADC3_IN13
     pub curr: hal::Peri<'static, hal::peripherals::PC2>, // ADC3_IN12
-    pub rssi: hal::Peri<'static, hal::peripherals::PC5>, // ADC3_IN15
 }
 
 pub struct MotorPins {
@@ -205,8 +136,6 @@ pub struct MotorPins {
     pub m3: hal::Peri<'static, hal::peripherals::PE9>, // TIM1_CH1 (AF1)
     pub m4: hal::Peri<'static, hal::peripherals::PE11>, // TIM1_CH2 (AF1)
 
-    pub led_strip: hal::Peri<'static, hal::peripherals::PD12>, // TIM4_CH1 (AF2)
-
     pub m1_dma: hal::Peri<'static, DshotDmaM1>,
     pub m2_dma: hal::Peri<'static, DshotDmaM2>,
     pub m3_dma: hal::Peri<'static, DshotDmaM3>,
@@ -217,16 +146,7 @@ pub struct SensorPins {
     pub gyro1_cs: Output<'static>,
     pub gyro1_drdy: exti::ExtiInput<'static>,
     pub gyro1_align: SensorAlign,
-    pub mag_i2c_addr: u8,
     pub mag_align: SensorAlign,
-}
-
-pub struct FlashPins {
-    pub flash_cs: Output<'static>,
-}
-
-pub struct OsdPins {
-    pub osd_cs: Output<'static>,
 }
 
 pub struct UsbPins {
@@ -241,7 +161,6 @@ bind_interrupts!(pub struct UsbIrqs {
 
 pub struct Board {
     pub leds: Leds,
-    pub beeper: Beeper<Output<'static>>,
 
     pub spi: SpiPins,
     pub i2c: I2cPins,
@@ -249,8 +168,6 @@ pub struct Board {
     pub adc: AdcPins,
     pub motors: MotorPins,
     pub sensors: SensorPins,
-    pub flash: FlashPins,
-    pub osd: OsdPins,
     pub usb: UsbPins,
 
     pub internal_flash: hal::Peri<'static, hal::peripherals::FLASH>,
@@ -268,6 +185,7 @@ pub const APB1_TIMER_HZ: u32 = 108_000_000;
 
 fn board_config() -> Config {
     let mut config = Config::default();
+    config.dma_interrupt_priority = hal::interrupt::Priority::P4;
     {
         use hal::rcc::*;
         config.rcc.hse = Some(Hse {
@@ -297,20 +215,16 @@ pub fn init() -> (Board, hal::usart::UartTx<'static, hal::mode::Blocking>) {
         led0: Output::new(p.PA2, Level::Low, Speed::Low),
     };
 
-    let beeper_pin = Output::new(
-        p.PD15,
-        if BEEPER_INVERTED {
-            Level::High
-        } else {
-            Level::Low
-        },
-        Speed::Low,
-    );
-    let beeper = Beeper::new(beeper_pin, BEEPER_INVERTED);
+    // Hold unused active-high beeper (PD15) OFF and unused SPI slave CS pins HIGH;
+    // forget the Output tokens so Drop doesn't disconnect the pins.
+    let beeper_pin = Output::new(p.PD15, Level::Low, Speed::Low);
+    core::mem::forget(beeper_pin);
 
     let gyro1_cs = Output::new(p.PE4, Level::High, Speed::VeryHigh);
     let flash_cs = Output::new(p.PA4, Level::High, Speed::VeryHigh);
+    core::mem::forget(flash_cs);
     let osd_cs = Output::new(p.PB12, Level::High, Speed::VeryHigh);
+    core::mem::forget(osd_cs);
 
     let gyro1_drdy = exti::ExtiInput::new(p.PE1, p.EXTI1, Pull::None, ExtiIrqs);
 
@@ -321,16 +235,6 @@ pub fn init() -> (Board, hal::usart::UartTx<'static, hal::mode::Blocking>) {
     };
 
     let spi = SpiPins {
-        spi1: p.SPI1,
-        spi1_sck: p.PA5,
-        spi1_miso: p.PA6,
-        spi1_mosi: p.PA7,
-
-        spi2: p.SPI2,
-        spi2_sck: p.PB13,
-        spi2_miso: p.PB14,
-        spi2_mosi: p.PB15,
-
         spi4: p.SPI4,
         spi4_sck: p.PE2,
         spi4_miso: p.PE5,
@@ -379,7 +283,6 @@ pub fn init() -> (Board, hal::usart::UartTx<'static, hal::mode::Blocking>) {
         adc3: p.ADC3,
         vbat: p.PC3,
         curr: p.PC2,
-        rssi: p.PC5,
     };
 
     let motors = MotorPins {
@@ -390,7 +293,6 @@ pub fn init() -> (Board, hal::usart::UartTx<'static, hal::mode::Blocking>) {
         m2: p.PB1,
         m3: p.PE9,
         m4: p.PE11,
-        led_strip: p.PD12,
         m1_dma: p.DMA1_CH7,
         m2_dma: p.DMA1_CH2,
         m3_dma: p.DMA2_CH1,
@@ -405,13 +307,9 @@ pub fn init() -> (Board, hal::usart::UartTx<'static, hal::mode::Blocking>) {
         // Invensense frame); arbitrary diamond AIO frame mounting (e.g. 135°
         // FLU / 225° CW yaw) is applied via `imu_rpy_r/p/y` in `goku_f745.yaml`.
         gyro1_align: SensorAlign::Cw270Deg,
-        mag_i2c_addr: sensors::MAG_I2C_ADDR,
         // External GPS-mast QMC5883L (ROTATION_YAW_90 in ArduPilot FRD -> Cw270Deg in FLU)
         mag_align: SensorAlign::Cw270Deg,
     };
-
-    let flash = FlashPins { flash_cs };
-    let osd = OsdPins { osd_cs };
 
     // defmt hardware logger on UART7 TX (PE8) at 921600 baud
     let mut defmt_uart_config = hal::usart::Config::default();
@@ -422,15 +320,12 @@ pub fn init() -> (Board, hal::usart::UartTx<'static, hal::mode::Blocking>) {
     (
         Board {
             leds,
-            beeper,
             spi,
             i2c,
             serial,
             adc,
             motors,
             sensors,
-            flash,
-            osd,
             usb,
             internal_flash: p.FLASH,
         },

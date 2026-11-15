@@ -194,15 +194,11 @@ fn flu_to_frd(v: Vector3<f32>) -> Vector3<f32> {
 
 /// Wrap to `[-π, π]`.
 #[inline]
-fn wrap_pi(mut a: f32) -> f32 {
-    const TWO_PI: f32 = core::f32::consts::TAU;
-    while a > core::f32::consts::PI {
-        a -= TWO_PI;
+fn wrap_pi(a: f32) -> f32 {
+    if !a.is_finite() {
+        return 0.0;
     }
-    while a < -core::f32::consts::PI {
-        a += TWO_PI;
-    }
-    a
+    libm::atan2f(libm::sinf(a), libm::cosf(a))
 }
 
 /// `R_ned_frd = M · R_enu_flu · N`, with `M` mapping ENU vectors to NED and
@@ -576,5 +572,23 @@ mod tests {
     fn body_rate_conversion_is_involutive() {
         let w = Vector3::new(0.3, -1.2, 0.7);
         assert_eq!(flu_to_frd(flu_to_frd(w)), w);
+    }
+
+    #[test]
+    fn wrap_pi_handles_normal_and_non_finite_angles() {
+        use core::f32::consts::{FRAC_PI_2, PI, TAU};
+
+        assert!((wrap_pi(0.0)).abs() < 1e-6);
+        assert!((wrap_pi(FRAC_PI_2) - FRAC_PI_2).abs() < 1e-6);
+        assert!((wrap_pi(-FRAC_PI_2) + FRAC_PI_2).abs() < 1e-6);
+        assert!((wrap_pi(TAU + 0.3) - 0.3).abs() < 1e-5);
+        assert!((wrap_pi(-TAU - 0.3) + 0.3).abs() < 1e-5);
+        assert!(wrap_pi(PI).abs() <= PI + 1e-5);
+
+        let huge = wrap_pi(1e20);
+        assert!(huge.is_finite() && huge >= -PI && huge <= PI);
+        assert_eq!(wrap_pi(f32::INFINITY), 0.0);
+        assert_eq!(wrap_pi(f32::NEG_INFINITY), 0.0);
+        assert_eq!(wrap_pi(f32::NAN), 0.0);
     }
 }

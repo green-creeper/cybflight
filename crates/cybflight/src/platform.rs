@@ -29,6 +29,13 @@ fn unlock_backup_domain() {
         let _ = pac::RCC.apb1enr().read();
         cortex_m::asm::dsb();
     }
+    #[cfg(not(feature = "board_flywoof745"))]
+    {
+        // Enable RTC APB clock so RTC backup registers (BKP0R..BKP31R) are writable on H7.
+        pac::RCC.apb4enr().modify(|w| w.set_rtcapben(true));
+        let _ = pac::RCC.apb4enr().read();
+        cortex_m::asm::dsb();
+    }
     pac::PWR.cr1().modify(|w| w.set_dbp(true));
     for _ in 0..1024 {
         if pac::PWR.cr1().read().dbp() {

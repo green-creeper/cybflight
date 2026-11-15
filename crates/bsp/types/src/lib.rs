@@ -14,16 +14,6 @@ pub enum SensorAlign {
     Cw270DegFlip,
 }
 
-/// Default serial role mapping (Betaflight target header).
-#[derive(Copy, Clone, Debug, Eq, PartialEq, defmt::Format)]
-pub enum SerialRole {
-    Msp,
-    DisplayPort,
-    Gps,
-    EscSensor,
-    SerialRx,
-}
-
 /// A concrete serial port ID — full STM32H7 superset.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, defmt::Format)]
 pub enum SerialPortId {
@@ -36,32 +26,6 @@ pub enum SerialPortId {
     Uart7,
     Uart8,
     Lpuart1,
-}
-
-/// Timer ID — full STM32H7 timer set.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, defmt::Format)]
-pub enum TimerId {
-    Tim1,
-    Tim2,
-    Tim3,
-    Tim4,
-    Tim5,
-    Tim8,
-    Tim12,
-    Tim13,
-    Tim14,
-    Tim15,
-    Tim16,
-    Tim17,
-}
-
-/// Timer channel identifier.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, defmt::Format)]
-pub enum TimerChannel {
-    Ch1,
-    Ch2,
-    Ch3,
-    Ch4,
 }
 
 /// Battery/current ADC calibration constants from Betaflight target config.
@@ -77,22 +41,4 @@ pub struct PowerCalibration {
     pub current_scale: u16,
     /// Betaflight `current_meter_offset` (centiamps).
     pub current_offset: i16,
-}
-
-/// DMA stream/request hint derived from Betaflight timer tables.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, defmt::Format)]
-pub struct DmaHint {
-    /// Betaflight "DMA stream" number (0..7). Embassy typically exposes these as DMAx_CH0..CH7.
-    pub stream: u8,
-    /// Betaflight "request" number (DMAMUX request).
-    pub request: u16,
-}
-
-/// Motor timer grouping metadata derived from `timer` output.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, defmt::Format)]
-pub struct MotorMeta {
-    pub timer: TimerId,
-    pub channel: TimerChannel,
-    pub af: u8,
-    pub dma: Option<DmaHint>,
 }

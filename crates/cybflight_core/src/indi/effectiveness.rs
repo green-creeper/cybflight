@@ -12,7 +12,7 @@
 //
 // See docs/indi_effectiveness.tex for the full derivation.
 
-use nalgebra::{Matrix3, SMatrix, SVector, Vector3};
+use nalgebra::{SMatrix, SVector, Vector3};
 
 use crate::mixer::{MotorParams, RigidBodyParams};
 
@@ -170,14 +170,6 @@ impl<const N: usize> IndiEffectiveness<N> {
         }
 
         g1g2
-    }
-
-    /// Inertia-inverse helper: convert physical torque column to acceleration space.
-    ///
-    /// Useful if you need to add custom effectiveness rows not covered by
-    /// `from_motors` (e.g. tilting rotors with lateral force).
-    pub fn torque_to_accel(inertia_inv: &Matrix3<f32>, torque: &Vector3<f32>) -> Vector3<f32> {
-        inertia_inv * torque
     }
 }
 

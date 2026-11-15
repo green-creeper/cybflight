@@ -30,6 +30,7 @@
 //! cross-check stays on its "ready" sentinel; wiring it up is a
 //! separate, deliberate change.
 
+use core::sync::atomic::Ordering;
 use core::time::Duration;
 
 use embassy_sync::pubsub::WaitResult;
@@ -146,13 +147,18 @@ pub async fn mahony_task() {
             Err(_) => continue,
         }
 
-        // Pathological gyro spikes can drive the orientation into NaN
-        // even with a sane accel. Reset to identity and re-warm.
-        if !orientation_is_finite(&filter.orientation()) {
+        // Pathological gyro spikes can drive orientation or gyro_bias into NaN
+        // even with a sane accel. Reset both and re-warm.
+        if !orientation_is_finite(&filter.orientation())
+            || !filter.gyro_bias().iter().all(|v| v.is_finite())
+        {
             filter.set_orientation(UnitQuaternion::identity());
             filter.set_gyro_bias(Vector3::zeros());
+            super::MAHONY_READY.store(false, Ordering::Release);
+            super::MAHONY_ATTITUDE_DEG.lock(|c| c.set(None));
             warmup = 0;
-            defmt::warn!("Mahony: non-finite orientation, reset to identity");
+            pub_decim = 0;
+            defmt::warn!("Mahony: non-finite state, reset to identity");
             continue;
         }
 
@@ -167,9 +173,19 @@ pub async fn mahony_task() {
         }
         pub_decim = 0;
 
+        let q = filter.orientation();
+        let (r_rad, p_rad, y_rad) = q.euler_angles();
+        let (r_deg, p_deg, y_deg) = (r_rad.to_degrees(), p_rad.to_degrees(), y_rad.to_degrees());
+        if r_deg.is_finite() && p_deg.is_finite() && y_deg.is_finite() {
+            super::MAHONY_ATTITUDE_DEG.lock(|c| c.set(Some((r_deg, p_deg, y_deg))));
+            if warmup >= WARMUP_UPDATES {
+                super::MAHONY_READY.store(true, Ordering::Release);
+            }
+        }
+
         let m = msgs::VehicleAttitude {
             timestamp: imu.timestamp,
-            orientation: filter.orientation(),
+            orientation: q,
         };
         att_pub.publish_immediate(m.clone());
         #[cfg(not(any(feature = "est_pos_mocap", feature = "est_pos_gps")))]

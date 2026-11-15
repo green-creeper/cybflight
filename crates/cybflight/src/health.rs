@@ -93,15 +93,42 @@ pub enum EstimatorPhaseSummary {
 }
 
 impl SystemHealth {
+    /// Capture the live [`SystemHealth`] snapshot using the global RC link state
+    /// (`RC_LINK_ACTIVE` + `LATEST_RC_LINK_STATUS`) and an optional throttle reading.
+    pub fn capture_with_throttle(throttle: Option<u16>) -> Self {
+        use core::sync::atomic::Ordering;
+
+        let link_active = crate::sensors::rc::RC_LINK_ACTIVE.load(Ordering::Acquire);
+        let link = crate::sensors::rc::LATEST_RC_LINK_STATUS
+            .lock(|c| c.borrow().clone())
+            .map(|s| LinkSnapshot {
+                active: link_active,
+                // `s.timestamp` comes from the RC task's `Instant::now()`; saturating
+                // subtraction avoids panicking if tasks read across a tick boundary.
+                age_ms: Instant::now()
+                    .saturating_duration_since(s.timestamp)
+                    .as_millis(),
+                quality: if link_active { s.link_quality } else { 0 },
+            })
+            .unwrap_or(LinkSnapshot {
+                active: false,
+                age_ms: 0,
+                quality: 0,
+            });
+        Self::snapshot(link, throttle)
+    }
+
     /// Sample every gate input. The caller supplies the live link state
     /// and latest throttle PWM (peeked from `RC_LINK_STATUS` / `RC_INPUT`)
-    /// because those don't have global mirrors.
+    /// or uses [`Self::capture_with_throttle`].
     pub fn snapshot(link: LinkSnapshot, throttle: Option<u16>) -> Self {
         use core::sync::atomic::Ordering;
 
         let failsafe_active = crate::control::failsafe::FAILSAFE_ACTIVE.load(Ordering::Acquire);
         let armed = crate::motors::IS_ARMED.load(Ordering::Acquire);
         let gyro_calibrated = crate::sensors::imu::IMU1_GYRO_CALIBRATED.load(Ordering::Acquire);
+        let mahony_ready = crate::estimation::MAHONY_READY.load(Ordering::Acquire);
+        let mahony_attitude_deg = crate::estimation::MAHONY_ATTITUDE_DEG.lock(|c| c.get());
 
         #[cfg(any(feature = "est_pos_mocap", feature = "est_pos_gps"))]
         let (
@@ -110,8 +137,6 @@ impl SystemHealth {
             estimator_faults,
             estimator_severe,
             estimator_phase,
-            mahony_ready,
-            mahony_attitude_deg,
             attitude_health_bits,
             attitude_health_required,
         ) = {
@@ -142,18 +167,12 @@ impl SystemHealth {
                     yaw_deg,
                 },
             };
-            // Mahony AHRS is not present on this branch — readers see a
-            // "ready" sentinel and an empty quaternion so the cross-check
-            // gates that depend on it never block.
-            let mahony_attitude_deg: Option<(f32, f32, f32)> = None;
             (
                 crate::estimation::ESTIMATOR_READY.load(Ordering::Acquire),
                 crate::estimation::ESKF_DEGRADED.load(Ordering::Acquire),
                 crate::estimation::ESKF_FAULTS.load(Ordering::Acquire),
                 crate::estimation::ESKF_SEVERE_FAULT.load(Ordering::Acquire),
                 phase_summary,
-                true,
-                mahony_attitude_deg,
                 crate::estimation::ATTITUDE_HEALTH.load(Ordering::Acquire),
                 att_health::ALL_OK,
             )
@@ -166,8 +185,6 @@ impl SystemHealth {
             estimator_faults,
             estimator_severe,
             estimator_phase,
-            mahony_ready,
-            mahony_attitude_deg,
             attitude_health_bits,
             attitude_health_required,
         ) = (
@@ -176,8 +193,6 @@ impl SystemHealth {
             0u32,
             false,
             EstimatorPhaseSummary::NotConfigured,
-            true,
-            None,
             0u8,
             0u8,
         );
@@ -265,7 +280,8 @@ impl SystemHealth {
             } => Some((roll_deg, pitch_deg)),
             _ => None,
         };
-        if let Some((r, p)) = attitude_rp {
+        let tilt_rp = attitude_rp.or_else(|| self.mahony_attitude_deg.map(|(r, p, _)| (r, p)));
+        if let Some((r, p)) = tilt_rp {
             if r.abs() > cfg.max_tilt_deg || p.abs() > cfg.max_tilt_deg {
                 return Some(BlockReason::TiltOutOfEnvelope {
                     roll_deg: r,

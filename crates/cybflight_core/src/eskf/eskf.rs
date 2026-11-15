@@ -635,6 +635,7 @@ impl Eskf {
         self.clamp_covariance_diagonal();
         if !self.state_is_finite() {
             self.initialized = false;
+            self.health.nan_resets = self.health.nan_resets.saturating_add(1);
         }
     }
 
@@ -744,6 +745,7 @@ impl Eskf {
         self.renormalize_orientation();
         if !self.state_is_finite() {
             self.initialized = false;
+            self.health.nan_resets = self.health.nan_resets.saturating_add(1);
             return UpdateOutcome::NaNAfterUpdate;
         }
         UpdateOutcome::Accepted { inflated }
@@ -852,6 +854,7 @@ impl Eskf {
         self.renormalize_orientation();
         if !self.state_is_finite() {
             self.initialized = false;
+            self.health.nan_resets = self.health.nan_resets.saturating_add(1);
             return UpdateOutcome::NaNAfterUpdate;
         }
         UpdateOutcome::Accepted { inflated }
@@ -1009,6 +1012,7 @@ impl Eskf {
         // form skips it. Keep the two paths bit-identical.)
         if !self.state_is_finite() {
             self.initialized = false;
+            self.health.nan_resets = self.health.nan_resets.saturating_add(1);
             return UpdateOutcome::NaNAfterUpdate;
         }
         UpdateOutcome::Accepted { inflated }
@@ -1488,6 +1492,14 @@ mod health_tests {
     }
 
     #[test]
+    fn nan_input_predict_sparse_increments_nan_resets() {
+        let mut e = fresh_eskf();
+        e.predict_sparse(Vector3::new(f32::NAN, 0.0, 0.0), Vector3::zeros(), 0.001);
+        assert_eq!(e.health().nan_resets, 1);
+        assert!(!e.is_initialized());
+    }
+
+    #[test]
     fn pos_cov_trace_reflects_init_diag() {
         // init() sets P[0..3,0..3] diag = 1.0 each, so trace = 3.0.
         let e = fresh_eskf();
@@ -1510,7 +1522,8 @@ mod health_tests {
     fn baseline_update_corrects_yaw_toward_truth() {
         let b_body = Vector3::new(0.0, -1.0, 0.0); // ANT1(L)->ANT2(R)
         let mut e = fresh_eskf(); // q_nom = identity
-        let q_true = UnitQuaternion::from_axis_angle(&Vector3::z_axis(), 0.5236); // +30° yaw
+        let q_true =
+            UnitQuaternion::from_axis_angle(&Vector3::z_axis(), core::f32::consts::FRAC_PI_6); // +30° yaw
         let b_meas = q_true * b_body; // world direction the true attitude produces
         let err_before = e.orientation().angle_to(&q_true);
         let out = e.update_baseline(b_meas, b_body, 0.02, 0.02);

@@ -6,34 +6,19 @@ use hal::exti;
 use hal::gpio::{Level, Output, Pull, Speed};
 use hal::{Config, Peripherals, bind_interrupts};
 
-pub use bsp_types::{
-    DmaHint, MotorMeta, PowerCalibration, SensorAlign, SerialPortId, TimerChannel, TimerId,
-};
-pub use cybflight_drivers::beeper::Beeper;
+pub use bsp_types::{PowerCalibration, SensorAlign, SerialPortId};
 
 /// Board name from Betaflight target.
 pub const BOARD_NAME: &str = "FOXEERH743";
-/// Manufacturer ID from Betaflight target.
-pub const MANUFACTURER_ID: &str = "FOXE";
-
-/// Betaflight target: beeper is inverted (active-low).
-pub const BEEPER_INVERTED: bool = true;
 
 pub const IMU_COUNT: usize = 1;
 pub const BARO_COUNT: usize = 1;
-pub const HAS_MAG: bool = false;
-pub const HAS_OSD: bool = true;
-pub const HAS_FLASH: bool = true;
-pub const HAS_GPS: bool = true;
 pub const HAS_SDCARD: bool = false;
 /// True if the board exposes any storage backend usable for the
 /// blackbox / flight-data-recorder pipeline. FOXEERH743 has no SD slot
 /// and the SPI-NOR backend is not yet wired, so the pipeline compiles
 /// out entirely.
 pub const HAS_BLACKBOX_STORAGE: bool = false;
-/// STM32H743's D3-domain backup SRAM. See SAKURAH743 BSP for the full
-/// rationale; same MCU, same answer.
-pub const HAS_BACKUP_SRAM: bool = true;
 pub const LED_COUNT: usize = 1;
 
 /// Primary gyro *native* output data rate (Hz). ICM426xx runs at 8 kHz. The
@@ -85,115 +70,6 @@ pub mod sensors {
     pub const MAG: &str = "MAG";
 }
 
-/// Motor metadata table in motor index order (M1..M8).
-///
-/// M1  PB4  TIM3 CH1 AF2  (DMA1 Stream0 Req23)
-/// M2  PB5  TIM3 CH2 AF2  (DMA1 Stream1 Req24)
-/// M3  PB0  TIM3 CH3 AF2  (DMA1 Stream2 Req25)
-/// M4  PB1  TIM3 CH4 AF2  (DMA1 Stream3 Req26)
-/// M5  PD12 TIM4 CH1 AF2  (DMA1 Stream4 Req29)
-/// M6  PD13 TIM4 CH2 AF2  (DMA1 Stream5 Req30)
-/// M7  PC8  TIM8 CH3 AF3  (DMA1 Stream6 Req49)
-/// M8  PC9  TIM8 CH4 AF3  (DMA1 Stream7 Req50)
-pub const MOTOR_META: [MotorMeta; 8] = [
-    MotorMeta {
-        timer: TimerId::Tim3,
-        channel: TimerChannel::Ch1,
-        af: 2,
-        dma: Some(DmaHint {
-            stream: 0,
-            request: 23,
-        }),
-    },
-    MotorMeta {
-        timer: TimerId::Tim3,
-        channel: TimerChannel::Ch2,
-        af: 2,
-        dma: Some(DmaHint {
-            stream: 1,
-            request: 24,
-        }),
-    },
-    MotorMeta {
-        timer: TimerId::Tim3,
-        channel: TimerChannel::Ch3,
-        af: 2,
-        dma: Some(DmaHint {
-            stream: 2,
-            request: 25,
-        }),
-    },
-    MotorMeta {
-        timer: TimerId::Tim3,
-        channel: TimerChannel::Ch4,
-        af: 2,
-        dma: Some(DmaHint {
-            stream: 3,
-            request: 26,
-        }),
-    },
-    MotorMeta {
-        timer: TimerId::Tim4,
-        channel: TimerChannel::Ch1,
-        af: 2,
-        dma: Some(DmaHint {
-            stream: 4,
-            request: 29,
-        }),
-    },
-    MotorMeta {
-        timer: TimerId::Tim4,
-        channel: TimerChannel::Ch2,
-        af: 2,
-        dma: Some(DmaHint {
-            stream: 5,
-            request: 30,
-        }),
-    },
-    MotorMeta {
-        timer: TimerId::Tim8,
-        channel: TimerChannel::Ch3,
-        af: 3,
-        dma: Some(DmaHint {
-            stream: 6,
-            request: 49,
-        }),
-    },
-    MotorMeta {
-        timer: TimerId::Tim8,
-        channel: TimerChannel::Ch4,
-        af: 3,
-        dma: Some(DmaHint {
-            stream: 7,
-            request: 50,
-        }),
-    },
-];
-
-/// Servo PWM mapping metadata (from Betaflight target).
-pub const SERVO_META: &[(/*pin*/ &str, TimerId, TimerChannel, /*af*/ u8)] = &[
-    ("PE5", TimerId::Tim15, TimerChannel::Ch1, 4),
-    ("PE6", TimerId::Tim15, TimerChannel::Ch2, 4),
-];
-
-/// LED strip pin mapping metadata.
-pub const LED_STRIP_META: (
-    /*pin*/ &str,
-    TimerId,
-    TimerChannel,
-    /*af*/ u8,
-    DmaHint,
-) = (
-    "PA8",
-    TimerId::Tim1,
-    TimerChannel::Ch1,
-    1,
-    DmaHint {
-        stream: 0,
-        request: 11,
-    },
-);
-
 // EXTI interrupt required by gyro DRDY pin:
 // - PD0 (EXTI0) for GYRO_1
 bind_interrupts!(pub struct ExtiIrqs {
@@ -206,12 +82,6 @@ pub struct Leds {
 }
 
 pub struct SpiPins {
-    // SPI1 (PA5/6/7): OSD (MAX7456)
-    pub spi1: hal::Peri<'static, hal::peripherals::SPI1>,
-    pub spi1_sck: hal::Peri<'static, hal::peripherals::PA5>,
-    pub spi1_miso: hal::Peri<'static, hal::peripherals::PA6>,
-    pub spi1_mosi: hal::Peri<'static, hal::peripherals::PA7>,
-
     // SPI2 (PB13/14/15): gyro
     pub spi2: hal::Peri<'static, hal::peripherals::SPI2>,
     pub spi2_sck: hal::Peri<'static, hal::peripherals::PB13>,
@@ -265,7 +135,6 @@ pub struct AdcPins {
     pub adc3: hal::Peri<'static, hal::peripherals::ADC3>,
     pub vbat: hal::Peri<'static, hal::peripherals::PC3>,
     pub curr: hal::Peri<'static, hal::peripherals::PC2>,
-    pub rssi: hal::Peri<'static, hal::peripherals::PC5>,
 }
 
 pub struct MotorPins {
@@ -290,9 +159,6 @@ pub struct MotorPins {
     pub s1: hal::Peri<'static, hal::peripherals::PE5>,
     pub s2: hal::Peri<'static, hal::peripherals::PE6>,
 
-    // LED strip pin:
-    pub led_strip: hal::Peri<'static, hal::peripherals::PA8>,
-
     // DMA streams used by Betaflight for motor timer channels:
     pub dma1_ch0: hal::Peri<'static, hal::peripherals::DMA1_CH0>,
     pub dma1_ch1: hal::Peri<'static, hal::peripherals::DMA1_CH1>,
@@ -314,16 +180,6 @@ pub struct SensorPins {
     pub mag_align: SensorAlign,
 }
 
-pub struct FlashPins {
-    // Flash W25Q128FV on SPI3, CS=PA15
-    pub flash_cs: Output<'static>,
-}
-
-pub struct OsdPins {
-    // MAX7456 on SPI1, CS=PA4
-    pub osd_cs: Output<'static>,
-}
-
 pub struct UsbPins {
     pub usb_otg_fs: hal::Peri<'static, hal::peripherals::USB_OTG_FS>,
     pub dp: hal::Peri<'static, hal::peripherals::PA12>,
@@ -336,7 +192,6 @@ bind_interrupts!(pub struct UsbIrqs {
 
 pub struct Board {
     pub leds: Leds,
-    pub beeper: Beeper<Output<'static>>,
 
     pub spi: SpiPins,
     pub i2c: I2cPins,
@@ -344,8 +199,6 @@ pub struct Board {
     pub adc: AdcPins,
     pub motors: MotorPins,
     pub sensors: SensorPins,
-    pub flash: FlashPins,
-    pub osd: OsdPins,
     pub usb: UsbPins,
 
     /// Internal flash peripheral for parameter storage.
@@ -384,6 +237,8 @@ pub const APB1_TIMER_HZ: u32 = 240_000_000;
 /// USB uses HSI48 (independent of PLL1).
 fn board_config() -> Config {
     let mut config = Config::default();
+    config.dma_interrupt_priority = hal::interrupt::Priority::P4;
+    config.bdma_interrupt_priority = hal::interrupt::Priority::P4;
     {
         use hal::rcc::*;
         config.rcc.pll1 = Some(Pll {
@@ -420,22 +275,16 @@ pub fn init() -> (Board, hal::usart::UartTx<'static, hal::mode::Blocking>) {
         led0: Output::new(p.PC13, Level::Low, Speed::Low),
     };
 
-    // Beeper (PD2), inverted => OFF should be High.
-    let beeper_pin = Output::new(
-        p.PD2,
-        if BEEPER_INVERTED {
-            Level::High
-        } else {
-            Level::Low
-        },
-        Speed::Low,
-    );
-    let beeper = Beeper::new(beeper_pin, BEEPER_INVERTED);
+    // Beeper (PD2), inverted => OFF should be High; forget to keep pin driven idle.
+    let beeper_pin = Output::new(p.PD2, Level::High, Speed::Low);
+    core::mem::forget(beeper_pin);
 
-    // Sensor CS pins: deasserted high.
+    // Sensor CS pins: deasserted high. Unused SPI slaves forgotten to hold CS high.
     let gyro1_cs = Output::new(p.PB12, Level::High, Speed::VeryHigh);
     let flash_cs = Output::new(p.PA15, Level::High, Speed::VeryHigh);
+    core::mem::forget(flash_cs);
     let osd_cs = Output::new(p.PA4, Level::High, Speed::VeryHigh);
+    core::mem::forget(osd_cs);
 
     // Gyro DRDY pin as EXTI input.
     let gyro1_drdy = exti::ExtiInput::new(p.PD0, p.EXTI0, Pull::None, ExtiIrqs);
@@ -448,11 +297,6 @@ pub fn init() -> (Board, hal::usart::UartTx<'static, hal::mode::Blocking>) {
     };
 
     let spi = SpiPins {
-        spi1: p.SPI1,
-        spi1_sck: p.PA5,
-        spi1_miso: p.PA6,
-        spi1_mosi: p.PA7,
-
         spi2: p.SPI2,
         spi2_sck: p.PB13,
         spi2_miso: p.PB14,
@@ -504,7 +348,6 @@ pub fn init() -> (Board, hal::usart::UartTx<'static, hal::mode::Blocking>) {
         adc3: p.ADC3,
         vbat: p.PC3,
         curr: p.PC2,
-        rssi: p.PC5,
     };
 
     let motors = MotorPins {
@@ -525,8 +368,6 @@ pub fn init() -> (Board, hal::usart::UartTx<'static, hal::mode::Blocking>) {
 
         s1: p.PE5,
         s2: p.PE6,
-
-        led_strip: p.PA8,
 
         dma1_ch0: p.DMA1_CH0,
         dma1_ch1: p.DMA1_CH1,
@@ -555,15 +396,12 @@ pub fn init() -> (Board, hal::usart::UartTx<'static, hal::mode::Blocking>) {
     (
         Board {
             leds,
-            beeper,
             spi,
             i2c,
             serial,
             adc,
             motors,
             sensors,
-            flash: FlashPins { flash_cs },
-            osd: OsdPins { osd_cs },
             usb,
             internal_flash: p.FLASH,
         },

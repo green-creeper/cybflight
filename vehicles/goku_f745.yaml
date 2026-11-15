@@ -23,8 +23,8 @@ default_mission: outdoor_splits_slow
 airframe:
   name: goku_f745_01
   thrust_model: { type: quadratic, k: 0.518 }
-  mass_kg: 0.0618
-  inertia_kg_m2: [0.00035, 0.0, 0.0, 0.0, 0.00035, 0.0, 0.0, 0.0, 0.00045]
+  mass_kg: 0.090
+  inertia_kg_m2: [0.000045, 0.0, 0.0, 0.0, 0.000048, 0.0, 0.0, 0.0, 0.000072]
   max_rate_rad_s: [10.0, 10.0, 6.0]
   motors:
     - { pos_m: [-0.031466, -0.031466], spin: cw,  max_thrust_n: 0.6063, torque_coeff_m: 0.0047 }
@@ -60,10 +60,11 @@ tuning:
   m1_tau: 0.012
   m2_tau: 0.012
   m3_tau: 0.012
-  m0_omega_max: 9600.0
-  m1_omega_max: 9600.0
-  m2_omega_max: 9600.0
-  m3_omega_max: 9600.0
+  motor_poles: 12
+  m0_omega_max: 5800.0
+  m1_omega_max: 5800.0
+  m2_omega_max: 5800.0
+  m3_omega_max: 5800.0
   m0_g2_ry: 0.00004
   m1_g2_ry: -0.00004
   m2_g2_ry: -0.00004
@@ -72,8 +73,8 @@ tuning:
   batt_nominal_v: 7.6
   batt_min_v: 6.0
   batt_max_v: 10.0
-  imu_accel_lpf_hz: 80.0
-  imu_gyro_lpf_hz: 200.0
+  imu_accel_lpf_hz: 20.0
+  imu_gyro_lpf_hz: 175.0
 
   # ── eskf.filter — process/measurement noise + jump gates ──
   eskf_acc_noise: 0.01
@@ -113,6 +114,7 @@ tuning:
   eskf_mocap_reanchor_m: 0.10
 
   # ── airframe.install + sensors — install calibration + fusion policy ──
+  # QMC5883L requires per-airframe hard-iron calibration before enabling mag heading fusion.
   mag_hi_x: 0
   mag_hi_y: 0
   mag_hi_z: 0
@@ -133,7 +135,7 @@ tuning:
 
   # ── battery — cell detection ──
   batt_cell_detect_v: 4.3
-  batt_max_cells: 6
+  batt_max_cells: 2
   batt_no_battery_v: 3
   batt_lpf_hz: 5
 
@@ -226,7 +228,7 @@ tuning:
   rpm_est_tau_d: 0
 
   # ── rpm_notch — gyro/accel notch bank ──
-  rpm_notch_en: 0
+  rpm_notch_en: 1
   rpm_notch_q: 5
   rpm_notch_min_hz: 100
   rpm_notch_fade_hz: 50

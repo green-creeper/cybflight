@@ -31,13 +31,11 @@
 //! upgrade with a new layout treats an old record as invalid rather
 //! than misinterpreting fields.
 
-use core::mem::{MaybeUninit, size_of};
+use core::mem::size_of;
 
 /// `0xC0DE_xxxx` family. Low 16 bits are the schema version. Bump on
 /// any layout change to make old records invalid by construction.
 pub const MAGIC: u32 = 0xC0DE_0001;
-/// Schema version embedded in [`MAGIC`].
-pub const SCHEMA_VERSION: u16 = 0x0001;
 
 /// Fixed event ring depth. 16 × 16 B = 256 B.
 pub const EVENT_RING_LEN: usize = 16;
@@ -260,22 +258,23 @@ impl PostmortemRecord {
     /// `magic` afterwards (typically batched per writer-side
     /// scheduling).
     pub fn push_event(&mut self, entry: EventEntry) {
-        let idx = (self.event_head as usize) % EVENT_RING_LEN;
-        self.events[idx] = entry;
-        self.event_head = self.event_head.wrapping_add(1);
+        let head = (self.event_head & 0x7F) as usize % EVENT_RING_LEN;
+        self.events[head] = entry;
+        let next = (head + 1) % EVENT_RING_LEN;
+        let wrapped = if next == 0 || (self.event_head & 0x80) != 0 {
+            0x80u8
+        } else {
+            0
+        };
+        self.event_head = wrapped | (next as u8);
     }
 
     /// Iterator over events in chronological order (oldest first).
-    /// Stops at the first all-zero entry so callers don't have to
-    /// special-case partially-filled rings.
     pub fn events_in_order(&self) -> impl Iterator<Item = &EventEntry> {
-        let head = self.event_head as usize % EVENT_RING_LEN;
-        // After `n` events have been pushed (`event_head == n`):
-        //   - if n < RING_LEN, items live at indices [0..n) and the
-        //     head points at the first empty slot. Walk [0..head).
-        //   - if n >= RING_LEN, the ring is full and the oldest
-        //     event is at `head`. Walk [head..head+RING_LEN).
-        let full = self.event_head as usize >= EVENT_RING_LEN;
+        let head = (self.event_head & 0x7F) as usize % EVENT_RING_LEN;
+        // Bit 7 (0x80) latches once the ring wraps past EVENT_RING_LEN, so
+        // pushing >256 events never loses wrapped state on u8 overflow.
+        let full = (self.event_head & 0x80) != 0;
         let start = if full { head } else { 0 };
         let count = if full { EVENT_RING_LEN } else { head };
         (0..count).map(move |i| &self.events[(start + i) % EVENT_RING_LEN])
@@ -349,20 +348,13 @@ pub fn clear(rec: &mut PostmortemRecord) {
     cortex_m::asm::dsb();
 }
 
-/// Build a fresh zero-initialized record. Used by host-side tests and
-/// any callers that need a stack-local instance.
-pub fn zeroed() -> PostmortemRecord {
-    // SAFETY: `PostmortemRecord` is `repr(C)` with all-`Copy` fields
-    // and no padding-with-niche, so an all-zero bit pattern is a
-    // valid value. Avoiding a real `MaybeUninit::zeroed().assume_init()`
-    // simply uses the existing `ZERO` const.
-    let _ = MaybeUninit::<PostmortemRecord>::zeroed; // ensure MaybeUninit imported
-    PostmortemRecord::ZERO
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn zeroed() -> PostmortemRecord {
+        PostmortemRecord::ZERO
+    }
 
     #[test]
     fn record_size_is_2k() {
@@ -436,5 +428,37 @@ mod tests {
         assert_eq!(walked.len(), EVENT_RING_LEN);
         assert_eq!(walked[0], 4);
         assert_eq!(walked[15], 19);
+    }
+
+    #[test]
+    fn ring_wrap_past_256_preserves_full() {
+        let mut rec = zeroed();
+        for i in 0..256u32 {
+            rec.push_event(EventEntry {
+                timestamp_ms: i,
+                kind: 1,
+                _pad: [0; 3],
+                data: i,
+                seq: i,
+            });
+        }
+        let walked_256: heapless::Vec<_, 32> = rec.events_in_order().map(|e| e.seq).collect();
+        assert_eq!(walked_256.len(), EVENT_RING_LEN);
+        assert_eq!(walked_256[0], 240);
+        assert_eq!(walked_256[15], 255);
+
+        for i in 256..260u32 {
+            rec.push_event(EventEntry {
+                timestamp_ms: i,
+                kind: 1,
+                _pad: [0; 3],
+                data: i,
+                seq: i,
+            });
+        }
+        let walked_260: heapless::Vec<_, 32> = rec.events_in_order().map(|e| e.seq).collect();
+        assert_eq!(walked_260.len(), EVENT_RING_LEN);
+        assert_eq!(walked_260[0], 244);
+        assert_eq!(walked_260[15], 259);
     }
 }

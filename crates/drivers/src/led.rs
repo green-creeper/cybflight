@@ -28,9 +28,4 @@ impl<P: OutputPin + StatefulOutputPin> Led<P> {
             let _ = self.pin.set_low();
         }
     }
-
-    #[inline]
-    pub fn toggle(&mut self) {
-        let _ = self.pin.toggle();
-    }
 }

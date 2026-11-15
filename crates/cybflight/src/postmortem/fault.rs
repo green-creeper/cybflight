@@ -307,11 +307,15 @@ fn pvd_irq_body() {
     };
     commit_fatal(summary);
 
-    // Park here until BOR or HW reset. WFI cuts power to the core
-    // until any pending IRQ wakes us — the only thing that should
-    // wake us is BOR, which doesn't take this path.
+    // Park here until BOR/reset, OR exit cleanly if VDD recovers above threshold
+    // (transient battery sag shouldn't wedge the MCU in-flight).
     loop {
         cortex_m::asm::wfi();
+        if !crate::hal::pac::PWR.csr1().read().pvdo() {
+            exti.pr(0).write(|w| w.set_line(16, true));
+            FAULT_DEPTH.store(0, Ordering::Release);
+            return;
+        }
     }
 }
 
@@ -381,23 +385,28 @@ pub fn enable_pvd_brownout() {
 /// validation rules.
 fn commit_fatal(summary: FatalSummary) {
     bkpsram::enable();
-    bkpsram::with_record_mut(|r| {
-        if !record::is_valid(r) {
-            *r = record::PostmortemRecord::ZERO;
-            r.header.boot_count = 1;
-            r.header.reset_cause = crate::reset_cause::read();
-        }
-        r.fatal = summary;
-        // Refresh uptime if monotonic time is available. We use
-        // raw `embassy_time` access via a public fn; if anything
-        // goes wrong (e.g. timer not initialized in early boot),
-        // we leave the field at whatever the postmortem_task last
-        // wrote.
-        if let Some(now_ms) = monotonic_ms() {
-            r.header.uptime_ms = now_ms;
-        }
-        record::finalize(r);
-    });
+    // SAFETY: Caller only runs once (guarded by `FAULT_DEPTH == 1`, interrupts masked
+    // or escalated to HardFault/P0 PVD), so FAULT_SCRATCH has exclusive access.
+    unsafe {
+        bkpsram::with_fault_scratch_mut(|r| {
+            if !record::is_valid(r) {
+                // Zero in place to avoid staging a 2 KiB ZERO temporary on stack.
+                core::ptr::write_bytes(r as *mut record::PostmortemRecord, 0, 1);
+                r.header.boot_count = 1;
+                r.header.reset_cause = crate::reset_cause::read();
+            }
+            r.fatal = summary;
+            // Refresh uptime if monotonic time is available. We use
+            // raw `embassy_time` access via a public fn; if anything
+            // goes wrong (e.g. timer not initialized in early boot),
+            // we leave the field at whatever the postmortem_task last
+            // wrote.
+            if let Some(now_ms) = monotonic_ms() {
+                r.header.uptime_ms = now_ms;
+            }
+            record::finalize(r);
+        });
+    }
 }
 
 /// Best-effort monotonic-time read. Returns `None` if `embassy_time`

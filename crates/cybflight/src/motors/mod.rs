@@ -46,6 +46,10 @@ pub const DSHOT600_ARR: u16 = (DSHOT600_TICKS_PER_BIT - 1) as u16;
 // The prescaler is integer, so the division must be exact or the bit
 // period is off and no ESC decodes the frame.
 const _: () = assert!(
+    crate::bsp::APB1_TIMER_HZ == crate::bsp::APB2_TIMER_HZ,
+    "DShot timers span APB1 and APB2; kernel clocks must match"
+);
+const _: () = assert!(
     crate::bsp::APB2_TIMER_HZ % DSHOT600_TIMER_HZ == 0,
     "this board's timer kernel clock is not an integer multiple of the \
      12 MHz DShot600 needs; the prescaler cannot express the bit period."
@@ -67,8 +71,6 @@ pub struct MotorTimerConfig {
     pub gpio_port: Gpio,
     /// GPIO pin number within port (0-15)
     pub gpio_pin: u8,
-    /// Alternate function number for this pin's timer channel
-    pub af_number: u8,
 }
 
 /// Quad motor DShot configuration — board-agnostic.

@@ -1464,7 +1464,7 @@ impl MpcDirectController {
         let mut x_ref = SVector::<f32, NX>::zeros();
         x_ref[6] = 1.0;
 
-        let mpc_stride = (MPC_SOLVE_RATE_HZ / MPC_SOLVE_RATE_HZ) as u32; // = 1
+        let mpc_stride: u32 = 1; // MPC runs at MPC_SOLVE_RATE_HZ (1:1)
 
         Self {
             solver: Box::new(FullSqpSolver::new()),

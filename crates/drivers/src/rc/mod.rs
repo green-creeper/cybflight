@@ -4,6 +4,12 @@ pub mod mavlink_rc;
 /// Maximum number of RC channels supported.
 pub const MAX_CHANNELS: usize = 16;
 
+/// Safe disarmed channel defaults in microseconds (1500 neutral, CH3 throttle=988, CH5-8 aux=988).
+pub const SAFE_DEFAULT_CHANNELS_US: [u16; MAX_CHANNELS] = [
+    1500, 1500, 988, 1500, 988, 988, 988, 988,
+    1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500,
+];
+
 /// Decoded RC channel data.
 #[derive(Clone, Debug, defmt::Format)]
 pub struct RcChannels {
@@ -16,7 +22,7 @@ pub struct RcChannels {
 impl Default for RcChannels {
     fn default() -> Self {
         Self {
-            channels: [1500; MAX_CHANNELS],
+            channels: SAFE_DEFAULT_CHANNELS_US,
             channel_count: 0,
         }
     }

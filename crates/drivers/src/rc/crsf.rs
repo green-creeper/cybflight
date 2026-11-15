@@ -6,29 +6,25 @@
 
 use embedded_io_async::{Read, Write};
 
-use super::{LinkStatistics, MAX_CHANNELS, RcChannels, crc8_dvb_s2_buf, crc8_poly_0xba_buf};
+use super::{
+    LinkStatistics, MAX_CHANNELS, RcChannels, SAFE_DEFAULT_CHANNELS_US, crc8_dvb_s2_buf,
+    crc8_poly_0xba_buf,
+};
 
 // ---------------------------------------------------------------------------
 // Protocol constants (from crsf_protocol.h)
 // ---------------------------------------------------------------------------
 
-pub const CRSF_BAUDRATE: u32 = 420000;
-
 pub const CRSF_SYNC_BYTE: u8 = 0xC8;
 pub const CRSF_FRAME_SIZE_MAX: usize = 64;
 
 // Addresses
-pub const CRSF_ADDRESS_BROADCAST: u8 = 0x00;
 pub const CRSF_ADDRESS_FLIGHT_CONTROLLER: u8 = 0xC8;
 pub const CRSF_ADDRESS_RADIO_TRANSMITTER: u8 = 0xEA;
 pub const CRSF_ADDRESS_CRSF_RECEIVER: u8 = 0xEC;
 pub const CRSF_ADDRESS_CRSF_TRANSMITTER: u8 = 0xEE;
 
 // Frame types
-pub const CRSF_FRAMETYPE_GPS: u8 = 0x02;
-pub const CRSF_FRAMETYPE_VARIO_SENSOR: u8 = 0x07;
-pub const CRSF_FRAMETYPE_BATTERY_SENSOR: u8 = 0x08;
-pub const CRSF_FRAMETYPE_BARO_ALTITUDE: u8 = 0x09;
 pub const CRSF_FRAMETYPE_HEARTBEAT: u8 = 0x0B;
 pub const CRSF_FRAMETYPE_LINK_STATISTICS: u8 = 0x14;
 pub const CRSF_FRAMETYPE_RC_CHANNELS_PACKED: u8 = 0x16;
@@ -36,28 +32,17 @@ pub const CRSF_FRAMETYPE_SUBSET_RC_CHANNELS_PACKED: u8 = 0x17;
 pub const CRSF_FRAMETYPE_LINK_STATISTICS_TX: u8 = 0x1D;
 pub const CRSF_FRAMETYPE_ATTITUDE: u8 = 0x1E;
 pub const CRSF_FRAMETYPE_FLIGHT_MODE: u8 = 0x21;
-pub const CRSF_FRAMETYPE_DEVICE_INFO: u8 = 0x29;
 pub const CRSF_FRAMETYPE_COMMAND: u8 = 0x32;
 
 // Payload sizes
 pub const CRSF_FRAME_RC_CHANNELS_PAYLOAD_SIZE: usize = 22;
 pub const CRSF_FRAME_LINK_STATISTICS_PAYLOAD_SIZE: usize = 10;
 pub const CRSF_FRAME_LINK_STATISTICS_TX_PAYLOAD_SIZE: usize = 6;
-pub const CRSF_FRAME_GPS_PAYLOAD_SIZE: usize = 15;
-pub const CRSF_FRAME_BATTERY_SENSOR_PAYLOAD_SIZE: usize = 8;
-pub const CRSF_FRAME_BARO_ALTITUDE_PAYLOAD_SIZE: usize = 3;
-pub const CRSF_FRAME_HEARTBEAT_PAYLOAD_SIZE: usize = 2;
 pub const CRSF_FRAME_ATTITUDE_PAYLOAD_SIZE: usize = 6;
-pub const CRSF_FRAME_VARIO_SENSOR_PAYLOAD_SIZE: usize = 2;
-
-// Frame structure sizes
-pub const CRSF_FRAME_LENGTH_TYPE_CRC: usize = 2;
 
 // Subset RC channel constants
 const SUBSET_RC_STARTING_CHANNEL_BITS: u8 = 5;
 const SUBSET_RC_STARTING_CHANNEL_MASK: u8 = 0x1F;
-#[allow(unused)]
-const SUBSET_RC_RES_CONFIGURATION_BITS: u8 = 2;
 const SUBSET_RC_RES_CONFIGURATION_MASK: u8 = 0x03;
 
 // Channel scaling
@@ -65,8 +50,6 @@ const RC_CHANNEL_SCALE_LEGACY: f32 = 0.62477120195241;
 
 // Subset RC resolution configs
 const SUBSET_RC_RES_CONF_10B: u8 = 0;
-#[allow(unused)]
-const SUBSET_RC_RES_CONF_11B: u8 = 1;
 const SUBSET_RC_RES_CONF_12B: u8 = 2;
 const SUBSET_RC_RES_CONF_13B: u8 = 3;
 
@@ -116,6 +99,7 @@ pub struct CrsfParser {
     buf: [u8; CRSF_FRAME_SIZE_MAX],
     len: usize,
     crc_errors: u32,
+    last_channels_us: [u16; MAX_CHANNELS],
 }
 
 impl Default for CrsfParser {
@@ -130,12 +114,14 @@ impl CrsfParser {
             buf: [0u8; CRSF_FRAME_SIZE_MAX],
             len: 0,
             crc_errors: 0,
+            last_channels_us: SAFE_DEFAULT_CHANNELS_US,
         }
     }
 
     pub fn reset(&mut self) {
         self.len = 0;
         self.crc_errors = 0;
+        self.last_channels_us = SAFE_DEFAULT_CHANNELS_US;
     }
 
     /// Return and clear accumulated CRC/framing errors since last check.
@@ -239,9 +225,9 @@ impl CrsfParser {
                         self.shift_one();
                         continue;
                     }
-                    Some(CrsfEvent::RcChannelsPacked(
-                        Crsf::<&[u8]>::unpack_rc_channels_packed(payload),
-                    ))
+                    let rc = Crsf::<&[u8]>::unpack_rc_channels_packed(payload);
+                    self.last_channels_us = rc.channels;
+                    Some(CrsfEvent::RcChannelsPacked(rc))
                 }
                 CRSF_FRAMETYPE_SUBSET_RC_CHANNELS_PACKED => {
                     if payload.is_empty() {
@@ -250,7 +236,10 @@ impl CrsfParser {
                         continue;
                     }
                     Some(CrsfEvent::SubsetRcChannels(
-                        Crsf::<&[u8]>::unpack_subset_rc_channels(payload, frame_len),
+                        Crsf::<&[u8]>::unpack_subset_rc_channels(
+                            payload,
+                            &mut self.last_channels_us,
+                        ),
                     ))
                 }
                 CRSF_FRAMETYPE_LINK_STATISTICS => {
@@ -388,9 +377,6 @@ impl<E: defmt::Format> defmt::Format for Error<E> {
 pub struct Crsf<RW> {
     rw: RW,
     parser: CrsfParser,
-    /// Baudrate hint: set after V3 speed negotiation is accepted.
-    /// The caller must reconfigure the UART to this baudrate.
-    new_baudrate: Option<u32>,
 }
 
 /// Map `ReadExactError<E>` to `Error<E>`.
@@ -446,8 +432,11 @@ impl<RW> Crsf<RW> {
     /// Unpack subset RC channels (frame type 0x17).
     /// Variable resolution: 10/11/12/13-bit channels, variable start channel.
     /// Scale: factor * raw + 988
-    fn unpack_subset_rc_channels(payload: &[u8], frame_len: usize) -> RcChannels {
-        let mut channels = [1500u16; MAX_CHANNELS];
+    fn unpack_subset_rc_channels(
+        payload: &[u8],
+        last_channels_us: &mut [u16; MAX_CHANNELS],
+    ) -> RcChannels {
+        let mut channels = *last_channels_us;
 
         let config_byte = payload[0];
         let start_channel = (config_byte & SUBSET_RC_STARTING_CHANNEL_MASK) as usize;
@@ -461,14 +450,12 @@ impl<RW> Crsf<RW> {
             _ => (11, 0x07FF, 0.5), // 11-bit default
         };
 
-        // Calculate number of channels packed
-        // frame_len includes type + payload + CRC, so payload bytes = frame_len - 2
-        // subtract 1 for config byte
-        let payload_bits = (frame_len - CRSF_FRAME_LENGTH_TYPE_CRC - 1) * 8;
+        let channel_data = &payload[1..];
+        let payload_bits = channel_data.len() * 8;
         let num_channels = payload_bits / channel_bits;
 
-        let channel_data = &payload[1..];
         let mut bit_offset: usize = 0;
+        let mut count = 0usize;
         for n in 0..num_channels {
             let idx = start_channel + n;
             if idx >= MAX_CHANNELS {
@@ -483,7 +470,7 @@ impl<RW> Crsf<RW> {
             let mut read_idx = byte_idx;
             let mut shift = 0usize;
 
-            while bits_merged < channel_bits {
+            while bits_merged < bit_idx + channel_bits {
                 if read_idx >= channel_data.len() {
                     break;
                 }
@@ -498,12 +485,20 @@ impl<RW> Crsf<RW> {
 
             let pwm = (scale * raw as f32 + 988.0) as u16;
             channels[idx] = pwm;
+            count += 1;
             bit_offset += channel_bits;
         }
 
+        *last_channels_us = channels;
+        let channel_count = if count == 0 || start_channel >= MAX_CHANNELS {
+            0
+        } else {
+            (start_channel + count).min(MAX_CHANNELS) as u8
+        };
+
         RcChannels {
             channels,
-            channel_count: num_channels.min(MAX_CHANNELS) as u8,
+            channel_count,
         }
     }
 
@@ -567,7 +562,7 @@ impl<RW> Crsf<RW> {
     ) -> Option<CrsfEvent> {
         // Command frame: [type, dest, origin, subcmd_id, subcmd, ...payload, cmd_crc, frame_crc]
         // cmd_crc uses poly 0xBA over type..payload (excluding frame_crc)
-        if frame_len < 6 {
+        if frame_len < 6 || data.len() < frame_len {
             return None;
         }
 
@@ -596,7 +591,7 @@ impl<RW> Crsf<RW> {
         if subcmd_id == CRSF_COMMAND_SUBCMD_GENERAL
             && subcmd == CRSF_COMMAND_SUBCMD_GENERAL_CRSF_SPEED_PROPOSAL
         {
-            if payload.len() >= 6 {
+            if payload.len() >= 7 {
                 let port_id = payload[2];
                 let baud = (payload[3] as u32) << 24
                     | (payload[4] as u32) << 16
@@ -622,13 +617,7 @@ where
         Self {
             rw,
             parser: CrsfParser::new(),
-            new_baudrate: None,
         }
-    }
-
-    /// Returns and clears the pending baudrate hint (set after V3 negotiation).
-    pub fn take_baudrate_hint(&mut self) -> Option<u32> {
-        self.new_baudrate.take()
     }
 
     /// Read one complete CRSF frame, validate CRC, and parse the payload.
@@ -646,61 +635,8 @@ where
     }
 
     // -----------------------------------------------------------------------
-    // Telemetry frame builders (all big-endian, matching BF)
+    // Telemetry frame writers
     // -----------------------------------------------------------------------
-
-    /// Write a complete frame: sync + len + type + payload + CRC.
-    async fn write_frame(
-        &mut self,
-        frame_type: u8,
-        payload: &[u8],
-    ) -> Result<(), Error<RW::Error>> {
-        let (frame, total) = encode_frame(frame_type, payload);
-        self.rw
-            .write_all(&frame[..total])
-            .await
-            .map_err(Error::Io)?;
-        Ok(())
-    }
-
-    /// Write a command frame with dual CRC (0xBA for command, 0xD5 for frame).
-    async fn write_command_frame(
-        &mut self,
-        dest: u8,
-        origin: u8,
-        cmd_payload: &[u8],
-    ) -> Result<(), Error<RW::Error>> {
-        let (frame, total) = encode_command_frame(dest, origin, cmd_payload);
-        self.rw
-            .write_all(&frame[..total])
-            .await
-            .map_err(Error::Io)?;
-        Ok(())
-    }
-
-    /// Send battery telemetry (type 0x08, 8 bytes payload).
-    ///
-    /// - `voltage_10mv`: voltage in units of 10mV (e.g. 1260 = 12.6V)
-    /// - `current_10ma`: current in units of 10mA
-    /// - `mah_drawn`: capacity consumed in mAh (24-bit)
-    /// - `remaining_pct`: battery remaining percentage [0..100]
-    pub async fn write_battery(
-        &mut self,
-        voltage_10mv: u16,
-        current_10ma: u16,
-        mah_drawn: u32,
-        remaining_pct: u8,
-    ) -> Result<(), Error<RW::Error>> {
-        let mut payload = [0u8; CRSF_FRAME_BATTERY_SENSOR_PAYLOAD_SIZE];
-        payload[0..2].copy_from_slice(&voltage_10mv.to_be_bytes());
-        payload[2..4].copy_from_slice(&current_10ma.to_be_bytes());
-        payload[4] = (mah_drawn >> 16) as u8;
-        payload[5] = (mah_drawn >> 8) as u8;
-        payload[6] = mah_drawn as u8;
-        payload[7] = remaining_pct;
-        self.write_frame(CRSF_FRAMETYPE_BATTERY_SENSOR, &payload)
-            .await
-    }
 
     /// Send attitude telemetry (type 0x1E, 6 bytes payload).
     ///
@@ -727,60 +663,9 @@ where
         self.rw.write_all(&frame[..total]).await.map_err(Error::Io)
     }
 
-    /// Send GPS telemetry (type 0x02, 15 bytes payload).
-    ///
-    /// - `lat`, `lon`: degrees × 10^7
-    /// - `speed_kmh10`: ground speed in km/h × 10
-    /// - `heading_deg100`: heading in degrees × 100
-    /// - `alt_m_offset`: altitude in meters + 1000m offset
-    /// - `num_sat`: satellites in use
-    pub async fn write_gps(
-        &mut self,
-        lat: i32,
-        lon: i32,
-        speed_kmh10: u16,
-        heading_deg100: u16,
-        alt_m_offset: u16,
-        num_sat: u8,
-    ) -> Result<(), Error<RW::Error>> {
-        let mut payload = [0u8; CRSF_FRAME_GPS_PAYLOAD_SIZE];
-        payload[0..4].copy_from_slice(&lat.to_be_bytes());
-        payload[4..8].copy_from_slice(&lon.to_be_bytes());
-        payload[8..10].copy_from_slice(&speed_kmh10.to_be_bytes());
-        payload[10..12].copy_from_slice(&heading_deg100.to_be_bytes());
-        payload[12..14].copy_from_slice(&alt_m_offset.to_be_bytes());
-        payload[14] = num_sat;
-        self.write_frame(CRSF_FRAMETYPE_GPS, &payload).await
-    }
-
-    /// Send barometric altitude (type 0x09, 3 bytes payload).
-    ///
-    /// - `alt_packed`: packed altitude (see BF `calcAltitudePacked`)
-    /// - `vario_packed`: packed vertical speed (see BF `calcVerticalSpeedPacked`)
-    pub async fn write_baro_altitude(
-        &mut self,
-        alt_packed: u16,
-        vario_packed: i8,
-    ) -> Result<(), Error<RW::Error>> {
-        let mut payload = [0u8; CRSF_FRAME_BARO_ALTITUDE_PAYLOAD_SIZE];
-        payload[0..2].copy_from_slice(&alt_packed.to_be_bytes());
-        payload[2] = vario_packed as u8;
-        self.write_frame(CRSF_FRAMETYPE_BARO_ALTITUDE, &payload)
-            .await
-    }
-
-    /// Send vario sensor (type 0x07, 2 bytes payload).
-    ///
-    /// - `vspeed_cm_s`: vertical speed in cm/s
-    pub async fn write_vario(&mut self, vspeed_cm_s: i16) -> Result<(), Error<RW::Error>> {
-        let payload = vspeed_cm_s.to_be_bytes();
-        self.write_frame(CRSF_FRAMETYPE_VARIO_SENSOR, &payload)
-            .await
-    }
-
     /// Send speed negotiation response (V3).
     ///
-    /// Call this after receiving a `SpeedProposal` event to accept the new baudrate.
+    /// Call this after receiving a `SpeedProposal` event to accept or reject the baudrate.
     pub async fn write_speed_response(
         &mut self,
         port_id: u8,
@@ -788,48 +673,6 @@ where
     ) -> Result<(), Error<RW::Error>> {
         let (frame, total) = encode_speed_response_frame(port_id, accept);
         self.rw.write_all(&frame[..total]).await.map_err(Error::Io)
-    }
-
-    /// Send device info response (type 0x29).
-    pub async fn write_device_info(&mut self, name: &[u8]) -> Result<(), Error<RW::Error>> {
-        // Frame: [dest, origin, name..., 0x00, 12 zero bytes, param_count, version]
-        let name_len = name.len().min(30);
-        let payload_len = 2 + name_len + 1 + 12 + 2;
-        let mut payload = [0u8; 48];
-        payload[0] = CRSF_ADDRESS_RADIO_TRANSMITTER;
-        payload[1] = CRSF_ADDRESS_FLIGHT_CONTROLLER;
-        payload[2..2 + name_len].copy_from_slice(&name[..name_len]);
-        payload[2 + name_len] = 0; // null terminator
-        // 12 zero bytes already set
-        payload[2 + name_len + 1 + 12] = 0; // parameter count
-        payload[2 + name_len + 1 + 12 + 1] = 0x01; // version
-        self.write_frame(CRSF_FRAMETYPE_DEVICE_INFO, &payload[..payload_len])
-            .await
-    }
-
-    /// Send a bind command to the receiver.
-    pub async fn write_bind(&mut self) -> Result<(), Error<RW::Error>> {
-        let cmd_payload = [0x10, 0x01]; // SUBCMD_RX, SUBCMD_RX_BIND
-        self.write_command_frame(
-            CRSF_ADDRESS_CRSF_RECEIVER,
-            CRSF_ADDRESS_FLIGHT_CONTROLLER,
-            &cmd_payload,
-        )
-        .await
-    }
-
-    /// Accept a V3 speed proposal: sends the response and sets the baudrate hint.
-    ///
-    /// After calling this, the caller should wait ~4ms, then reconfigure the
-    /// UART to the new baudrate (retrieved via `take_baudrate_hint()`).
-    pub async fn accept_speed_proposal(
-        &mut self,
-        port_id: u8,
-        baud: u32,
-    ) -> Result<(), Error<RW::Error>> {
-        self.write_speed_response(port_id, true).await?;
-        self.new_baudrate = Some(baud);
-        Ok(())
     }
 
     /// Reject a V3 speed proposal (`ACK = false`) so the receiver remains at
@@ -970,5 +813,179 @@ mod tests {
         let (spd, spd_len) = encode_speed_response_frame(1, true);
         assert_eq!(spd[2], CRSF_FRAMETYPE_COMMAND);
         assert_eq!(spd_len, 11);
+    }
+
+    #[test]
+    fn test_crsf_short_command_frame_no_panic() {
+        let mut parser = CrsfParser::new();
+
+        // 1. Valid-CRC 6-byte raw command payload after 0x32:
+        //    [dest, orig, sub_cmd, cmd, b4, b5]
+        let short_raw_payload = [
+            CRSF_ADDRESS_FLIGHT_CONTROLLER,
+            CRSF_ADDRESS_CRSF_RECEIVER,
+            CRSF_COMMAND_SUBCMD_GENERAL,
+            CRSF_COMMAND_SUBCMD_GENERAL_CRSF_SPEED_PROPOSAL,
+            0x01,
+            0x02,
+        ];
+        let (short_raw_frame, short_raw_len) =
+            encode_frame(CRSF_FRAMETYPE_COMMAND, &short_raw_payload);
+        for &b in &short_raw_frame[..short_raw_len] {
+            assert!(parser.feed(b).is_none());
+        }
+
+        // 2. Valid dual-CRC 6-byte command payload (`cmd_payload.len() == 6`):
+        //    previously satisfied `payload.len() >= 6` and panicked indexing `payload[6]`.
+        let short_cmd_payload = [
+            CRSF_COMMAND_SUBCMD_GENERAL,
+            CRSF_COMMAND_SUBCMD_GENERAL_CRSF_SPEED_PROPOSAL,
+            0x01,
+            0x00,
+            0x06,
+            0x68,
+        ];
+        let (short_cmd_frame, short_cmd_len) = encode_command_frame(
+            CRSF_ADDRESS_FLIGHT_CONTROLLER,
+            CRSF_ADDRESS_CRSF_RECEIVER,
+            &short_cmd_payload,
+        );
+        for &b in &short_cmd_frame[..short_cmd_len] {
+            assert!(parser.feed(b).is_none());
+        }
+
+        // 3. Valid 7-byte speed proposal payload returns SpeedProposal.
+        let valid_baud = 420_000u32.to_be_bytes();
+        let valid_cmd_payload = [
+            CRSF_COMMAND_SUBCMD_GENERAL,
+            CRSF_COMMAND_SUBCMD_GENERAL_CRSF_SPEED_PROPOSAL,
+            0x02,
+            valid_baud[0],
+            valid_baud[1],
+            valid_baud[2],
+            valid_baud[3],
+        ];
+        let (valid_frame, valid_len) = encode_command_frame(
+            CRSF_ADDRESS_FLIGHT_CONTROLLER,
+            CRSF_ADDRESS_CRSF_RECEIVER,
+            &valid_cmd_payload,
+        );
+        let mut parsed_speed = None;
+        for &b in &valid_frame[..valid_len] {
+            if let Some(evt) = parser.feed(b) {
+                parsed_speed = Some(evt);
+            }
+        }
+        assert!(matches!(
+            parsed_speed,
+            Some(CrsfEvent::SpeedProposal {
+                port_id: 2,
+                baud: 420_000
+            })
+        ));
+    }
+
+    fn pack_subset_payload(
+        start_ch: u8,
+        res_conf: u8,
+        bits_per_ch: usize,
+        raw_vals: &[u32],
+    ) -> ([u8; CRSF_FRAME_SIZE_MAX], usize) {
+        let mut payload = [0u8; CRSF_FRAME_SIZE_MAX];
+        payload[0] = (start_ch & SUBSET_RC_STARTING_CHANNEL_MASK)
+            | ((res_conf & SUBSET_RC_RES_CONFIGURATION_MASK) << SUBSET_RC_STARTING_CHANNEL_BITS);
+        let total_bits = raw_vals.len() * bits_per_ch;
+        let data_bytes = total_bits.div_ceil(8);
+        let mut bit_offset = 0usize;
+        for &raw in raw_vals {
+            let byte_idx = bit_offset / 8;
+            let bit_idx = bit_offset % 8;
+            let val = raw << bit_idx;
+            payload[1 + byte_idx] |= val as u8;
+            payload[1 + byte_idx + 1] |= (val >> 8) as u8;
+            payload[1 + byte_idx + 2] |= (val >> 16) as u8;
+            bit_offset += bits_per_ch;
+        }
+        (payload, 1 + data_bytes)
+    }
+
+    #[test]
+    fn test_crsf_subset_rc_channels() {
+        let mut parser = CrsfParser::new();
+
+        // Subset frame 1: 11-bit resolution (res_conf = 1), start_channel = 1 (CH2..CH4).
+        // 3 channels * 11 bits = 33 bits -> 5 bytes (40 bits -> 40 / 11 = 3 channels).
+        // CH2=1600 -> raw=1224, CH3=1000 -> raw=24, CH4=1400 -> raw=824.
+        let (sub1_payload, sub1_len) = pack_subset_payload(1, 1, 11, &[1224, 24, 824]);
+        let (sub1_frame, sub1_frame_len) = encode_frame(
+            CRSF_FRAMETYPE_SUBSET_RC_CHANNELS_PACKED,
+            &sub1_payload[..sub1_len],
+        );
+        let mut evt1 = None;
+        for &b in &sub1_frame[..sub1_frame_len] {
+            if let Some(e) = parser.feed(b) {
+                evt1 = Some(e);
+            }
+        }
+        let rc1 = match evt1 {
+            Some(CrsfEvent::SubsetRcChannels(rc)) => rc,
+            other => panic!("expected SubsetRcChannels, got {:?}", other),
+        };
+        assert_eq!(rc1.channel_count, 4);
+        assert_eq!(rc1.channels[0], 1500);
+        assert_eq!(rc1.channels[1], 1600);
+        assert_eq!(rc1.channels[2], 1000);
+        assert_eq!(rc1.channels[3], 1400);
+        // CH5..CH8 must preserve disarmed 988us safe default, not 1500us.
+        assert_eq!(rc1.channels[4], 988);
+        assert_eq!(rc1.channels[5], 988);
+        assert_eq!(rc1.channels[6], 988);
+        assert_eq!(rc1.channels[7], 988);
+
+        // Feed a full 0x16 frame (all channels ~1500us), updating last_channels_us.
+        let mut full_payload = [0u8; 22];
+        let mut bit_offset = 0usize;
+        for _ in 0..16 {
+            let byte_idx = bit_offset / 8;
+            let bit_idx = bit_offset % 8;
+            let val = 992u32 << bit_idx;
+            full_payload[byte_idx] |= val as u8;
+            if byte_idx + 1 < 22 {
+                full_payload[byte_idx + 1] |= (val >> 8) as u8;
+            }
+            if byte_idx + 2 < 22 {
+                full_payload[byte_idx + 2] |= (val >> 16) as u8;
+            }
+            bit_offset += 11;
+        }
+        let (full_frame, full_len) =
+            encode_frame(CRSF_FRAMETYPE_RC_CHANNELS_PACKED, &full_payload);
+        for &b in &full_frame[..full_len] {
+            let _ = parser.feed(b);
+        }
+
+        // Subset frame 2: 10-bit resolution (res_conf = 0), start_channel = 8 (CH9..CH10).
+        // 2 * 10 bits = 20 bits -> 3 bytes (24 bits -> 24 / 10 = 2 channels).
+        let (sub2_payload, sub2_len) = pack_subset_payload(8, 0, 10, &[100, 800]);
+        let (sub2_frame, sub2_frame_len) = encode_frame(
+            CRSF_FRAMETYPE_SUBSET_RC_CHANNELS_PACKED,
+            &sub2_payload[..sub2_len],
+        );
+        let mut evt2 = None;
+        for &b in &sub2_frame[..sub2_frame_len] {
+            if let Some(e) = parser.feed(b) {
+                evt2 = Some(e);
+            }
+        }
+        let rc2 = match evt2 {
+            Some(CrsfEvent::SubsetRcChannels(rc)) => rc,
+            other => panic!("expected SubsetRcChannels, got {:?}", other),
+        };
+        assert_eq!(rc2.channel_count, 10);
+        // Untouched channels retain values from prior 0x16 frame (~1500us).
+        assert!((1500..=1501).contains(&rc2.channels[0]));
+        assert!((1500..=1501).contains(&rc2.channels[4]));
+        assert_eq!(rc2.channels[8], 1088);
+        assert_eq!(rc2.channels[9], 1788);
     }
 }

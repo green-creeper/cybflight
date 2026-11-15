@@ -198,7 +198,7 @@ impl core::fmt::Display for GpsHealth {
                 carr_soln,
                 last_fix_at,
             } => {
-                let age_ms = Instant::now().duration_since(*last_fix_at).as_millis();
+                let age_ms = Instant::now().saturating_duration_since(*last_fix_at).as_millis();
                 write!(
                     f,
                     "GPS: locked (fix_type={}, num_sv={}, h_acc={}mm, dgps={}, rtk={}, age={}ms)",
