@@ -302,4 +302,5 @@ tuning:
   sampler_max_lead_s: 0.1
 
   # ── system — device/UX toggles ──
-  blackbox_tier: 3
+  blackbox_tier: 2
+  blackbox_rate_div: 4

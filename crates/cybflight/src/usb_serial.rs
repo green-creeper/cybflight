@@ -41,70 +41,19 @@ type UsbDriver<'d> = Driver<'d, hal::peripherals::USB_OTG_FS>;
 
 const PROMPT: &[u8] = b"> ";
 const HELP_TEXT: &[u8] = b"\
-  imu1                 one-shot IMU 1 snapshot\r\n\
-  imu2                 one-shot IMU 2 snapshot\r\n\
-  imurate              measure the actual IMU sample rate vs the build's\r\n\
-  indistat             INDI step cost avg/max us since last call\r\n\
-  att                  one-shot attitude snapshot\r\n\
-  ocp                  one-shot OCP solver output\r\n\
-  rc                   one-shot RC channel values\r\n\
-  rcstats              one-shot RC link status\r\n\
-  rcdiag               RC auto-detect scanner & per-UART RX byte diagnostics\r\n\
-  rcdiag rescan        unlock RC port, zero counters, and rescan all UARTs\r\n\
-  dshot                one-shot DShot telemetry\r\n\
-  power                one-shot power status\r\n\
-  gps                  one-shot GPS fix\r\n\
-  gpshealth            one-shot GPS init/fix health\r\n\
-  gpsrtk               one-shot RTK / NAV-PVT detail (corrections, accuracy)\r\n\
-  fleetstate           one-shot neighbour fleet state (swarm pos/vel)\r\n\
-  magext               one-shot external compass\r\n\
-  magint               one-shot internal compass\r\n\
-  baro1                one-shot barometer 1\r\n\
-  baro2                one-shot barometer 2\r\n\
-  vicon                one-shot Vicon pose\r\n\
-  timesync             one-shot time sync status\r\n\
-  eskf                 one-shot estimator status\r\n\
-  health               aggregated arming/health snapshot\r\n\
-  resetcause           why the board last reset (IWDG / brownout / pin / POR)\r\n\
-  version              print firmware version, git hash, board and vehicle\r\n\
-  stream <topic> on    stream data on <topic>\r\n\
-  stream <topic> off   stop data stream on <topic>\r\n\
-  stream off           stop all active data streams\r\n\
-                       (topics: imu1 imu2 att ocp rc rcstats dshot power gps\r\n\
-                        gpsrtk magext magint baro1 baro2 attcontrol vicon timesync eskf)\r\n\
-  motor <1-4> <0-100>  set motor throttle (test mode)\r\n\
-  param list           list all vehicle parameters\r\n\
-  param get <name>     get a parameter value\r\n\
-  param set <name> <v> set a parameter (in-memory)\r\n\
-  param save [--prune] write params to flash (--prune: drop stale overrides)\r\n\
-  param defaults       reset to compile-time defaults\r\n\
-  mission list                            list available offline trajectories\r\n\
-  mission get                             show the active mission: schedule, head/end, yaw/lookahead, flatness map, state\r\n\
-  mission set <env> <variant> <speed>     select a trajectory (in-memory; 'param save' to persist)\r\n\
-  led on               enable arm LEDs (red top / blue bottom, brighter when armed)\r\n\
-  led off              disable arm LEDs\r\n\
-  blackbox record on   manually start a flight log (flight_NNNN.mcap)\r\n\
-  blackbox record off  stop the manual flight log\r\n\
-  blackbox status      show current recording state and what's triggering it\r\n\
-  blackbox set <tier>  set the record-set tier (none|small|mid|large|sysid); next session\r\n\
-                       none=disabled, small=events+rc,\r\n\
-                       mid=small+imu1/attitude/motors/health (default flight-debug tier),\r\n\
-                       large=mid+ESKF odometry/mpc/tracking_error/control_setpoint/estimator_state,\r\n\
-                       sysid=small+imu1_raw/motors/motor_state/odometry with INDI mirrors at >=500 Hz\r\n\
-                       (sysid is NOT a superset of large; see 'blackbox_rate_div' for card bandwidth)\r\n\
-  blackbox ls          list files in the FAT root (rejected while recording)\r\n\
-  blackbox get <f> [<off> [<len>]]  download a file: 'OK <size>' + raw bytes + 'CRC <hex8>'\r\n\
-                       (binary! use 'just blackbox-pull', not a bare terminal)\r\n\
-  blackbox rm <f>      delete a file from the FAT root (rejected while recording)\r\n\
-  blackbox clean       delete ALL flight_NNNN.mcap logs (other files untouched; rejected while recording)\r\n\
-                       (recorder also auto-starts on real ARM_STATE arm: RC switch / failsafe path)\r\n\
-                       (file numbering picks up after the highest existing flight_NNNN; survives reboots)\r\n\
-  postmortem show      print the prior-boot crash record (reset cause, fatal kind, last events)\r\n\
-  postmortem clear     wipe the BKPSRAM post-mortem slot\r\n\
-  reboot               software reset\r\n\
-  reboot --dfu         reset into USB DFU bootloader\r\n\
-  help                 show this message\r\n\
-  <Tab>                complete a command, stream topic, param or mission name\r\n\
+  imu1|imu2|imurate|indistat       IMU snapshots, ODR check, INDI timing\r\n\
+  att|ocp|rc|rcstats|rcdiag [rescan]  attitude, OCP, RC channels & UART scan\r\n\
+  dshot|power|gps|gpshealth|gpsrtk DShot, battery/current, GPS/RTK status\r\n\
+  fleetstate|magext|magint|baro1|baro2|vicon|timesync|eskf  sensor snapshots\r\n\
+  health|resetcause|version        arm gates, reset flags, build info\r\n\
+  stream <topic> on|off | stream off  (imu1 imu2 att ocp rc rcstats dshot power\r\n\
+                                      gps gpsrtk magext magint baro1 baro2 attcontrol vicon timesync eskf)\r\n\
+  motor <1-4> <0-100> | led on|off bench actuator & LED controls\r\n\
+  param list|get|set|diff|reset|save [--prune]|defaults\r\n\
+  mission list|get|set <env> <var> <spd>  offline trajectory selection\r\n\
+  blackbox record on|off|status|set <none|small|mid|large|sysid>|ls|get <f> [<off> [<len>]]|rm <f>|clean\r\n\
+  postmortem show|clear            prior-boot crash record\r\n\
+  reboot [--dfu] | help | <Tab>    reboot/DFU, this help, completion\r\n\
 ";
 
 // ---------------------------------------------------------------------------
@@ -1444,6 +1393,26 @@ async fn dispatch_blackbox_status<'d>(
         p.system.blackbox_mute_mask,
     );
     write_all(class, w.as_slice()).await?;
+    #[cfg(feature = "board_flywoof745")]
+    {
+        let info = crate::blackbox::nor_store::NOR_STORAGE_INFO.lock(|c| c.get());
+        let mut nor_buf = [0u8; 160];
+        let mut nor_w = WriteBuf::new(&mut nor_buf);
+        let fmt_tag = if info.formatting { " [formatting]" } else { "" };
+        let _ = write!(
+            nor_w,
+            "nor flash:       JEDEC {:02x}:{:02x}:{:02x}, {}/{} KiB used, {} KiB ready, {} file(s){}\r\n",
+            info.jedec[0],
+            info.jedec[1],
+            info.jedec[2],
+            info.used_kib,
+            info.capacity_kib,
+            info.ready_kib,
+            info.files,
+            fmt_tag,
+        );
+        write_all(class, nor_w.as_slice()).await?;
+    }
 
     // Last-session lines (Stage 7): what the most recent close produced,
     // plus the card-level I/O counters behind it.
@@ -1762,7 +1731,7 @@ async fn dispatch_blackbox_get<'d>(
     let Some(name_str) = parts.next() else {
         return write_all(class, USAGE).await;
     };
-    let mut name: crate::blackbox::fat::EntryName = heapless::String::new();
+    let mut name: crate::blackbox::EntryName = heapless::String::new();
     if name.push_str(name_str.trim_start_matches('/')).is_err() {
         return write_all(class, b"blackbox get: name too long (max 32 chars)\r\n").await;
     }
@@ -1892,7 +1861,7 @@ async fn dispatch_blackbox_rm<'d>(
     let (Some(name_str), None) = (parts.next(), parts.next()) else {
         return write_all(class, b"usage: blackbox rm <file>\r\n").await;
     };
-    let mut name: crate::blackbox::fat::EntryName = heapless::String::new();
+    let mut name: crate::blackbox::EntryName = heapless::String::new();
     if name.push_str(name_str.trim_start_matches('/')).is_err() {
         return write_all(class, b"blackbox rm: name too long (max 32 chars)\r\n").await;
     }
@@ -1908,7 +1877,7 @@ async fn dispatch_blackbox_rm<'d>(
     let _ = RM_RESULT.try_take();
     RM_REQUEST.signal(name);
 
-    let task_timeout = Duration::from_secs(10);
+    let task_timeout = Duration::from_secs(60);
     match with_timeout(task_timeout, RM_RESULT.wait()).await {
         Ok(RmReport::Ok) => {
             let mut buf = [0u8; 64];
@@ -1980,7 +1949,7 @@ async fn dispatch_blackbox_clean<'d>(
 
     // One directory rescan + one delete per file; a card with dozens
     // of large logs can take a few seconds on the FAT-table writes.
-    let task_timeout = Duration::from_secs(30);
+    let task_timeout = Duration::from_secs(90);
     match with_timeout(task_timeout, CLEAN_RESULT.wait()).await {
         Ok(CleanReport::Ok(s)) => {
             let mut buf = [0u8; 128];
@@ -2213,24 +2182,29 @@ async fn dispatch_postmortem_clear<'d>(
     write_all(class, b"postmortem: BKPSRAM slot cleared\r\n").await
 }
 
-fn blackbox_fat_reason(stage: crate::blackbox::fat::OpError) -> &'static str {
-    use crate::blackbox::fat::OpError;
+fn blackbox_fat_reason(stage: crate::blackbox::OpError) -> &'static str {
+    use crate::blackbox::OpError;
     match stage {
         OpError::NoSubscriberSlot => "topic has no free subscriber slot (bump SUBS on the channel)",
         OpError::NoMessageInTimeout => {
             "no fresh message on the topic within the op's timeout \
              (sensor driver stalled or topic silent?)"
         }
+        #[cfg(not(feature = "board_flywoof745"))]
         OpError::CardAcquire => "card acquire failed (CMD0/ACMD41 — card missing/unseated/locked?)",
+        #[cfg(not(feature = "board_flywoof745"))]
         OpError::NoPartitionTable => {
             "sector 0 has neither MBR signature nor FAT BPB \
              (card blank/GPT/corrupted; reformat as FAT32)"
         }
+        #[cfg(not(feature = "board_flywoof745"))]
         OpError::NoFatPartition => {
             "MBR present but no FAT partition entry \
              (card formatted as exFAT/ext4/NTFS; reformat as FAT32)"
         }
+        #[cfg(not(feature = "board_flywoof745"))]
         OpError::PartitionIo => "MBR/partition I/O fault (see defmt log)",
+        #[cfg(not(feature = "board_flywoof745"))]
         OpError::Mount => {
             "FAT boot sector unreadable \
              (partition exists but BPB corrupted; reformat as FAT32)"
@@ -2243,7 +2217,15 @@ fn blackbox_fat_reason(stage: crate::blackbox::fat::OpError) -> &'static str {
             "write faulted mid-session, but the partial log was flushed and closed \
              (file is readable up to the fault; see defmt log)"
         }
+        #[cfg(not(feature = "board_flywoof745"))]
         OpError::Unmount => "unmount-flush failed (file may not have hit the card; see defmt log)",
+        #[cfg(feature = "board_flywoof745")]
+        OpError::CardAcquire
+        | OpError::NoPartitionTable
+        | OpError::NoFatPartition
+        | OpError::PartitionIo
+        | OpError::Mount
+        | OpError::Unmount => "storage error",
         OpError::NotFound => "file not found in FAT root",
         OpError::Open => "open failed (see defmt log)",
         OpError::Read => {
@@ -2251,6 +2233,8 @@ fn blackbox_fat_reason(stage: crate::blackbox::fat::OpError) -> &'static str {
              directory entry; see defmt log)"
         }
         OpError::Remove => "remove failed (see defmt log)",
+        OpError::StorageInit => "onboard blackbox storage init or JEDEC probe failed",
+        OpError::DiskFull => "blackbox storage full (clean or remove old logs)",
         OpError::Aborted => "transfer aborted (armed mid-transfer, or shell stopped draining)",
     }
 }

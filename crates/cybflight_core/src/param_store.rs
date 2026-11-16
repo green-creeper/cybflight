@@ -135,7 +135,7 @@ fn hash_of_idx<G: ParamGroup>(idx: usize) -> Option<u32> {
 }
 
 fn crc(bytes: &[u8]) -> u32 {
-    crc32fast::hash(bytes)
+    crate::crc32::hash(bytes)
 }
 
 fn header_word(generation: u32) -> [u8; WORD] {

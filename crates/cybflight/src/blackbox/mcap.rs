@@ -83,8 +83,11 @@ pub async fn write_header<W: Write>(
 /// Emit the DataEnd record (op 0x0F). `data_section_crc` is
 /// optional (set to 0 if not computed); we pass 0 in Stage 1.
 pub async fn write_data_end<W: Write>(w: &mut W, data_section_crc: u32) -> Result<(), W::Error> {
-    write_prelude(w, op::DATA_END, 4).await?;
-    w.write_all(&data_section_crc.to_le_bytes()).await
+    let mut buf = [0u8; 13];
+    buf[0] = op::DATA_END;
+    buf[1..9].copy_from_slice(&4u64.to_le_bytes());
+    buf[9..13].copy_from_slice(&data_section_crc.to_le_bytes());
+    w.write_all(&buf).await
 }
 
 /// Emit the Footer record (op 0x02). For files with no summary
@@ -97,12 +100,13 @@ pub async fn write_footer<W: Write>(
     summary_offset_start: u64,
     summary_crc: u32,
 ) -> Result<(), W::Error> {
-    write_prelude(w, op::FOOTER, 20).await?;
-    let mut body = [0u8; 20];
-    body[0..8].copy_from_slice(&summary_start.to_le_bytes());
-    body[8..16].copy_from_slice(&summary_offset_start.to_le_bytes());
-    body[16..20].copy_from_slice(&summary_crc.to_le_bytes());
-    w.write_all(&body).await
+    let mut buf = [0u8; 29];
+    buf[0] = op::FOOTER;
+    buf[1..9].copy_from_slice(&20u64.to_le_bytes());
+    buf[9..17].copy_from_slice(&summary_start.to_le_bytes());
+    buf[17..25].copy_from_slice(&summary_offset_start.to_le_bytes());
+    buf[25..29].copy_from_slice(&summary_crc.to_le_bytes());
+    w.write_all(&buf).await
 }
 
 /// Emit a Schema record (op 0x03). `id` must be > 0; `data` is the
@@ -195,13 +199,14 @@ pub async fn write_message<W: Write>(
     publish_time_ns: u64,
     data: &[u8],
 ) -> Result<(), W::Error> {
-    let body_len = 2 + 4 + 8 + 8 + data.len();
-    write_prelude(w, op::MESSAGE, body_len as u64).await?;
-    let mut head = [0u8; 22];
-    head[0..2].copy_from_slice(&channel_id.to_le_bytes());
-    head[2..6].copy_from_slice(&sequence.to_le_bytes());
-    head[6..14].copy_from_slice(&log_time_ns.to_le_bytes());
-    head[14..22].copy_from_slice(&publish_time_ns.to_le_bytes());
+    let body_len = (2 + 4 + 8 + 8 + data.len()) as u64;
+    let mut head = [0u8; 31];
+    head[0] = op::MESSAGE;
+    head[1..9].copy_from_slice(&body_len.to_le_bytes());
+    head[9..11].copy_from_slice(&channel_id.to_le_bytes());
+    head[11..15].copy_from_slice(&sequence.to_le_bytes());
+    head[15..23].copy_from_slice(&log_time_ns.to_le_bytes());
+    head[23..31].copy_from_slice(&publish_time_ns.to_le_bytes());
     w.write_all(&head).await?;
     w.write_all(data).await
 }

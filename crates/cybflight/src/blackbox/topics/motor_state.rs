@@ -25,22 +25,10 @@ use crate::msgs;
 pub const CHANNEL_ID: u16 = 8;
 pub const TOPIC: &str = "/motor_state";
 pub const SCHEMA_NAME: &str = "MotorStateTelemetry";
-pub const SCHEMA: &[u8] = br#"{
-  "title": "MotorStateTelemetry",
-  "type": "object",
-  "properties": {
-    "timestamp_ns": { "type": "integer" },
-    "omega":        { "type": "array", "minItems": 4, "maxItems": 4,
-                      "items": {"type": "number"},
-                      "description": "Filtered motor angular velocity (rad/s), mixer order" },
-    "omega_dot":    { "type": "array", "minItems": 4, "maxItems": 4,
-                      "items": {"type": "number"},
-                      "description": "Filtered motor angular acceleration (rad/s^2)" },
-    "raw":          { "type": "array", "minItems": 4, "maxItems": 4,
-                      "items": {"type": ["number", "null"]},
-                      "description": "Raw bidir-DShot eRPM-derived measurement; null when telemetry frame missing" }
-  }
-}"#;
+//   omega: Filtered motor angular velocity (rad/s), mixer order
+//   omega_dot: Filtered motor angular acceleration (rad/s^2)
+//   raw: Raw bidir-DShot eRPM-derived measurement; null when telemetry frame missing
+pub const SCHEMA: &[u8] = br#"{"title":"MotorStateTelemetry","type":"object","properties":{"timestamp_ns":{"type":"integer"},"omega":{"type":"array","minItems":4,"maxItems":4,"items":{"type":"number"}},"omega_dot":{"type":"array","minItems":4,"maxItems":4,"items":{"type":"number"}},"raw":{"type":"array","minItems":4,"maxItems":4,"items":{"type":["number","null"]}}}}"#;
 
 pub const DEF: TopicDef = TopicDef {
     channel_id: CHANNEL_ID,

@@ -17,19 +17,9 @@ use crate::msgs;
 pub const CHANNEL_ID: u16 = 12;
 pub const TOPIC: &str = "/estimator_state";
 pub const SCHEMA_NAME: &str = "EstimatorBias";
-pub const SCHEMA: &[u8] = br#"{
-  "title": "EstimatorBias",
-  "type": "object",
-  "properties": {
-    "timestamp_ns":     { "type": "integer" },
-    "gyro_bias_rad_s":  { "type": "array", "minItems": 3, "maxItems": 3,
-                          "items": {"type": "number"},
-                          "description": "ESKF gyro bias estimate (rad/s)" },
-    "accel_bias_m_s2":  { "type": "array", "minItems": 3, "maxItems": 3,
-                          "items": {"type": "number"},
-                          "description": "ESKF accel bias estimate (m/s^2)" }
-  }
-}"#;
+//   gyro_bias_rad_s: ESKF gyro bias estimate (rad/s)
+//   accel_bias_m_s2: ESKF accel bias estimate (m/s^2)
+pub const SCHEMA: &[u8] = br#"{"title":"EstimatorBias","type":"object","properties":{"timestamp_ns":{"type":"integer"},"gyro_bias_rad_s":{"type":"array","minItems":3,"maxItems":3,"items":{"type":"number"}},"accel_bias_m_s2":{"type":"array","minItems":3,"maxItems":3,"items":{"type":"number"}}}}"#;
 
 pub const DEF: TopicDef = TopicDef {
     channel_id: CHANNEL_ID,

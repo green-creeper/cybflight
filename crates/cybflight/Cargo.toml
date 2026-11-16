@@ -136,11 +136,6 @@ defmt = "1.0.1"
 critical-section = "1"
 embedded-io = "0.7"
 panic-probe = { version = "1.0.0", features = ["print-defmt"] }
-# CRC over the post-mortem record body. `default-features = false`
-# disables std-only "use_simd" path; the no_std fallback is the
-# table-based implementation which is still callable from a
-# panic/HardFault context (no allocator, no statics-with-Drop).
-crc32fast = { version = "1.5", default-features = false }
 
 # COBS framing for ESP bridge communication
 cobs = { version = "0.5", default-features = false }

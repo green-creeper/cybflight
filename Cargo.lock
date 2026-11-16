@@ -1597,7 +1597,6 @@ dependencies = [
  "cobs",
  "cortex-m",
  "cortex-m-rt",
- "crc32fast",
  "critical-section",
  "cybflight-core",
  "cybflight-drivers",
@@ -1628,7 +1627,6 @@ name = "cybflight-core"
 version = "0.1.0"
 dependencies = [
  "air-filters",
- "crc32fast",
  "cybflight-params-derive",
  "flight-solver",
  "float-cmp",

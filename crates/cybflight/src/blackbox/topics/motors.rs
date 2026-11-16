@@ -21,16 +21,8 @@ use crate::msgs;
 pub const CHANNEL_ID: u16 = 7;
 pub const TOPIC: &str = "/motors";
 pub const SCHEMA_NAME: &str = "ActuatorMotors";
-pub const SCHEMA: &[u8] = br#"{
-  "title": "ActuatorMotors",
-  "type": "object",
-  "properties": {
-    "timestamp_ns":   { "type": "integer" },
-    "motor_commands": { "type": "array", "minItems": 4, "maxItems": 4,
-                        "items": {"type": "number"},
-                        "description": "Normalized [0..1] per-motor command, mixer order" }
-  }
-}"#;
+//   motor_commands: Normalized [0..1] per-motor command, mixer order
+pub const SCHEMA: &[u8] = br#"{"title":"ActuatorMotors","type":"object","properties":{"timestamp_ns":{"type":"integer"},"motor_commands":{"type":"array","minItems":4,"maxItems":4,"items":{"type":"number"}}}}"#;
 
 pub const DEF: TopicDef = TopicDef {
     channel_id: CHANNEL_ID,

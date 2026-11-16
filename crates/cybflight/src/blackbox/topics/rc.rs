@@ -8,17 +8,8 @@ use crate::msgs;
 pub const CHANNEL_ID: u16 = 3;
 pub const TOPIC: &str = "/rc";
 pub const SCHEMA_NAME: &str = "RcInput";
-pub const SCHEMA: &[u8] = br#"{
-  "title": "RcInput",
-  "type": "object",
-  "properties": {
-    "timestamp_ns":  { "type": "integer" },
-    "channels":      { "type": "array", "minItems": 0, "maxItems": 16,
-                       "items": {"type": "integer"},
-                       "description": "PWM microseconds [988..2012]; length == channel_count" },
-    "channel_count": { "type": "integer" }
-  }
-}"#;
+//   channels: PWM microseconds [988..2012]; length == channel_count
+pub const SCHEMA: &[u8] = br#"{"title":"RcInput","type":"object","properties":{"timestamp_ns":{"type":"integer"},"channels":{"type":"array","minItems":0,"maxItems":16,"items":{"type":"integer"}},"channel_count":{"type":"integer"}}}"#;
 
 pub const DEF: TopicDef = TopicDef {
     channel_id: CHANNEL_ID,

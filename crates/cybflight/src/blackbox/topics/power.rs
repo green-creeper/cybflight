@@ -22,19 +22,14 @@ use crate::sensors::power::PowerTelemetry;
 pub const CHANNEL_ID: u16 = 15;
 pub const TOPIC: &str = "/power";
 pub const SCHEMA_NAME: &str = "PowerTelemetry";
-pub const SCHEMA: &[u8] = br#"{
-  "title": "PowerTelemetry",
-  "description": "One power_task ADC tick (100 Hz). voltage_v is the batt_lpf_hz-filtered pack voltage every consumer (INDI thrust table, shell, GCS) sees; voltage_raw_v is the same tick's hardware-oversampled reading with no software filter, ripple included.",
-  "type": "object",
-  "properties": {
-    "timestamp_ns":  { "type": "integer", "description": "Sample wall-clock time, ns since boot." },
-    "voltage_v":     { "type": "number",  "description": "Filtered pack voltage (V), PT1 at batt_lpf_hz." },
-    "voltage_raw_v": { "type": "number",  "description": "Unfiltered pack voltage (V) from the same ADC conversion." },
-    "current_a":     { "type": "number",  "description": "Unfiltered pack current (A); negative = charging / sensor offset." },
-    "mah_drawn":     { "type": "integer", "description": "Integrated charge drawn since power-on (mAh)." },
-    "cell_count":    { "type": "integer", "description": "Auto-detected series cell count; 0 = no battery." }
-  }
-}"#;
+// One power_task ADC tick (100 Hz). voltage_v is the batt_lpf_hz-filtered pack voltage every consumer (INDI thrust table, shell, GCS) sees; voltage_raw_v is the same tick's hardware-oversampled reading with no software filter, ripple included.
+//   timestamp_ns: Sample wall-clock time, ns since boot.
+//   voltage_v: Filtered pack voltage (V), PT1 at batt_lpf_hz.
+//   voltage_raw_v: Unfiltered pack voltage (V) from the same ADC conversion.
+//   current_a: Unfiltered pack current (A); negative = charging / sensor offset.
+//   mah_drawn: Integrated charge drawn since power-on (mAh).
+//   cell_count: Auto-detected series cell count; 0 = no battery.
+pub const SCHEMA: &[u8] = br#"{"title":"PowerTelemetry","type":"object","properties":{"timestamp_ns":{"type":"integer"},"voltage_v":{"type":"number"},"voltage_raw_v":{"type":"number"},"current_a":{"type":"number"},"mah_drawn":{"type":"integer"},"cell_count":{"type":"integer"}}}"#;
 
 pub const DEF: TopicDef = TopicDef {
     channel_id: CHANNEL_ID,

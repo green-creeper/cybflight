@@ -44,130 +44,10 @@ use embedded_io_async::{Read as _, Seek as _, SeekFrom, Write};
 use embedded_partitions::mbr::{Error as MbrError, Mbr, Scheme};
 
 use super::sdmmc_block::SdmmcBlockStore;
-
-/// Max filename surfaced to callers in [`EntrySummary`]. Long enough
-/// to fit `flight_NNNN.mcap` plus headroom for any other names a
-/// user might drop on the card.
-pub const MAX_FILENAME: usize = 32;
-pub type EntryName = heapless::String<MAX_FILENAME>;
-
-/// One root-directory entry, materialised so callers can drop the
-/// underlying `DirEntry` borrow before consuming results. Names are
-/// best-effort ASCII (non-ASCII units / OEM bytes become `?`).
-#[derive(Clone)]
-pub struct EntrySummary {
-    pub name: EntryName,
-    /// File length in bytes, capped to `u32::MAX` (4 GiB). Files
-    /// larger than 4 GiB are unrepresentable on FAT32 anyway.
-    pub size: u32,
-}
-
-/// Unified per-op error: covers both source-side failures (no
-/// pubsub subscriber slot, sample timeout) and sink-side failures
-/// (each stage of the FAT pipeline).
-///
-/// Variants are listed in roughly the order an op encounters them:
-/// pre-FAT data acquisition first, then card → partition → FS →
-/// file → flush → unmount.
-#[derive(Clone, Copy, defmt::Format)]
-pub enum OpError {
-    // ── Pre-FAT (data source) ─────────────────────────────────────
-    /// Pubsub channel ran out of subscriber slots — bump the `SUBS`
-    /// const on the channel.
-    NoSubscriberSlot,
-    /// Subscriber didn't see a fresh message within the op's
-    /// timeout — sensor task may be down or the topic is silent.
-    NoMessageInTimeout,
-    // ── Sink (FAT) ────────────────────────────────────────────────
-    /// Couldn't acquire the SD card itself (CMD0/ACMD41).
-    CardAcquire,
-    /// Sector 0 looks like neither an MBR nor a FAT BPB — card is
-    /// blank, GPT-formatted, or its first sector is corrupt.
-    NoPartitionTable,
-    /// MBR present but no FAT-typed partition entry — card is
-    /// formatted as ext4/exFAT/etc.
-    NoFatPartition,
-    /// MBR / partition I/O failed before mount.
-    PartitionIo,
-    /// Couldn't parse the FAT superblock — partition exists but is
-    /// not FAT32/FAT16, or its boot sector is corrupted.
-    Mount,
-    /// Couldn't create the directory entry — disk full, name collision, etc.
-    Create,
-    /// Body's `write` returned an I/O fault, or `flush` failed, and
-    /// nothing could be salvaged — the directory entry is still at the
-    /// zero size `truncate()` set, so no file survives.
-    Write,
-    /// Body's `write` returned an I/O fault **after** some bytes had
-    /// already been committed, and the flush/close/unmount that
-    /// followed succeeded. A truncated but structurally readable log
-    /// survives on the card under this name.
-    ///
-    /// Callers must **not** recycle the sequence number: the next
-    /// session would `create_file` the same name and `truncate()` the
-    /// salvage away.
-    PartialWrite,
-    /// Final unmount-time flush failed; data may not have hit the card.
-    Unmount,
-    // ── Read / remove path ────────────────────────────────────────
-    /// `open_file` / `remove`: the path doesn't exist in the FAT root.
-    NotFound,
-    /// `open_file` failed for a reason other than absence.
-    Open,
-    /// `File::read` or a seek returned an I/O fault mid-stream, or
-    /// the file ended short of its directory-entry size.
-    Read,
-    /// `Dir::remove` failed for a reason other than absence.
-    Remove,
-    /// The sink refused data — shell disconnected, chunk-channel send
-    /// timed out, or the vehicle armed mid-transfer. Not a card fault.
-    Aborted,
-}
-
-/// Pluggable file payload — what to write into the just-created FAT
-/// file. Implementors are responsible for byte counting; the count is
-/// returned to the caller for shell-side reporting.
-///
-/// Stage-1 of the blackbox plan ships two impls: [`Bytes`] (for the
-/// existing `touch sd` canned text) and `McapSkeleton` (in
-/// `super::skeleton`). Future stages add `McapCapture<...>` with the
-/// same shape — generic over `Write`, no FAT details leak in.
-#[allow(async_fn_in_trait)]
-pub trait FileBody {
-    /// Write the body. Return total bytes written so the shell can
-    /// report file size without a separate stat.
-    async fn write<W: Write>(&mut self, w: &mut W) -> Result<u32, W::Error>;
-}
-
-/// Plain byte payload. Used by `touch sd`.
-pub struct Bytes<'a>(pub &'a [u8]);
-
-impl FileBody for Bytes<'_> {
-    async fn write<W: Write>(&mut self, w: &mut W) -> Result<u32, W::Error> {
-        w.write_all(self.0).await?;
-        Ok(self.0.len() as u32)
-    }
-}
-
-/// Sink-side abort marker for [`FileSink`]: the consumer no longer
-/// wants bytes (shell disconnected, channel send timed out, vehicle
-/// armed mid-transfer). Carries no detail — the sink owner knows why
-/// it aborted; `read_file` just maps it to [`OpError::Aborted`].
-pub struct SinkAbort;
-
-/// Pluggable read-side consumer — the mirror of [`FileBody`] for
-/// [`read_file`]. `begin` fires exactly once, after the file has been
-/// opened and the requested window clamped to its real size, so the
-/// consumer can emit a size header before the first data byte.
-/// `data` then receives the file content in sequential chunks of at
-/// most 512 bytes.
-#[allow(async_fn_in_trait)]
-pub trait FileSink {
-    /// Announce the exact byte count that will follow.
-    async fn begin(&mut self, total: u32) -> Result<(), SinkAbort>;
-    /// Consume one sequential chunk of file content.
-    async fn data(&mut self, chunk: &[u8]) -> Result<(), SinkAbort>;
-}
+pub use super::types::{
+    CleanSummary, EntryName, EntrySummary, FileBody, FileSink, MAX_FILENAME, OpError, SinkAbort,
+    is_flight_log, parse_seq,
+};
 
 /// Open the card, locate the FAT partition (or accept a superfloppy
 /// layout), create `path` in the root directory truncated to empty,
@@ -590,21 +470,6 @@ where
     Ok(())
 }
 
-/// Outcome of [`remove_flight_logs`].
-#[derive(Clone, Copy, Default, defmt::Format)]
-pub struct CleanSummary {
-    /// Files deleted.
-    pub removed: u32,
-    /// True if a delete failed part-way; `removed` is still accurate.
-    pub aborted: bool,
-}
-
-/// True for the recorder's own files (`flight_NNNN.mcap`, any NNNN,
-/// case-insensitive) — the only thing `blackbox clean` touches.
-pub fn is_flight_log(name: &str) -> bool {
-    parse_seq(name, "flight_", ".mcap").is_some()
-}
-
 /// Delete every root-directory file for which `is_flight_log` holds,
 /// in a single card session / single mount. Other files on the card
 /// are never touched. Stops at the first failing delete (reported via
@@ -777,24 +642,7 @@ pub async fn scan_highest_seq(
     Ok(highest)
 }
 
-/// Parse `"<prefix>NNNN<suffix>"` (case-insensitive) into NNNN.
-/// Accepts any unsigned u32; the typical forms are 4-digit zero-
-/// padded, but a card that's been hand-edited might carry shorter
-/// or longer numbers and they should still bump the counter.
-fn parse_seq(name: &str, prefix: &str, suffix: &str) -> Option<u32> {
-    if name.len() < prefix.len() + suffix.len() {
-        return None;
-    }
-    let (head, rest) = name.split_at(prefix.len());
-    if !head.eq_ignore_ascii_case(prefix) {
-        return None;
-    }
-    let (mid, tail) = rest.split_at(rest.len() - suffix.len());
-    if !tail.eq_ignore_ascii_case(suffix) {
-        return None;
-    }
-    mid.parse().ok()
-}
+/// `scan_root_files` helper for sequence numbers.
 
 async fn scan_mbr_partition<IO, F>(mut mbr: Mbr<IO>, visit: &mut F) -> Result<(), OpError>
 where

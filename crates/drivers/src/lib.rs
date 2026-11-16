@@ -8,6 +8,7 @@ pub mod imu;
 pub mod led;
 pub mod mag;
 pub mod rc;
+pub mod w25q128;
 
 /// Yield to the executor once, allowing other tasks to run.
 /// Essential for cooperative scheduling when polling in a loop on a shared bus.

@@ -3,6 +3,7 @@ pub mod acmpc;
 pub mod attitude_control;
 pub mod blackbox_wire;
 pub mod cbor;
+pub mod crc32;
 pub mod eskf;
 pub mod geodetic;
 pub mod imu_stamp;

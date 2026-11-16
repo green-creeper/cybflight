@@ -14,16 +14,9 @@ use embassy_time::Instant;
 pub const CHANNEL_ID: u16 = 4;
 pub const TOPIC: &str = "/events";
 pub const SCHEMA_NAME: &str = "Event";
-pub const SCHEMA: &[u8] = br#"{
-  "title": "Event",
-  "type": "object",
-  "properties": {
-    "timestamp_ns": { "type": "integer" },
-    "kind":         { "type": "integer",
-                      "description": "Kind enum: 1=ARM, 2=DISARM, 3=FAILSAFE, 4=FAILSAFE_CLEAR, 5=ESTIMATOR_DOWN, 6=ESTIMATOR_UP, 7=RC_LOSS, 8=RC_RECOVERED, 9=MISSION_PLANNING, 10=MISSION_EXECUTING, 11=MISSION_IDLE, 12=INNER_SILENT, 13=POWER_STALE, 14=POWER_OK, 15=RECORDER_OVERRUN, 16=LOG_END, 32=PANIC, 33=HARDFAULT, 34=BROWNOUT, 35=IWDG_RESET, 36=BOOT_POSTMORTEM" },
-    "data":         { "type": "integer", "description": "kind-specific: KIND_DISARM -> cause, same codes as KIND_FAILSAFE (0=commanded by pilot, 1=ControllerTimeout, 2=RcLoss); KIND_FAILSAFE -> FailsafeReason (1=ControllerTimeout, 2=RcLoss); KIND_MISSION_IDLE -> previous MissionState (1=Planning, 2=Executing); KIND_INNER_SILENT -> cause (1=voltage stale, 2=WLS NaN); KIND_POWER_STALE -> episode index since boot; KIND_POWER_OK -> episode duration in ms; KIND_RECORDER_OVERRUN -> cumulative records dropped this session; KIND_BOOT_POSTMORTEM -> packed (reset_cause<<8 | fatal_kind) when entering, 0 when leaving the prior-boot bracket; 0 otherwise" }
-  }
-}"#;
+//   kind: Kind enum: 1=ARM, 2=DISARM, 3=FAILSAFE, 4=FAILSAFE_CLEAR, 5=ESTIMATOR_DOWN, 6=ESTIMATOR_UP, 7=RC_LOSS, 8=RC_RECOVERED, 9=MISSION_PLANNING, 10=MISSION_EXECUTING, 11=MISSION_IDLE, 12=INNER_SILENT, 13=POWER_STALE, 14=POWER_OK, 15=RECORDER_OVERRUN, 16=LOG_END, 32=PANIC, 33=HARDFAULT, 34=BROWNOUT, 35=IWDG_RESET, 36=BOOT_POSTMORTEM
+//   data: kind-specific: KIND_DISARM -> cause, same codes as KIND_FAILSAFE (0=commanded by pilot, 1=ControllerTimeout, 2=RcLoss); KIND_FAILSAFE -> FailsafeReason (1=ControllerTimeout, 2=RcLoss); KIND_MISSION_IDLE -> previous MissionState (1=Planning, 2=Executing); KIND_INNER_SILENT -> cause (1=voltage stale, 2=WLS NaN); KIND_POWER_STALE -> episode index since boot; KIND_POWER_OK -> episode duration in ms; KIND_RECORDER_OVERRUN -> cumulative records dropped this session; KIND_BOOT_POSTMORTEM -> packed (reset_cause<<8 | fatal_kind) when entering, 0 when leaving the prior-boot bracket; 0 otherwise
+pub const SCHEMA: &[u8] = br#"{"title":"Event","type":"object","properties":{"timestamp_ns":{"type":"integer"},"kind":{"type":"integer"},"data":{"type":"integer"}}}"#;
 
 pub const DEF: TopicDef = TopicDef {
     channel_id: CHANNEL_ID,

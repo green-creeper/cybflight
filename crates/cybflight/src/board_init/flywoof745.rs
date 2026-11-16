@@ -132,6 +132,24 @@ pub async fn init(
     Timer::after_millis(100).await;
     crate::watchdog::feed();
 
+    if bsp::HAS_BLACKBOX_STORAGE {
+        let mut flash_spi_cfg = spi::Config::default();
+        flash_spi_cfg.mode = spi::MODE_3;
+        flash_spi_cfg.frequency = Hertz(27_000_000);
+        let spi1 = Spi::new_blocking(
+            board.flash.spi1,
+            board.flash.sck,
+            board.flash.mosi,
+            board.flash.miso,
+            flash_spi_cfg,
+        );
+        spawner
+            .spawn(crate::blackbox::blackbox_task(
+                crate::blackbox::NorBlackboxStore::new(spi1, board.flash.cs),
+            ))
+            .unwrap();
+    }
+
     // Start SPI4 at 1 MHz (54 MHz / 64 = 843.75 kHz) to satisfy the MPU-6000
     // <= 1 MHz register-write specification during WHO_AM_I probe & config,
     // then switch to high-speed SPI (6.75 MHz / 13.5 MHz) for 8 kHz DMA reads.
@@ -181,8 +199,8 @@ pub async fn init(
                         fast_cfg.mode = spi::MODE_3;
                         let _ = spi4_bus.lock().await.set_config(&fast_cfg);
                         defmt::info!("IMU1 init OK (MPU6000 on SPI4 @ 13.5 MHz)");
-                        // Pass `None` for IMU_1_RAW: this AIO has no blackbox SD/flash storage,
-                        // avoiding 8,000 unconsumed critical-section PubSub writes/sec.
+                        // Publish IMU_1_RAW only when onboard blackbox storage is actively
+                        // recording a `Sysid` tier (`IMU_1_RAW` publisher checks recording state).
                         imu_spawner
                             .spawn(mpu_reader_task(
                                 ImuReader::new(
@@ -192,7 +210,7 @@ pub async fn init(
                                     gyro_cutoff_hz,
                                 ),
                                 &crate::sensors::IMU_1,
-                                None,
+                                Some(&crate::sensors::IMU_1_RAW),
                             ))
                             .unwrap();
                     }
@@ -233,7 +251,7 @@ pub async fn init(
                                 gyro_cutoff_hz,
                             ),
                             &crate::sensors::IMU_1,
-                            None,
+                            Some(&crate::sensors::IMU_1_RAW),
                         ))
                         .unwrap();
                 }
@@ -267,7 +285,7 @@ pub async fn init(
                                 gyro_cutoff_hz,
                             ),
                             &crate::sensors::IMU_1,
-                            None,
+                            Some(&crate::sensors::IMU_1_RAW),
                         ))
                         .unwrap();
                 }

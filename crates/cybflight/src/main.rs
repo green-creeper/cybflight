@@ -299,6 +299,7 @@ async fn main(spawner: embassy_executor::Spawner) {
     spawner
         .spawn(cybflight::usb_serial::att_stream_task())
         .unwrap_or_else(|_| defmt::panic!("failed to spawn attitude stream task"));
+    #[cfg(feature = "outer_mpc")]
     spawner
         .spawn(cybflight::usb_serial::ocp_stream_task())
         .unwrap_or_else(|_| defmt::panic!("failed to spawn OCP stream task"));
@@ -339,6 +340,7 @@ async fn main(spawner: embassy_executor::Spawner) {
     spawner
         .spawn(cybflight::usb_serial::baro2_stream_task())
         .unwrap_or_else(|_| defmt::panic!("failed to spawn baro2 stream task"));
+    #[cfg(feature = "est_pos_mocap")]
     spawner
         .spawn(cybflight::usb_serial::vicon_stream_task())
         .unwrap_or_else(|_| defmt::panic!("failed to spawn Vicon stream task"));

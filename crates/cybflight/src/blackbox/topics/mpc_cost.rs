@@ -25,21 +25,9 @@ use crate::msgs;
 pub const CHANNEL_ID: u16 = 16;
 pub const TOPIC: &str = "/mpc_cost";
 pub const SCHEMA_NAME: &str = "MpcCostAdapt";
-pub const SCHEMA: &[u8] = br#"{
-  "title": "MpcCostAdapt",
-  "type": "object",
-  "properties": {
-    "timestamp_ns":   { "type": "integer" },
-    "z":              { "type": "array", "items": {"type": "number"},
-                        "description": "Policy output for the accompanying solve, clamped to [-1,1], BEFORE the ramp-in gain (multiply by `gain` for the applied residual): stage [contour, lag, vel x3, att x3], terminal [same 8], rates [x, y, z]. All-zero = nominal weights" },
-    "w_contour":      { "type": "number" },
-    "w_lag":          { "type": "number" },
-    "w_rate":         { "type": "array", "items": {"type": "number"} },
-    "gain":           { "type": "number",
-                        "description": "Effective ramp-in gain for this solve: `mpc_learned_gain` while tracking a trajectory with the mission Executing, 0 otherwise (the policy is not trained off-trajectory, so its output is withheld)" },
-    "policy_time_us": { "type": "integer" }
-  }
-}"#;
+//   z: Policy output for the accompanying solve, clamped to [-1,1], BEFORE the ramp-in gain (multiply by `gain` for the applied residual): stage [contour, lag, vel x3, att x3], terminal [same 8], rates [x, y, z]. All-zero = nominal weights
+//   gain: Effective ramp-in gain for this solve: `mpc_learned_gain` while tracking a trajectory with the mission Executing, 0 otherwise (the policy is not trained off-trajectory, so its output is withheld)
+pub const SCHEMA: &[u8] = br#"{"title":"MpcCostAdapt","type":"object","properties":{"timestamp_ns":{"type":"integer"},"z":{"type":"array","items":{"type":"number"}},"w_contour":{"type":"number"},"w_lag":{"type":"number"},"w_rate":{"type":"array","items":{"type":"number"}},"gain":{"type":"number"},"policy_time_us":{"type":"integer"}}}"#;
 
 pub const DEF: TopicDef = TopicDef {
     channel_id: CHANNEL_ID,

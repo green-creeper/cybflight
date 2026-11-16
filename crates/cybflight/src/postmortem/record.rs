@@ -283,9 +283,8 @@ impl PostmortemRecord {
 
 // ── CRC ─────────────────────────────────────────────────────────────────
 //
-// `crc32fast` is `no_std`-compatible (default-features=false in
-// cybflight_core). Re-using it here avoids a new dep and keeps the
-// algorithm consistent across the codebase.
+// `cybflight_core::crc32` is a `no_std`, zero-alloc, 64 B LUT IEEE 802.3
+// CRC-32 implementation callable from panic/HardFault context.
 //
 // CRC covers everything **after** the `crc32` field. The `magic` field
 // is *included* in the CRC even though it's written last — a partial
@@ -302,7 +301,7 @@ pub fn compute_crc(rec: &PostmortemRecord) -> u32 {
     let bytes = unsafe {
         core::slice::from_raw_parts((rec as *const PostmortemRecord) as *const u8, RECORD_SIZE)
     };
-    let mut h = crc32fast::Hasher::new();
+    let mut h = cybflight_core::crc32::Hasher::new();
     h.update(&bytes[CRC_RANGE_OFFSET..]);
     h.finalize()
 }

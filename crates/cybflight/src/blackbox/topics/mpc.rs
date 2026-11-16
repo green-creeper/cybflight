@@ -15,20 +15,9 @@ use crate::msgs;
 pub const CHANNEL_ID: u16 = 6;
 pub const TOPIC: &str = "/mpc";
 pub const SCHEMA_NAME: &str = "OcpSolverOutput";
-pub const SCHEMA: &[u8] = br#"{
-  "title": "OcpSolverOutput",
-  "type": "object",
-  "properties": {
-    "timestamp_ns":  { "type": "integer" },
-    "command":       { "type": "array", "items": {"type": "number"},
-                       "description": "Solver-output command vector (size depends on OCP problem)" },
-    "iterations":    { "type": "integer" },
-    "converged":     { "type": "boolean" },
-    "solve_time_us": { "type": "integer" },
-    "policy_time_us": { "type": "integer",
-                        "description": "Learned cost policy obs+inference wall time this tick (0 = disabled)" }
-  }
-}"#;
+//   command: Solver-output command vector (size depends on OCP problem)
+//   policy_time_us: Learned cost policy obs+inference wall time this tick (0 = disabled)
+pub const SCHEMA: &[u8] = br#"{"title":"OcpSolverOutput","type":"object","properties":{"timestamp_ns":{"type":"integer"},"command":{"type":"array","items":{"type":"number"}},"iterations":{"type":"integer"},"converged":{"type":"boolean"},"solve_time_us":{"type":"integer"},"policy_time_us":{"type":"integer"}}}"#;
 
 pub const DEF: TopicDef = TopicDef {
     channel_id: CHANNEL_ID,

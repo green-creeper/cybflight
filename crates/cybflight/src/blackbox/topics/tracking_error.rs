@@ -39,27 +39,12 @@ use crate::control::TrackingError;
 pub const CHANNEL_ID: u16 = 9;
 pub const TOPIC: &str = "/tracking_error";
 pub const SCHEMA_NAME: &str = "TrackingError";
-pub const SCHEMA: &[u8] = br#"{
-  "title": "TrackingError",
-  "type": "object",
-  "properties": {
-    "timestamp_ns":  { "type": "integer" },
-    "pos_err":       { "type": "array", "minItems": 3, "maxItems": 3,
-                       "items": {"type": "number"},
-                       "description": "World-frame reference - actual position [m]; raw (unclamped)" },
-    "vel_err":       { "type": "array", "minItems": 3, "maxItems": 3,
-                       "items": {"type": "number"},
-                       "description": "World-frame reference - actual velocity [m/s]; raw" },
-    "attitude_err":  { "type": "array", "minItems": 3, "maxItems": 3,
-                       "items": {"type": "number"},
-                       "description": "Body-frame tilt-prio 3-vec from model_utils::attitude_error (MPC source only)" },
-    "body_rate_err": { "type": "array", "minItems": 3, "maxItems": 3,
-                       "items": {"type": "number"},
-                       "description": "Body-frame rate_ref - gyro_corrected [rad/s] (INDI source only)" },
-    "source":        { "type": "integer",
-                       "description": "0=cascade, 1=mpc, 2=indi. Tells the consumer which fields are meaningful; others are zero." }
-  }
-}"#;
+//   pos_err: World-frame reference - actual position [m]; raw (unclamped)
+//   vel_err: World-frame reference - actual velocity [m/s]; raw
+//   attitude_err: Body-frame tilt-prio 3-vec from model_utils::attitude_error (MPC source only)
+//   body_rate_err: Body-frame rate_ref - gyro_corrected [rad/s] (INDI source only)
+//   source: 0=cascade, 1=mpc, 2=indi. Tells the consumer which fields are meaningful; others are zero.
+pub const SCHEMA: &[u8] = br#"{"title":"TrackingError","type":"object","properties":{"timestamp_ns":{"type":"integer"},"pos_err":{"type":"array","minItems":3,"maxItems":3,"items":{"type":"number"}},"vel_err":{"type":"array","minItems":3,"maxItems":3,"items":{"type":"number"}},"attitude_err":{"type":"array","minItems":3,"maxItems":3,"items":{"type":"number"}},"body_rate_err":{"type":"array","minItems":3,"maxItems":3,"items":{"type":"number"}},"source":{"type":"integer"}}}"#;
 
 pub const DEF: TopicDef = TopicDef {
     channel_id: CHANNEL_ID,

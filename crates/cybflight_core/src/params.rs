@@ -2286,7 +2286,7 @@ impl FirmwareConfig {
         debug_assert_eq!(off - HEADER_SIZE, PAYLOAD_SIZE);
 
         let payload = &buf[HEADER_SIZE..HEADER_SIZE + PAYLOAD_SIZE];
-        let crc = crc32fast::hash(payload);
+        let crc = crate::crc32::hash(payload);
         put_u32(&mut buf, 0, MAGIC);
         put_u32(&mut buf, 4, VERSION);
         put_u32(&mut buf, 8, PAYLOAD_SIZE as u32);
@@ -2307,7 +2307,7 @@ impl FirmwareConfig {
             return false;
         }
         let payload = &buf[HEADER_SIZE..HEADER_SIZE + PAYLOAD_SIZE];
-        if crc32fast::hash(payload) != stored_crc {
+        if crate::crc32::hash(payload) != stored_crc {
             return false;
         }
 

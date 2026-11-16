@@ -24,21 +24,10 @@ use crate::msgs;
 pub const CHANNEL_ID: u16 = 14;
 pub const TOPIC: &str = "/control_setpoint";
 pub const SCHEMA_NAME: &str = "AttitudeControlSetpoint";
-pub const SCHEMA: &[u8] = br#"{
-  "title": "AttitudeControlSetpoint",
-  "type": "object",
-  "properties": {
-    "timestamp_ns":         { "type": "integer" },
-    "collective_thrust_n":  { "type": "number",
-                              "description": "Newtons of collective thrust commanded by the outer loop" },
-    "body_rate_rad_s":      { "type": "array", "minItems": 3, "maxItems": 3,
-                              "items": {"type": "number"},
-                              "description": "Body-frame rate setpoint [rad/s]; consumed by INDI" },
-    "attitude_quaternion":  { "type": "array", "minItems": 4, "maxItems": 4,
-                              "items": {"type": "number"},
-                              "description": "[w, i, j, k] reference attitude" }
-  }
-}"#;
+//   collective_thrust_n: Newtons of collective thrust commanded by the outer loop
+//   body_rate_rad_s: Body-frame rate setpoint [rad/s]; consumed by INDI
+//   attitude_quaternion: [w, i, j, k] reference attitude
+pub const SCHEMA: &[u8] = br#"{"title":"AttitudeControlSetpoint","type":"object","properties":{"timestamp_ns":{"type":"integer"},"collective_thrust_n":{"type":"number"},"body_rate_rad_s":{"type":"array","minItems":3,"maxItems":3,"items":{"type":"number"}},"attitude_quaternion":{"type":"array","minItems":4,"maxItems":4,"items":{"type":"number"}}}}"#;
 
 pub const DEF: TopicDef = TopicDef {
     channel_id: CHANNEL_ID,

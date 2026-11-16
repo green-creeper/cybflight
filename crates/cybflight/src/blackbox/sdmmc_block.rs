@@ -164,24 +164,7 @@ pub struct WriteCombiner<'b, D> {
     stats: IoStats,
 }
 
-/// What the card was actually asked to do during one session —
-/// turns "is CMD25 working?" from inference into measurement. Read
-/// via [`LAST_IO_STATS`] after the session's final flush.
-#[derive(Clone, Copy, Default, defmt::Format)]
-pub struct IoStats {
-    /// Write commands issued (CMD25 batches + single CMD24s).
-    pub writes: u32,
-    /// Blocks written in total.
-    pub blocks_written: u32,
-    /// Largest batch handed to one write command.
-    pub max_batch: u16,
-    /// Read commands passed through to the card.
-    pub reads: u32,
-    /// Blocks read in total.
-    pub blocks_read: u32,
-    /// CMD25 batches that failed and were retried block-by-block.
-    pub fallbacks: u32,
-}
+pub use super::types::IoStats;
 
 /// Stats of the most recent session, published by `fat::finish_session`.
 pub static LAST_IO_STATS: Mutex<CriticalSectionRawMutex, Cell<IoStats>> =
@@ -365,5 +348,52 @@ impl BlockStore for SdmmcBlockStore {
 
     fn capacity_blocks(&self) -> u32 {
         self.capacity
+    }
+}
+
+impl super::types::BlackboxBackend for SdmmcBlockStore {
+    async fn scan_highest_seq(
+        &mut self,
+        prefix: &str,
+        suffix: &str,
+    ) -> Result<u32, super::types::OpError> {
+        super::fat::scan_highest_seq(self, prefix, suffix).await
+    }
+
+    async fn write_session<P: super::types::FileBody>(
+        &mut self,
+        path: &str,
+        body: &mut P,
+    ) -> Result<u32, super::types::OpError> {
+        super::fat::write_file(self, path, body).await
+    }
+
+    fn last_io_stats(&self) -> IoStats {
+        LAST_IO_STATS.lock(|c| c.get())
+    }
+
+    async fn scan_root_files<F>(&mut self, visit: &mut F) -> Result<(), super::types::OpError>
+    where
+        F: FnMut(&str, u32),
+    {
+        super::fat::scan_root_files(self, visit).await
+    }
+
+    async fn read_file<S: super::types::FileSink>(
+        &mut self,
+        path: &str,
+        offset: u32,
+        max_len: Option<u32>,
+        sink: &mut S,
+    ) -> Result<u32, super::types::OpError> {
+        super::fat::read_file(self, path, offset, max_len, sink).await
+    }
+
+    async fn remove_file(&mut self, path: &str) -> Result<(), super::types::OpError> {
+        super::fat::remove_file(self, path).await
+    }
+
+    async fn remove_flight_logs(&mut self) -> Result<super::types::CleanSummary, super::types::OpError> {
+        super::fat::remove_flight_logs(self).await
     }
 }

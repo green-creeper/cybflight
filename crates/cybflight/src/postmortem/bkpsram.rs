@@ -66,7 +66,7 @@ const PANIC_TEXT_WORDS: usize = 2 + (PANIC_TEXT_MAX_BYTES / size_of::<u32>()); /
 /// `0x4002_4000`, inside the `0x4000_0000..0x5FFF_FFFF` `Device` memory
 /// region where Cortex-M7 faults (`UsageFault: UNALIGNED`) on any unaligned
 /// access. Never hand a `&PostmortemRecord` or `&mut PostmortemRecord`
-/// pointing directly into `.bkpsram` to general Rust code or `crc32fast`;
+/// pointing directly into `.bkpsram` to general Rust code or `cybflight_core::crc32`;
 /// always copy to/from normal SRAM via 32-bit word `read_volatile` /
 /// `write_volatile` helpers below.
 #[unsafe(link_section = ".bkpsram")]

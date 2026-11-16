@@ -36,9 +36,12 @@ Requires: pip install mcap cbor2
 
 import argparse
 import collections
+import io
 import json
 import signal
+import struct
 import sys
+from dataclasses import dataclass
 
 # Don't traceback when piped into `head` / `grep -m`.
 signal.signal(signal.SIGPIPE, signal.SIG_DFL)
@@ -48,7 +51,275 @@ try:
     from mcap.stream_reader import StreamReader
     from mcap import records as R
 except ImportError:
-    sys.exit("missing deps: pip install mcap cbor2")
+    class _R:
+        """Minimal fallback record types matching `mcap.records` fields used below."""
+
+        @dataclass
+        class Header:
+            profile: str
+            library: str
+
+        @dataclass
+        class Footer:
+            summary_start: int
+            summary_offset_start: int
+            summary_crc: int
+
+        @dataclass
+        class Schema:
+            id: int
+            name: str
+            encoding: str
+            data: bytes
+
+        @dataclass
+        class Channel:
+            id: int
+            schema_id: int
+            topic: str
+            message_encoding: str
+
+        @dataclass
+        class Message:
+            channel_id: int
+            sequence: int
+            log_time: int
+            publish_time: int
+            data: bytes
+
+    R = _R
+
+    _MCAP_MAGIC = b"\x89MCAP0\r\n"
+
+    def _u16(b: bytes, p: int):
+        return struct.unpack_from("<H", b, p)[0], p + 2
+
+    def _u32(b: bytes, p: int):
+        return struct.unpack_from("<I", b, p)[0], p + 4
+
+    def _u64(b: bytes, p: int):
+        return struct.unpack_from("<Q", b, p)[0], p + 8
+
+    def _mcap_str(b: bytes, p: int):
+        n, p = _u32(b, p)
+        if p + n > len(b):
+            raise EOFError("truncated MCAP string")
+        return b[p : p + n].decode("utf-8", errors="replace"), p + n
+
+    def _mcap_bytes(b: bytes, p: int):
+        n, p = _u32(b, p)
+        if p + n > len(b):
+            raise EOFError("truncated MCAP bytes")
+        return b[p : p + n], p + n
+
+    def _iter_mcap_records(stream):
+        while True:
+            head8 = stream.read(8)
+            if not head8:
+                break
+            if head8 == _MCAP_MAGIC:
+                break
+            if len(head8) < 8:
+                break
+            b9 = stream.read(1)
+            if not b9:
+                break
+            op, length = struct.unpack("<BQ", head8 + b9)
+            body = stream.read(length)
+            if len(body) < length:
+                break
+            if op == 0x01:
+                profile, p = _mcap_str(body, 0)
+                library, _ = _mcap_str(body, p)
+                yield R.Header(profile=profile, library=library)
+            elif op == 0x02:
+                ss, p = _u64(body, 0)
+                sos, p = _u64(body, p)
+                scrc, _ = _u32(body, p)
+                yield R.Footer(summary_start=ss, summary_offset_start=sos, summary_crc=scrc)
+            elif op == 0x03:
+                sid, p = _u16(body, 0)
+                name, p = _mcap_str(body, p)
+                enc, p = _mcap_str(body, p)
+                data, _ = _mcap_bytes(body, p)
+                yield R.Schema(id=sid, name=name, encoding=enc, data=data)
+            elif op == 0x04:
+                cid, p = _u16(body, 0)
+                sid, p = _u16(body, p)
+                topic, p = _mcap_str(body, p)
+                enc, _ = _mcap_str(body, p)
+                yield R.Channel(id=cid, schema_id=sid, topic=topic, message_encoding=enc)
+            elif op == 0x05:
+                cid, p = _u16(body, 0)
+                seq, p = _u32(body, p)
+                log_time, p = _u64(body, p)
+                pub_time, p = _u64(body, p)
+                yield R.Message(
+                    channel_id=cid,
+                    sequence=seq,
+                    log_time=log_time,
+                    publish_time=pub_time,
+                    data=body[p:],
+                )
+            elif op == 0x06:
+                _, p = _u64(body, 0)
+                _, p = _u64(body, p)
+                _, p = _u64(body, p)
+                _, p = _u32(body, p)
+                compression, p = _mcap_str(body, p)
+                chunk_bytes, _ = _mcap_bytes(body, p)
+                if compression == "":
+                    yield from _iter_mcap_records(io.BytesIO(chunk_bytes))
+
+    class StreamReader:
+        """Stdlib streamed MCAP reader fallback (no summary index required)."""
+
+        def __init__(self, stream):
+            self._stream = stream
+
+        @property
+        def records(self):
+            magic = self._stream.read(8)
+            if magic != _MCAP_MAGIC:
+                raise ValueError(f"not an MCAP file (bad header magic {magic!r})")
+            yield from _iter_mcap_records(self._stream)
+
+    class _CborStdlib:
+        """Stdlib RFC 8949 CBOR decoder fallback for cybflight blackbox messages."""
+
+        @staticmethod
+        def _read_arg(buf: bytes, pos: int, ai: int):
+            if ai < 24:
+                return ai, pos
+            if ai == 24:
+                if pos + 1 > len(buf):
+                    raise ValueError("truncated CBOR u8")
+                return buf[pos], pos + 1
+            if ai == 25:
+                if pos + 2 > len(buf):
+                    raise ValueError("truncated CBOR u16")
+                return struct.unpack_from(">H", buf, pos)[0], pos + 2
+            if ai == 26:
+                if pos + 4 > len(buf):
+                    raise ValueError("truncated CBOR u32")
+                return struct.unpack_from(">I", buf, pos)[0], pos + 4
+            if ai == 27:
+                if pos + 8 > len(buf):
+                    raise ValueError("truncated CBOR u64")
+                return struct.unpack_from(">Q", buf, pos)[0], pos + 8
+            if ai == 31:
+                return None, pos
+            raise ValueError(f"unsupported CBOR additional info {ai}")
+
+        @classmethod
+        def _decode_at(cls, buf: bytes, pos: int):
+            if pos >= len(buf):
+                raise ValueError("unexpected end of CBOR data")
+            initial = buf[pos]
+            pos += 1
+            major = initial >> 5
+            ai = initial & 0x1F
+            if major == 7:
+                if ai == 20:
+                    return False, pos
+                if ai == 21:
+                    return True, pos
+                if ai in (22, 23):
+                    return None, pos
+                if ai == 24:
+                    if pos + 1 > len(buf):
+                        raise ValueError("truncated CBOR simple")
+                    return buf[pos], pos + 1
+                if ai == 25:
+                    if pos + 2 > len(buf):
+                        raise ValueError("truncated CBOR f16")
+                    return struct.unpack_from("!e", buf, pos)[0], pos + 2
+                if ai == 26:
+                    if pos + 4 > len(buf):
+                        raise ValueError("truncated CBOR f32")
+                    return struct.unpack_from("!f", buf, pos)[0], pos + 4
+                if ai == 27:
+                    if pos + 8 > len(buf):
+                        raise ValueError("truncated CBOR f64")
+                    return struct.unpack_from("!d", buf, pos)[0], pos + 8
+                if ai < 20:
+                    return ai, pos
+                raise ValueError(f"unsupported CBOR major 7 ai={ai}")
+
+            arg, pos = cls._read_arg(buf, pos, ai)
+            if major == 0:
+                if arg is None:
+                    raise ValueError("invalid indefinite int")
+                return arg, pos
+            if major == 1:
+                if arg is None:
+                    raise ValueError("invalid indefinite negint")
+                return -1 - arg, pos
+            if major == 2:
+                if arg is None:
+                    chunks = []
+                    while pos < len(buf) and buf[pos] != 0xFF:
+                        c, pos = cls._decode_at(buf, pos)
+                        chunks.append(c)
+                    if pos >= len(buf):
+                        raise ValueError("unterminated CBOR bstr")
+                    return b"".join(chunks), pos + 1
+                if pos + arg > len(buf):
+                    raise ValueError("truncated CBOR bstr")
+                return buf[pos : pos + arg], pos + arg
+            if major == 3:
+                if arg is None:
+                    chunks = []
+                    while pos < len(buf) and buf[pos] != 0xFF:
+                        c, pos = cls._decode_at(buf, pos)
+                        chunks.append(c)
+                    if pos >= len(buf):
+                        raise ValueError("unterminated CBOR tstr")
+                    return "".join(chunks), pos + 1
+                if pos + arg > len(buf):
+                    raise ValueError("truncated CBOR tstr")
+                return buf[pos : pos + arg].decode("utf-8"), pos + arg
+            if major == 4:
+                items = []
+                if arg is None:
+                    while pos < len(buf) and buf[pos] != 0xFF:
+                        v, pos = cls._decode_at(buf, pos)
+                        items.append(v)
+                    if pos >= len(buf):
+                        raise ValueError("unterminated CBOR array")
+                    return items, pos + 1
+                for _ in range(arg):
+                    v, pos = cls._decode_at(buf, pos)
+                    items.append(v)
+                return items, pos
+            if major == 5:
+                mapping = {}
+                if arg is None:
+                    while pos < len(buf) and buf[pos] != 0xFF:
+                        k, pos = cls._decode_at(buf, pos)
+                        v, pos = cls._decode_at(buf, pos)
+                        mapping[k] = v
+                    if pos >= len(buf):
+                        raise ValueError("unterminated CBOR map")
+                    return mapping, pos + 1
+                for _ in range(arg):
+                    k, pos = cls._decode_at(buf, pos)
+                    v, pos = cls._decode_at(buf, pos)
+                    mapping[k] = v
+                return mapping, pos
+            if major == 6:
+                val, pos = cls._decode_at(buf, pos)
+                return val, pos
+            raise ValueError(f"unsupported CBOR major type {major}")
+
+        @classmethod
+        def loads(cls, data: bytes):
+            val, pos = cls._decode_at(data, 0)
+            if pos != len(data):
+                raise ValueError(f"trailing CBOR bytes ({len(data) - pos})")
+            return val
+
+    cbor2 = _CborStdlib
 
 # Mirror of `cybflight::blackbox::topics::events::KIND_*`.
 EVENT_KINDS = {

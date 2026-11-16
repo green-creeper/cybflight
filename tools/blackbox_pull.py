@@ -50,14 +50,158 @@ def find_port() -> str:
     return candidates[0]
 
 
+class _PosixSerial:
+    """Zero-dependency POSIX serial wrapper (`termios` + `fcntl` + `select`)."""
+
+    def __init__(self, port: str, baudrate: int = 115200, timeout: float = 0.5):
+        import errno
+        import fcntl
+        import os
+        import select
+        import struct
+        import subprocess
+        import termios
+        import time
+        import tty
+
+        self._os = os
+        self._select = select
+        self._time = time
+        self._termios = termios
+        self.timeout = timeout
+        self._rx = bytearray()
+
+        try:
+            self._fd = os.open(port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+        except OSError as exc:
+            if exc.errno == errno.EBUSY:
+                holder = ""
+                try:
+                    res = subprocess.run(
+                        ["lsof", port],
+                        capture_output=True,
+                        text=True,
+                        timeout=2.0,
+                        check=False,
+                    )
+                    if res.stdout.strip():
+                        holder = f"\nPort is currently held open by:\n{res.stdout.strip()}"
+                except Exception:
+                    pass
+                sys.exit(f"error: {port} is busy (close cybflight-gs or another terminal){holder}")
+            sys.exit(f"error: failed to open {port}: {exc}")
+
+        try:
+            tty.setraw(self._fd, when=termios.TCSANOW)
+            attrs = termios.tcgetattr(self._fd)
+            attrs[2] |= termios.CLOCAL | termios.CREAD
+            speed = getattr(termios, f"B{baudrate}", termios.B115200)
+            attrs[4] = speed
+            attrs[5] = speed
+            termios.tcsetattr(self._fd, termios.TCSANOW, attrs)
+        except termios.error:
+            pass
+
+        tiocmbis = 0x8004746C if sys.platform == "darwin" else 0x5416
+        try:
+            fcntl.ioctl(self._fd, tiocmbis, struct.pack("I", 0x002 | 0x004))
+        except OSError:
+            pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc):
+        self.close()
+
+    def close(self):
+        fd = getattr(self, "_fd", -1)
+        if fd >= 0:
+            self._fd = -1
+            try:
+                self._os.close(fd)
+            except OSError:
+                pass
+
+    def reset_input_buffer(self):
+        self._rx.clear()
+        while True:
+            r, _, _ = self._select.select([self._fd], [], [], 0.0)
+            if not r:
+                break
+            try:
+                chunk = self._os.read(self._fd, 4096)
+            except BlockingIOError:
+                break
+            except OSError:
+                break
+            if not chunk:
+                break
+
+    def write(self, data: bytes) -> int:
+        view = memoryview(data)
+        sent = 0
+        deadline = self._time.monotonic() + 2.0
+        while sent < len(view):
+            try:
+                n = self._os.write(self._fd, view[sent:])
+                sent += n
+            except BlockingIOError:
+                rem = deadline - self._time.monotonic()
+                if rem <= 0:
+                    raise TimeoutError(f"serial write timeout ({sent}/{len(view)} bytes)")
+                self._select.select([], [self._fd], [], min(0.05, rem))
+        return sent
+
+    def flush(self):
+        try:
+            self._termios.tcdrain(self._fd)
+        except Exception:
+            pass
+
+    def read(self, size: int = 1) -> bytes:
+        if size <= 0:
+            return b""
+        if len(self._rx) < size:
+            deadline = self._time.monotonic() + max(0.0, self.timeout)
+            while len(self._rx) < size:
+                rem = deadline - self._time.monotonic()
+                if rem <= 0:
+                    break
+                r, _, _ = self._select.select([self._fd], [], [], rem)
+                if not r:
+                    break
+                try:
+                    chunk = self._os.read(self._fd, max(65536, size - len(self._rx)))
+                except BlockingIOError:
+                    continue
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                self._rx.extend(chunk)
+        n = min(size, len(self._rx))
+        out = bytes(self._rx[:n])
+        del self._rx[:n]
+        return out
+
+
 def open_port(port: str):
+    import time
+
     try:
         import serial  # pyserial
+
+        ser = serial.Serial(port, 115200, timeout=0.5)
+        ser.dtr = True
+        ser.rts = True
     except ImportError:
-        sys.exit("pyserial not installed: pip install pyserial")
-    ser = serial.Serial(port, 115200, timeout=0.5)
-    ser.dtr = True
-    ser.rts = True
+        ser = _PosixSerial(port, 115200, timeout=0.5)
+
+    # Stop any running shell telemetry stream so its lines don't mix into ls/get.
+    ser.write(b"\r\nstream off\r\n")
+    time.sleep(0.12)
+    ser.reset_input_buffer()
     return ser
 
 

@@ -49,37 +49,30 @@ pub const TOPIC: &str = "/health";
 /// link fields). Readers key their decoder on this name; the keyed-map
 /// layout was plain `SystemHealth`.
 pub const SCHEMA_NAME: &str = "SystemHealth.v2";
-pub const SCHEMA: &[u8] = br#"{
-  "title": "SystemHealth.v2",
-  "description": "Flat positional array; see prefixItems for element order. Post-flight mirror of the live `health` shell report (crate::health::SystemHealth) plus cumulative ESKF gate counters, INDI loop timing and RC link statistics. Source-of-truth atomics live in crate::estimation, crate::control::failsafe, crate::control::indi_task::step_stats and crate::sensors::rc.",
-  "type": "array",
-  "minItems": 23, "maxItems": 23,
-  "prefixItems": [
-    { "title": "timestamp_ns",       "type": "integer", "description": "Sample wall-clock time, ns since boot." },
-    { "title": "imu1_temp_c",        "type": "number",  "description": "Latest IMU-1 die temperature seen on /imu1; NaN before the first sample." },
-    { "title": "failsafe_active",    "type": "boolean", "description": "control::failsafe::FAILSAFE_ACTIVE -- top-level disarm gate." },
-    { "title": "estimator_ready",    "type": "boolean", "description": "estimation::ESTIMATOR_READY -- converged AND quality-good (RTK debounce on GPS, plain converged on mocap)." },
-    { "title": "eskf_degraded",      "type": "boolean", "description": "estimation::ESKF_DEGRADED -- non-severe fault present." },
-    { "title": "eskf_severe_fault",  "type": "boolean", "description": "estimation::ESKF_SEVERE_FAULT -- failsafe-watchdog signal. Only set while armed." },
-    { "title": "eskf_faults",        "type": "integer", "description": "u32 bitfield. NAN_RESET=1, POS_STALE=2, VEL_STALE=4, ATT_STALE=8, COV_TRACE_BLOWUP=16, GUARD_JUMP_CASCADE=32, GUARD_REJECT_CASCADE=64. See estimation::fault." },
-    { "title": "attitude_health",    "type": "integer", "description": "u8 bitfield. ACCEL_OK=1, GYRO_OK=2, NO_RECENT_NAN=4. See estimation::att_health." },
-    { "title": "nan_resets",         "type": "integer", "description": "Cumulative ESKF NaN-state recoveries since boot." },
-    { "title": "gate_rejects_pos",   "type": "integer", "description": "Cumulative pos-update gate rejections (Mahalanobis + jump)." },
-    { "title": "gate_rejects_vel",   "type": "integer", "description": "Cumulative vel-update gate rejections." },
-    { "title": "gate_rejects_att",   "type": "integer", "description": "Cumulative att-update gate rejections." },
-    { "title": "last_nis_pos",       "type": "number",  "description": "Most recent pos normalised innovation^2, per-DoF." },
-    { "title": "last_nis_vel",       "type": "number",  "description": "Most recent vel normalised innovation^2." },
-    { "title": "last_nis_att",       "type": "number",  "description": "Most recent att normalised innovation^2." },
-    { "title": "last_pos_update_ns", "type": "integer", "description": "Wall-clock time of last accepted pos update, ns since boot. 0 = never. A frozen value means upstream stopped delivering; a recent one means the guard is rejecting fresh measurements." },
-    { "title": "last_vel_update_ns", "type": "integer", "description": "Wall-clock time of last accepted vel update, ns since boot. 0 = never." },
-    { "title": "last_att_update_ns", "type": "integer", "description": "Wall-clock time of last accepted att update, ns since boot. 0 = never." },
-    { "title": "indi_step_max_us",   "type": "integer", "description": "Longest INDI iteration (compute, decimation gate to motor publish) since the previous /health record, us. 0 = no iteration ran in the window." },
-    { "title": "indi_period_max_us", "type": "integer", "description": "Longest gap between INDI iteration starts since the previous /health record, us. Compare against the nominal control period (IMU ODR / indi_ctrl_div); an excess is a missed deadline." },
-    { "title": "rc_link_quality",    "type": ["integer", "null"], "description": "Latest RC link quality, percent [0..100]. null = no link-statistics frame since boot." },
-    { "title": "rc_rssi_dbm",        "type": ["integer", "null"], "description": "Latest uplink RSSI, dBm (negative). null = never heard." },
-    { "title": "rc_link_age_ms",     "type": ["integer", "null"], "description": "Age of that link-statistics frame at record time, ms. Growing while quality holds steady = frames stopped arriving. null = never heard." }
-  ]
-}"#;
+// Flat positional array; see prefixItems for element order. Post-flight mirror of the live `health` shell report (crate::health::SystemHealth) plus cumulative ESKF gate counters, INDI loop timing and RC link statistics. Source-of-truth atomics live in crate::estimation, crate::control::failsafe, crate::control::indi_task::step_stats and crate::sensors::rc.
+//   [0] timestamp_ns: Sample wall-clock time, ns since boot.
+//   [1] imu1_temp_c: Latest IMU-1 die temperature seen on /imu1; NaN before the first sample.
+//   [3] estimator_ready: estimation::ESTIMATOR_READY -- converged AND quality-good (RTK debounce on GPS, plain converged on mocap).
+//   [4] eskf_degraded: estimation::ESKF_DEGRADED -- non-severe fault present.
+//   [5] eskf_severe_fault: estimation::ESKF_SEVERE_FAULT -- failsafe-watchdog signal. Only set while armed.
+//   [6] eskf_faults: u32 bitfield. NAN_RESET=1, POS_STALE=2, VEL_STALE=4, ATT_STALE=8, COV_TRACE_BLOWUP=16, GUARD_JUMP_CASCADE=32, GUARD_REJECT_CASCADE=64. See estimation::fault.
+//   [7] attitude_health: u8 bitfield. ACCEL_OK=1, GYRO_OK=2, NO_RECENT_NAN=4. See estimation::att_health.
+//   [8] nan_resets: Cumulative ESKF NaN-state recoveries since boot.
+//   [9] gate_rejects_pos: Cumulative pos-update gate rejections (Mahalanobis + jump).
+//   [10] gate_rejects_vel: Cumulative vel-update gate rejections.
+//   [11] gate_rejects_att: Cumulative att-update gate rejections.
+//   [12] last_nis_pos: Most recent pos normalised innovation^2, per-DoF.
+//   [13] last_nis_vel: Most recent vel normalised innovation^2.
+//   [14] last_nis_att: Most recent att normalised innovation^2.
+//   [15] last_pos_update_ns: Wall-clock time of last accepted pos update, ns since boot. 0 = never. A frozen value means upstream stopped delivering; a recent one means the guard is rejecting fresh measurements.
+//   [16] last_vel_update_ns: Wall-clock time of last accepted vel update, ns since boot. 0 = never.
+//   [17] last_att_update_ns: Wall-clock time of last accepted att update, ns since boot. 0 = never.
+//   [18] indi_step_max_us: Longest INDI iteration (compute, decimation gate to motor publish) since the previous /health record, us. 0 = no iteration ran in the window.
+//   [19] indi_period_max_us: Longest gap between INDI iteration starts since the previous /health record, us. Compare against the nominal control period (IMU ODR / indi_ctrl_div); an excess is a missed deadline.
+//   [20] rc_link_quality: Latest RC link quality, percent [0..100]. null = no link-statistics frame since boot.
+//   [21] rc_rssi_dbm: Latest uplink RSSI, dBm (negative). null = never heard.
+//   [22] rc_link_age_ms: Age of that link-statistics frame at record time, ms. Growing while quality holds steady = frames stopped arriving. null = never heard.
+pub const SCHEMA: &[u8] = br#"{"title":"SystemHealth.v2","type":"array","minItems":23,"maxItems":23,"prefixItems":[{"title":"timestamp_ns","type":"integer"},{"title":"imu1_temp_c","type":"number"},{"title":"failsafe_active","type":"boolean"},{"title":"estimator_ready","type":"boolean"},{"title":"eskf_degraded","type":"boolean"},{"title":"eskf_severe_fault","type":"boolean"},{"title":"eskf_faults","type":"integer"},{"title":"attitude_health","type":"integer"},{"title":"nan_resets","type":"integer"},{"title":"gate_rejects_pos","type":"integer"},{"title":"gate_rejects_vel","type":"integer"},{"title":"gate_rejects_att","type":"integer"},{"title":"last_nis_pos","type":"number"},{"title":"last_nis_vel","type":"number"},{"title":"last_nis_att","type":"number"},{"title":"last_pos_update_ns","type":"integer"},{"title":"last_vel_update_ns","type":"integer"},{"title":"last_att_update_ns","type":"integer"},{"title":"indi_step_max_us","type":"integer"},{"title":"indi_period_max_us","type":"integer"},{"title":"rc_link_quality","type":["integer","null"]},{"title":"rc_rssi_dbm","type":["integer","null"]},{"title":"rc_link_age_ms","type":["integer","null"]}]}"#;
 
 pub const DEF: TopicDef = TopicDef {
     channel_id: CHANNEL_ID,

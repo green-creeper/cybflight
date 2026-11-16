@@ -20,21 +20,8 @@ pub const TOPIC: &str = "/imu1";
 /// `.v2` = the positional-array layout. Readers key their decoder on
 /// this name; the old map layout was plain `Imu`.
 pub const SCHEMA_NAME: &str = "Imu.v2";
-pub const SCHEMA: &[u8] = br#"{
-  "title": "Imu.v2",
-  "description": "Flat positional array; see prefixItems for element order. accel m/s^2, gyro rad/s. temp_c moved to /health.imu1_temp_c.",
-  "type": "array",
-  "minItems": 7, "maxItems": 7,
-  "prefixItems": [
-    { "title": "timestamp_ns", "type": "integer" },
-    { "title": "accel_x_m_s2", "type": "number" },
-    { "title": "accel_y_m_s2", "type": "number" },
-    { "title": "accel_z_m_s2", "type": "number" },
-    { "title": "gyro_x_rad_s", "type": "number" },
-    { "title": "gyro_y_rad_s", "type": "number" },
-    { "title": "gyro_z_rad_s", "type": "number" }
-  ]
-}"#;
+// Flat positional array; see prefixItems for element order. accel m/s^2, gyro rad/s. temp_c moved to /health.imu1_temp_c.
+pub const SCHEMA: &[u8] = br#"{"title":"Imu.v2","type":"array","minItems":7,"maxItems":7,"prefixItems":[{"title":"timestamp_ns","type":"integer"},{"title":"accel_x_m_s2","type":"number"},{"title":"accel_y_m_s2","type":"number"},{"title":"accel_z_m_s2","type":"number"},{"title":"gyro_x_rad_s","type":"number"},{"title":"gyro_y_rad_s","type":"number"},{"title":"gyro_z_rad_s","type":"number"}]}"#;
 
 pub const DEF: TopicDef = TopicDef {
     channel_id: CHANNEL_ID,

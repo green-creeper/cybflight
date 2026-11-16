@@ -15,21 +15,8 @@ pub const CHANNEL_ID: u16 = 13;
 pub const TOPIC: &str = "/imu1_raw";
 /// `.v2` = the positional-array layout (old map layout was `ImuRaw`).
 pub const SCHEMA_NAME: &str = "ImuRaw.v2";
-pub const SCHEMA: &[u8] = br#"{
-  "title": "ImuRaw.v2",
-  "description": "Pre-biquad-LP IMU sample. Flat positional array, same element order as Imu.v2. accel m/s^2, gyro rad/s.",
-  "type": "array",
-  "minItems": 7, "maxItems": 7,
-  "prefixItems": [
-    { "title": "timestamp_ns", "type": "integer" },
-    { "title": "accel_x_m_s2", "type": "number" },
-    { "title": "accel_y_m_s2", "type": "number" },
-    { "title": "accel_z_m_s2", "type": "number" },
-    { "title": "gyro_x_rad_s", "type": "number" },
-    { "title": "gyro_y_rad_s", "type": "number" },
-    { "title": "gyro_z_rad_s", "type": "number" }
-  ]
-}"#;
+// Pre-biquad-LP IMU sample. Flat positional array, same element order as Imu.v2. accel m/s^2, gyro rad/s.
+pub const SCHEMA: &[u8] = br#"{"title":"ImuRaw.v2","type":"array","minItems":7,"maxItems":7,"prefixItems":[{"title":"timestamp_ns","type":"integer"},{"title":"accel_x_m_s2","type":"number"},{"title":"accel_y_m_s2","type":"number"},{"title":"accel_z_m_s2","type":"number"},{"title":"gyro_x_rad_s","type":"number"},{"title":"gyro_y_rad_s","type":"number"},{"title":"gyro_z_rad_s","type":"number"}]}"#;
 
 pub const DEF: TopicDef = TopicDef {
     channel_id: CHANNEL_ID,

@@ -76,9 +76,31 @@ pub static VEHICLE_ATTITUDE: PubSubChannel<
 // the full-rate publish (one counter increment per sample). For
 // consumers that want ~1 kHz and must not be woken at the ODR
 // (Mahony). CAP=32 = 32 ms of stall tolerance at 1 kHz (> the 24 ms
-// IMU_1 rings). SUBS=4 (mahony + imu1_stream + 2 spare), PUBS=1.
-pub static IMU_1_DECIM: PubSubChannel<CriticalSectionRawMutex, msgs::Imu, 32, 4, 1> =
-    PubSubChannel::new();
+// IMU_1 rings). SUBS=6 (mahony + imu1_stream + flywoof745 blackbox + spare), PUBS=1.
+pub const IMU_DECIM_CAP: usize = 32;
+pub const IMU_DECIM_SUBS: usize = 6;
+pub static IMU_1_DECIM: PubSubChannel<
+    CriticalSectionRawMutex,
+    msgs::Imu,
+    IMU_DECIM_CAP,
+    IMU_DECIM_SUBS,
+    1,
+> = PubSubChannel::new();
+
+/// Blackbox-dedicated filtered IMU mirror on `board_flywoof745`: thinned
+/// at the publisher to `1000 Hz / blackbox_rate_div` (`250 Hz` at the
+/// baked `blackbox_rate_div: 4`) while `IMU_1` (8 kHz) and `IMU_1_DECIM`
+/// (1 kHz Mahony) stay at full rate.
+#[cfg(feature = "board_flywoof745")]
+pub const BLACKBOX_IMU_CAP: usize = 32;
+#[cfg(feature = "board_flywoof745")]
+pub static BLACKBOX_IMU_1: PubSubChannel<
+    CriticalSectionRawMutex,
+    msgs::Imu,
+    BLACKBOX_IMU_CAP,
+    1,
+    1,
+> = PubSubChannel::new();
 
 // Mahony IMU-only attitude (estimation::mahony_task) — kept separate
 // from the ESKF's VEHICLE_ATTITUDE so the two estimates never
@@ -87,7 +109,7 @@ pub static IMU_1_DECIM: PubSubChannel<CriticalSectionRawMutex, msgs::Imu, 32, 4,
 // (CAP=2's 20 ms measurably dropped ~1 % of samples across SD
 // page-erase pauses). SUBS=4 (blackbox recorder + shell stream +
 // 2 spare), PUBS=1 (the Mahony task).
-pub static MAHONY_ATTITUDE: PubSubChannel<CriticalSectionRawMutex, msgs::VehicleAttitude, 4, 4, 1> =
+pub static MAHONY_ATTITUDE: PubSubChannel<CriticalSectionRawMutex, msgs::VehicleAttitude, 8, 4, 1> =
     PubSubChannel::new();
 
 // Vicon pose (position + orientation): PUBS=1 (ESP bridge RX),
@@ -95,8 +117,8 @@ pub static MAHONY_ATTITUDE: PubSubChannel<CriticalSectionRawMutex, msgs::Vehicle
 pub static VICON_POSE: PubSubChannel<CriticalSectionRawMutex, msgs::ViconPose, 4, 4, 1> =
     PubSubChannel::new();
 
-// RC input: CAP=4, SUBS=4 (control + telemetry + 2 spare), PUBS=1 (single RC task).
-pub static RC_INPUT: PubSubChannel<CriticalSectionRawMutex, msgs::RcInput, 4, 6, 1> =
+// RC input: CAP=8, SUBS=6 (control + telemetry + 2 spare), PUBS=1 (single RC task).
+pub static RC_INPUT: PubSubChannel<CriticalSectionRawMutex, msgs::RcInput, 8, 6, 1> =
     PubSubChannel::new();
 
 // RC link status: CAP=2, SUBS=4 (esp_bridge + shell stream + oneshot + spare), PUBS=1 (single RC task).

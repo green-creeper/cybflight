@@ -15,8 +15,8 @@ pub const BOARD_NAME: &str = "FLYWOOF745";
 pub const IMU_COUNT: usize = 1;
 pub const BARO_COUNT: usize = 1;
 pub const HAS_SDCARD: bool = false;
-/// SPI-NOR flash (W25Q128 on SPI1) is present, no SDMMC slot.
-pub const HAS_BLACKBOX_STORAGE: bool = false;
+/// Onboard W25Q128 16 MiB SPI-NOR flash on SPI1 (CS = PA4), no SDMMC slot.
+pub const HAS_BLACKBOX_STORAGE: bool = true;
 pub const LED_COUNT: usize = 1;
 
 /// Primary gyro native output data rate (Hz). MPU6000 / ICM42688P run at 8 kHz.
@@ -159,10 +159,19 @@ bind_interrupts!(pub struct UsbIrqs {
     OTG_FS => hal::usb::InterruptHandler<hal::peripherals::USB_OTG_FS>;
 });
 
+pub struct FlashPins {
+    pub spi1: hal::Peri<'static, hal::peripherals::SPI1>,
+    pub sck: hal::Peri<'static, hal::peripherals::PA5>,
+    pub miso: hal::Peri<'static, hal::peripherals::PA6>,
+    pub mosi: hal::Peri<'static, hal::peripherals::PA7>,
+    pub cs: Output<'static>,
+}
+
 pub struct Board {
     pub leds: Leds,
 
     pub spi: SpiPins,
+    pub flash: FlashPins,
     pub i2c: I2cPins,
     pub serial: SerialPins,
     pub adc: AdcPins,
@@ -222,9 +231,16 @@ pub fn init() -> (Board, hal::usart::UartTx<'static, hal::mode::Blocking>) {
 
     let gyro1_cs = Output::new(p.PE4, Level::High, Speed::VeryHigh);
     let flash_cs = Output::new(p.PA4, Level::High, Speed::VeryHigh);
-    core::mem::forget(flash_cs);
     let osd_cs = Output::new(p.PB12, Level::High, Speed::VeryHigh);
     core::mem::forget(osd_cs);
+
+    let flash = FlashPins {
+        spi1: p.SPI1,
+        sck: p.PA5,
+        miso: p.PA6,
+        mosi: p.PA7,
+        cs: flash_cs,
+    };
 
     let gyro1_drdy = exti::ExtiInput::new(p.PE1, p.EXTI1, Pull::None, ExtiIrqs);
 
@@ -321,6 +337,7 @@ pub fn init() -> (Board, hal::usart::UartTx<'static, hal::mode::Blocking>) {
         Board {
             leds,
             spi,
+            flash,
             i2c,
             serial,
             adc,

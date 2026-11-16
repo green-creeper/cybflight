@@ -39,13 +39,17 @@ overflow-checks = false
 # Compile the top-level firmware shell crate with `opt-level = "s"` (preserving
 # loop unrolling unlike `"z"`) while keeping `cybflight-drivers` and `embassy-stm32`
 # at `opt-level = 2` and `cybflight-core`/`nalgebra`/`air-filters` at `opt-level = 3`,
-# so real-time loops on 216 MHz STM32F745 run fast and fit inside 512 KiB Flash.
+# so real-time loops on 216 MHz STM32F745 run fast and onboard NOR blackbox fits in 512 KiB Flash.
 [profile.release.package.cybflight]
 opt-level = "s"
 [profile.release.package.cybflight-drivers]
 opt-level = 2
 [profile.release.package.embassy-stm32]
-opt-level = 2
+opt-level = "s"
+[profile.release.package.embassy-usb]
+opt-level = "s"
+[profile.release.package.embassy-usb-synopsys-otg]
+opt-level = "s"
 [profile.release.package.embedded-fatfs]
 opt-level = "s"
 

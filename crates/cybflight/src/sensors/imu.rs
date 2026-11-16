@@ -379,6 +379,10 @@ impl<D: ReadImu> ImuReader<D> {
         // `sensors::IMU_1_DECIM`); one counter increment per sample.
         let decim_publisher = is_imu1.then(|| super::IMU_1_DECIM.immediate_publisher());
         let mut decim_ctr: u32 = 0;
+        #[cfg(feature = "board_flywoof745")]
+        let bb_imu_publisher = is_imu1.then(|| super::BLACKBOX_IMU_1.immediate_publisher());
+        #[cfg(feature = "board_flywoof745")]
+        let mut bb_imu_ctr: u32 = 0;
 
         loop {
             match embassy_time::with_timeout(embassy_time::Duration::from_millis(10), self.imu.read())
@@ -430,15 +434,20 @@ impl<D: ReadImu> ImuReader<D> {
                     // Thinned by the blackbox rate divider (see
                     // `raw_ctr` above); div 1 publishes every sample.
                     if let Some(raw) = &raw_publisher {
-                        raw_ctr += 1;
-                        if raw_ctr >= crate::blackbox::record_set::rate_div() {
-                            raw_ctr = 0;
-                            raw.publish_immediate(msgs::Imu {
-                                accel_m_s2: accel,
-                                gyro_rad_s: gyro,
-                                temp_c: reading.temp_c,
-                                timestamp,
-                            });
+                        if crate::bsp::HAS_BLACKBOX_STORAGE
+                            && crate::blackbox::is_capturing()
+                            && crate::blackbox::record_set::current().includes_imu_raw()
+                        {
+                            raw_ctr += 1;
+                            if raw_ctr >= crate::blackbox::record_set::rate_div() {
+                                raw_ctr = 0;
+                                raw.publish_immediate(msgs::Imu {
+                                    accel_m_s2: accel,
+                                    gyro_rad_s: gyro,
+                                    temp_c: reading.temp_c,
+                                    timestamp,
+                                });
+                            }
                         }
                     }
 
@@ -460,6 +469,17 @@ impl<D: ReadImu> ImuReader<D> {
                         decim_ctr += 1;
                         if decim_ctr >= crate::rates::IMU_DECIM_DIV {
                             decim_ctr = 0;
+                            #[cfg(feature = "board_flywoof745")]
+                            if let Some(bb_imu) = &bb_imu_publisher
+                                && crate::blackbox::is_capturing()
+                                && crate::blackbox::record_set::current().includes_imu()
+                            {
+                                bb_imu_ctr += 1;
+                                if bb_imu_ctr >= crate::blackbox::record_set::rate_div() {
+                                    bb_imu_ctr = 0;
+                                    bb_imu.publish_immediate(filtered.clone());
+                                }
+                            }
                             decim.publish_immediate(filtered.clone());
                         }
                     }

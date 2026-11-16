@@ -191,6 +191,7 @@ const TOPICS_MID: &[TopicDef] = &[
     topics::motor_state::DEF,
     topics::health::DEF,
     topics::gps_health::DEF,
+    #[cfg(feature = "outer_mpc")]
     topics::mpc_cost::DEF,
 ];
 
@@ -204,7 +205,9 @@ const TOPICS_LARGE: &[TopicDef] = &[
     topics::health::DEF,
     topics::gps_health::DEF,
     topics::odometry::DEF,
+    #[cfg(feature = "outer_mpc")]
     topics::mpc::DEF,
+    #[cfg(feature = "outer_mpc")]
     topics::mpc_cost::DEF,
     topics::tracking_error::DEF,
     topics::control_setpoint::DEF,
@@ -630,6 +633,9 @@ pub fn set_rate_div(div: u32) {
 /// and 140 KiB/s with the policy on (a ~7.3 ms non-yielding solve
 /// every 10 ms at `mpc_rate_hz 100`). The lower figure is the one to
 /// budget against, because that is the configuration that flies.
+#[cfg(feature = "board_flywoof745")]
+pub const SUSTAINED_GOODPUT_B_S: u32 = 60 * 1024;
+#[cfg(not(feature = "board_flywoof745"))]
 pub const SUSTAINED_GOODPUT_B_S: u32 = 140 * 1024;
 
 impl RecordSet {
@@ -650,6 +656,10 @@ impl RecordSet {
         }
         let div = rate_div.max(1) as f32;
         let imu_hz = crate::rates::IMU_ODR_HZ;
+        #[cfg(feature = "board_flywoof745")]
+        let logged_imu_hz = imu_hz / ((crate::rates::IMU_DECIM_DIV as f32) * div);
+        #[cfg(not(feature = "board_flywoof745"))]
+        let logged_imu_hz = imu_hz / div;
         let indi_hz = if self.fast_indi_telem() { 500.0 } else { 100.0 };
         // (included?, channel id, bytes/record, records/s)
         let rows: [(bool, u16, f32, f32); 9] = [
@@ -657,7 +667,7 @@ impl RecordSet {
                 self.includes_imu(),
                 topics::imu::CHANNEL_ID,
                 62.0,
-                imu_hz / div,
+                logged_imu_hz,
             ),
             (
                 self.includes_imu_raw(),

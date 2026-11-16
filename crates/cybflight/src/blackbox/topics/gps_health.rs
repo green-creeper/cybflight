@@ -74,33 +74,22 @@ use crate::sensors::gps::{
 pub const CHANNEL_ID: u16 = 11;
 pub const TOPIC: &str = "/gps_health";
 pub const SCHEMA_NAME: &str = "GpsHealth";
-pub const SCHEMA: &[u8] = br#"{
-  "title": "GpsHealth",
-  "description": "Post-flight mirror of the live `gpshealth` shell report (crate::sensors::gps::GPS_HEALTH + LATEST_NAV_PVT). Flattens the GpsHealth enum to a fixed-shape record so post-flight tooling can index and plot.",
-  "type": "object",
-  "properties": {
-    "timestamp_ns":      { "type": "integer", "description": "Sample wall-clock time, ns since boot." },
-    "state":             { "type": "integer",
-                           "description": "GpsHealth variant: 0=NotConfigured, 1=Initializing, 2=UartInitFailed, 3=InitTimedOut, 4=InitFailed, 5=Waiting, 6=Locked, 7=ReadError." },
-    "err_kind":          { "type": "integer",
-                           "description": "Set when state is InitFailed or ReadError, zero otherwise. 0=none, 1=Io, 2=BadChecksum, 3=Nak, 4=Timeout." },
-    "fix_type":          { "type": "integer",
-                           "description": "u-blox NAV-PVT fix_type. 0=no fix, 2=2D, 3=3D, 4=GNSS+dead-reckoning, 5=time-only. Populated for Waiting/Locked." },
-    "num_sv":            { "type": "integer", "description": "Satellites used in the navigation solution. Populated for Waiting/Locked." },
-    "h_acc_mm":          { "type": "integer", "description": "Horizontal accuracy estimate, mm. From the GpsHealth enum (Waiting/Locked) --matches NAV-PVT." },
-    "v_acc_mm":          { "type": "integer", "description": "Vertical accuracy estimate, mm. From LATEST_NAV_PVT (not in the enum). Zero when no NAV-PVT seen yet." },
-    "s_acc_mm_s":        { "type": "integer", "description": "Speed accuracy estimate, mm/s. From LATEST_NAV_PVT." },
-    "diff_soln":         { "type": "boolean", "description": "Differential corrections (e.g. RTCM3) applied. NAV-PVT flags bit 1." },
-    "carr_soln":         { "type": "integer", "description": "RTK carrier-phase solution status. 0=none, 1=float, 2=fixed. NAV-PVT flags bits 6-7." },
-    "gnss_fix_ok":       { "type": "boolean", "description": "Receiver believes the fix is valid. NAV-PVT flags bit 0. False when no NAV-PVT seen yet." },
-    "nav_pvt_arrival_us":         { "type": "integer",
-                                    "description": "`Instant` (microseconds since boot) when the GPS task parsed the most recent NAV-PVT, i.e. the source-of-truth arrival timestamp. 0 when no NAV-PVT has ever been received. Two derived metrics: liveness = (timestamp_ns/1000 - nav_pvt_arrival_us); inter-PVT interval (the GPS-jitter signal) = diff of unique nav_pvt_arrival_us values across records. The recorder oversamples relative to NAV-PVT, so successive records typically share an arrival timestamp -- dedupe before differencing." },
-    "nav_pvt_max_interval_recent_us":  { "type": "integer",
-                                         "description": "Worst-case inter-arrival interval among the most recent NAV_PVT_JITTER_WINDOW (=16) NAV-PVTs, in microseconds. Firmware-side dropout detector -- a single 1s gap among fifteen 200ms gaps spikes this from 200000 to 1000000. UINT32_MAX until at least two PVTs have been parsed since boot. Compare against the configured measurement period: much larger than expected = receiver is dropping or delaying frames." },
-    "nav_pvt_mean_interval_recent_us": { "type": "integer",
-                                         "description": "Mean inter-arrival interval over the same 16-PVT window, in microseconds. ROS `topic hz`-style typical-rate view (Hz = 1e6 / value). Where max_interval captures dropouts, this captures sustained rate -- a receiver that drops from 5 Hz to 2 Hz steadily moves this from 200000 to 500000. UINT32_MAX until at least two PVTs have been parsed." }
-  }
-}"#;
+// Post-flight mirror of the live `gpshealth` shell report (crate::sensors::gps::GPS_HEALTH + LATEST_NAV_PVT). Flattens the GpsHealth enum to a fixed-shape record so post-flight tooling can index and plot.
+//   timestamp_ns: Sample wall-clock time, ns since boot.
+//   state: GpsHealth variant: 0=NotConfigured, 1=Initializing, 2=UartInitFailed, 3=InitTimedOut, 4=InitFailed, 5=Waiting, 6=Locked, 7=ReadError.
+//   err_kind: Set when state is InitFailed or ReadError, zero otherwise. 0=none, 1=Io, 2=BadChecksum, 3=Nak, 4=Timeout.
+//   fix_type: u-blox NAV-PVT fix_type. 0=no fix, 2=2D, 3=3D, 4=GNSS+dead-reckoning, 5=time-only. Populated for Waiting/Locked.
+//   num_sv: Satellites used in the navigation solution. Populated for Waiting/Locked.
+//   h_acc_mm: Horizontal accuracy estimate, mm. From the GpsHealth enum (Waiting/Locked) --matches NAV-PVT.
+//   v_acc_mm: Vertical accuracy estimate, mm. From LATEST_NAV_PVT (not in the enum). Zero when no NAV-PVT seen yet.
+//   s_acc_mm_s: Speed accuracy estimate, mm/s. From LATEST_NAV_PVT.
+//   diff_soln: Differential corrections (e.g. RTCM3) applied. NAV-PVT flags bit 1.
+//   carr_soln: RTK carrier-phase solution status. 0=none, 1=float, 2=fixed. NAV-PVT flags bits 6-7.
+//   gnss_fix_ok: Receiver believes the fix is valid. NAV-PVT flags bit 0. False when no NAV-PVT seen yet.
+//   nav_pvt_arrival_us: `Instant` (microseconds since boot) when the GPS task parsed the most recent NAV-PVT, i.e. the source-of-truth arrival timestamp. 0 when no NAV-PVT has ever been received. Two derived metrics: liveness = (timestamp_ns/1000 - nav_pvt_arrival_us); inter-PVT interval (the GPS-jitter signal) = diff of unique nav_pvt_arrival_us values across records. The recorder oversamples relative to NAV-PVT, so successive records typically share an arrival timestamp -- dedupe before differencing.
+//   nav_pvt_max_interval_recent_us: Worst-case inter-arrival interval among the most recent NAV_PVT_JITTER_WINDOW (=16) NAV-PVTs, in microseconds. Firmware-side dropout detector -- a single 1s gap among fifteen 200ms gaps spikes this from 200000 to 1000000. UINT32_MAX until at least two PVTs have been parsed since boot. Compare against the configured measurement period: much larger than expected = receiver is dropping or delaying frames.
+//   nav_pvt_mean_interval_recent_us: Mean inter-arrival interval over the same 16-PVT window, in microseconds. ROS `topic hz`-style typical-rate view (Hz = 1e6 / value). Where max_interval captures dropouts, this captures sustained rate -- a receiver that drops from 5 Hz to 2 Hz steadily moves this from 200000 to 500000. UINT32_MAX until at least two PVTs have been parsed.
+pub const SCHEMA: &[u8] = br#"{"title":"GpsHealth","type":"object","properties":{"timestamp_ns":{"type":"integer"},"state":{"type":"integer"},"err_kind":{"type":"integer"},"fix_type":{"type":"integer"},"num_sv":{"type":"integer"},"h_acc_mm":{"type":"integer"},"v_acc_mm":{"type":"integer"},"s_acc_mm_s":{"type":"integer"},"diff_soln":{"type":"boolean"},"carr_soln":{"type":"integer"},"gnss_fix_ok":{"type":"boolean"},"nav_pvt_arrival_us":{"type":"integer"},"nav_pvt_max_interval_recent_us":{"type":"integer"},"nav_pvt_mean_interval_recent_us":{"type":"integer"}}}"#;
 
 pub const DEF: TopicDef = TopicDef {
     channel_id: CHANNEL_ID,

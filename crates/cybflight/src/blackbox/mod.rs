@@ -36,29 +36,44 @@
 //!   compile-time `const bool`) — no Cargo feature flag.
 
 pub mod cbor;
+#[cfg(not(feature = "board_flywoof745"))]
 pub mod fat;
+#[cfg(not(feature = "board_flywoof745"))]
 pub mod lazy_stream;
 pub mod mcap;
+#[cfg(feature = "board_flywoof745")]
+pub mod nor_store;
 pub mod record_set;
 pub mod recorder;
+#[cfg(not(feature = "board_flywoof745"))]
 pub mod sdmmc_block;
 pub mod topics;
+pub mod types;
 
+#[cfg(feature = "board_flywoof745")]
+pub use nor_store::NorBlackboxStore;
 pub use record_set::{RecordSet, current as record_set, set as set_record_set};
+#[cfg(not(feature = "board_flywoof745"))]
+pub use sdmmc_block::SdmmcBlockStore;
+pub use types::{
+    BlackboxBackend, CleanSummary, EntryName, EntrySummary, FileBody, FileSink, IoStats,
+    MAX_FILENAME, NorStorageInfo, OpError, SinkAbort, is_flight_log, parse_seq,
+};
 
-use core::sync::atomic::{AtomicBool, Ordering};
+#[cfg(feature = "board_flywoof745")]
+pub type BoardBlackboxStore = NorBlackboxStore;
+#[cfg(not(feature = "board_flywoof745"))]
+pub type BoardBlackboxStore = SdmmcBlockStore;
 
 use core::cell::Cell;
-use embassy_futures::select::{Either, Either4, select, select4};
+use core::sync::atomic::{AtomicBool, Ordering};
 
+use embassy_futures::select::{Either, Either4, select, select4};
 use embassy_sync::blocking_mutex::Mutex;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Timer, with_timeout};
-
-pub use fat::{CleanSummary, EntrySummary, MAX_FILENAME};
-pub use sdmmc_block::SdmmcBlockStore;
 
 /// Manual record-toggle for bench testing. When `true`, the recorder
 /// behaves as if `IS_ARMED` were `true` — opens a `flight_NNNN.mcap`
@@ -74,6 +89,17 @@ pub static RECORDER_HOLD: AtomicBool = AtomicBool::new(false);
 #[inline]
 pub fn should_record() -> bool {
     crate::motors::IS_ARMED.load(Ordering::Acquire) || RECORDER_HOLD.load(Ordering::Acquire)
+}
+
+/// True while `blackbox_task` is inside `recorder::run_session`
+/// (including the 3 s post-disarm grace window).
+pub static SESSION_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+/// True whenever IMU blackbox mirrors should publish (`should_record`
+/// or inside an active session's post-disarm grace window).
+#[inline]
+pub fn is_capturing() -> bool {
+    should_record() || SESSION_ACTIVE.load(Ordering::Acquire)
 }
 
 // ─── Request / result signals ───────────────────────────────────────────
@@ -102,14 +128,14 @@ pub enum LsReport {
         /// Total file count seen during the scan (not capped).
         total_files: u32,
     },
-    Failed(fat::OpError),
+    Failed(OpError),
     Busy,
 }
 
 /// Raised by `blackbox get`. Names a root-directory file plus the
 /// byte window to stream (`len = None` means "to EOF").
 pub struct GetRequest {
-    pub name: fat::EntryName,
+    pub name: EntryName,
     pub offset: u32,
     pub len: Option<u32>,
 }
@@ -123,7 +149,7 @@ pub static GET_REQUEST: Signal<CriticalSectionRawMutex, GetRequest> = Signal::ne
 pub enum GetReport {
     Ok { size: u32 },
     NotFound,
-    Failed(fat::OpError),
+    Failed(OpError),
     Busy,
 }
 pub static GET_RESULT: Signal<CriticalSectionRawMutex, GetReport> = Signal::new();
@@ -144,7 +170,7 @@ pub enum GetChunk {
     },
     /// Mid-stream fault; the transfer is dead and the shell should
     /// print the reason in-band (the size header is already out).
-    Err(fat::OpError),
+    Err(OpError),
 }
 
 /// File-content conduit for `blackbox get`. Depth 2 = double
@@ -159,14 +185,14 @@ pub static GET_STREAM: Channel<CriticalSectionRawMutex, GetChunk, 2> = Channel::
 const GET_SEND_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Raised by `blackbox rm`. Payload is the root-directory file name.
-pub static RM_REQUEST: Signal<CriticalSectionRawMutex, fat::EntryName> = Signal::new();
+pub static RM_REQUEST: Signal<CriticalSectionRawMutex, EntryName> = Signal::new();
 
 /// Outcome of one `blackbox rm` op.
 #[derive(Clone)]
 pub enum RmReport {
     Ok,
     NotFound,
-    Failed(fat::OpError),
+    Failed(OpError),
     Busy,
 }
 pub static RM_RESULT: Signal<CriticalSectionRawMutex, RmReport> = Signal::new();
@@ -179,7 +205,7 @@ pub static CLEAN_REQUEST: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 #[derive(Clone)]
 pub enum CleanReport {
     Ok(CleanSummary),
-    Failed(fat::OpError),
+    Failed(OpError),
     Busy,
 }
 pub static CLEAN_RESULT: Signal<CriticalSectionRawMutex, CleanReport> = Signal::new();
@@ -201,10 +227,9 @@ pub struct LastSession {
     /// but a truncated log was salvaged under this name. Any other
     /// `Some(e)` = session failed; counters above are 0 (the summary
     /// died with the session).
-    pub error: Option<fat::OpError>,
-    /// Card-level I/O counters for the session (CMD25 batches, reads,
-    /// fallbacks) — see [`sdmmc_block::IoStats`].
-    pub io: sdmmc_block::IoStats,
+    pub error: Option<OpError>,
+    /// Backend-level I/O counters for the session.
+    pub io: IoStats,
 }
 
 pub static LAST_SESSION: Mutex<CriticalSectionRawMutex, Cell<Option<LastSession>>> =
@@ -237,14 +262,10 @@ const ARM_DEBOUNCE_POLLS: u8 = 2; // 2 × 20 ms = 40 ms
 /// blocked inside `run_session` and requests queue (then get dropped
 /// as stale when the session ends).
 #[embassy_executor::task]
-pub async fn blackbox_task(mut store: SdmmcBlockStore) -> ! {
+pub async fn blackbox_task(mut store: BoardBlackboxStore) -> ! {
     defmt::info!("blackbox: ready");
     let mut prev_record = should_record();
     let mut debounce: u8 = 0;
-    // Sequence-number cache: highest `flight_NNNN.mcap` index handed
-    // out so far. `None` = "not yet probed; scan the FAT root before
-    // first use". Filled lazily from disk so reboots pick up where
-    // the previous session left off, then incremented in-memory.
     let mut flight_seq: Option<u32> = None;
 
     loop {
@@ -261,15 +282,9 @@ pub async fn blackbox_task(mut store: SdmmcBlockStore) -> ! {
                 if now_record && !prev_record {
                     debounce = debounce.saturating_add(1);
                     if debounce >= ARM_DEBOUNCE_POLLS {
-                        // Confirmed rising edge.
                         debounce = 0;
                         let rs = record_set::current();
                         if !rs.enabled() {
-                            // Tier `none` — record-edge observed but recorder
-                            // is muted. Don't open a file, don't bump the
-                            // sequence counter, just resync edge state and
-                            // wait for the next disarm/rearm cycle (or a
-                            // tier change).
                             defmt::info!(
                                 "blackbox: record-edge (record_set=none, session skipped)"
                             );
@@ -281,11 +296,13 @@ pub async fn blackbox_task(mut store: SdmmcBlockStore) -> ! {
                                         seq,
                                         rs.name(),
                                     );
+                                    SESSION_ACTIVE.store(true, Ordering::Release);
                                     let outcome = recorder::run_session(&mut store, seq, rs).await;
-                                    let io = sdmmc_block::LAST_IO_STATS.lock(|c| c.get());
+                                    SESSION_ACTIVE.store(false, Ordering::Release);
+                                    let io = store.last_io_stats();
                                     defmt::info!(
-                                        "blackbox: card io: {} writes / {} blocks (max batch {}), \
-                                         {} reads / {} blocks, {} CMD25 fallbacks",
+                                        "blackbox: io: {} writes / {} blocks (max batch {}), \
+                                         {} reads / {} blocks, {} fallbacks",
                                         io.writes,
                                         io.blocks_written,
                                         io.max_batch,
@@ -316,14 +333,7 @@ pub async fn blackbox_task(mut store: SdmmcBlockStore) -> ! {
                                                 }))
                                             });
                                         }
-                                        Err(fat::OpError::PartialWrite) => {
-                                            // A truncated log *was* committed
-                                            // under this number. Keep the seq
-                                            // advanced: recycling it would make
-                                            // the next arm `create_file` the same
-                                            // name and `truncate()` the salvage
-                                            // away — turning a partial log into
-                                            // no log at all.
+                                        Err(OpError::PartialWrite) => {
                                             defmt::warn!(
                                                 "blackbox: session {} faulted; \
                                                  partial log kept (seq not recycled)",
@@ -336,13 +346,13 @@ pub async fn blackbox_task(mut store: SdmmcBlockStore) -> ! {
                                                     messages: 0,
                                                     drops: 0,
                                                     encode_overflows: 0,
-                                                    error: Some(fat::OpError::PartialWrite),
+                                                    error: Some(OpError::PartialWrite),
                                                     io,
                                                 }))
                                             });
                                         }
                                         Err(e) => {
-                                            defmt::warn!("blackbox: session failed: {:?}", e,);
+                                            defmt::warn!("blackbox: session failed: {:?}", e);
                                             LAST_SESSION.lock(|c| {
                                                 c.set(Some(LastSession {
                                                     seq,
@@ -354,11 +364,6 @@ pub async fn blackbox_task(mut store: SdmmcBlockStore) -> ! {
                                                     io,
                                                 }))
                                             });
-                                            // Roll back the cached seq so we retry
-                                            // this number next time. If the file
-                                            // did make it onto the card despite the
-                                            // error, the next-rising-edge scan will
-                                            // see it and skip past.
                                             if let Some(s) = flight_seq.as_mut() {
                                                 *s = s.saturating_sub(1);
                                             }
@@ -370,10 +375,7 @@ pub async fn blackbox_task(mut store: SdmmcBlockStore) -> ! {
                                 }
                             }
                         }
-                        // Resync edge state with whatever's true after the session.
                         prev_record = should_record();
-                        // Drain any file-op request queued during the
-                        // session — stale by definition.
                         let _ = LS_REQUEST.try_take();
                         let _ = GET_REQUEST.try_take();
                         let _ = RM_REQUEST.try_take();
@@ -382,6 +384,9 @@ pub async fn blackbox_task(mut store: SdmmcBlockStore) -> ! {
                 } else {
                     debounce = 0;
                     prev_record = now_record;
+                    if !now_record && !crate::motors::IS_ARMED.load(Ordering::Acquire) {
+                        store.idle_maintenance().await;
+                    }
                 }
             }
             Either4::Second(()) => {
@@ -414,14 +419,10 @@ pub async fn blackbox_task(mut store: SdmmcBlockStore) -> ! {
                     CLEAN_RESULT.signal(CleanReport::Busy);
                     continue;
                 }
-                let report = match fat::remove_flight_logs(&mut store).await {
+                let report = match store.remove_flight_logs().await {
                     Ok(s) => CleanReport::Ok(s),
                     Err(e) => CleanReport::Failed(e),
                 };
-                // The card no longer holds the files the cached
-                // sequence was derived from: forget it so the next
-                // session rescans and numbering restarts at 0001
-                // (or after whatever survived an aborted clean).
                 if matches!(report, CleanReport::Ok(_)) {
                     flight_seq = None;
                 }
@@ -431,31 +432,20 @@ pub async fn blackbox_task(mut store: SdmmcBlockStore) -> ! {
     }
 }
 
-/// Get the next `flight_NNNN.mcap` sequence number. First call after
-/// boot scans the FAT root once and caches the highest existing NNNN;
-/// subsequent calls just increment the cache, so steady-state arming
-/// never re-mounts for sequencing.
-///
-/// The cache is populated **after** a successful scan, so a boot
-/// with no card / unmounted card defers the scan until the card is
-/// inserted instead of poisoning the cache with 0.
-async fn next_seq(
-    store: &mut SdmmcBlockStore,
+async fn next_seq<S: BlackboxBackend>(
+    store: &mut S,
     cache: &mut Option<u32>,
-) -> Result<u32, fat::OpError> {
+) -> Result<u32, OpError> {
     let highest = match *cache {
         Some(h) => h,
-        None => fat::scan_highest_seq(store, "flight_", ".mcap").await?,
+        None => store.scan_highest_seq("flight_", ".mcap").await?,
     };
     let next = highest.saturating_add(1);
     *cache = Some(next);
     Ok(next)
 }
 
-/// Scan the FAT root and assemble an `LsReport`. Caps the per-entry
-/// list at `LS_MAX_ENTRIES`; counts every file regardless so the
-/// shell can show "showing N of M".
-async fn run_ls(store: &mut SdmmcBlockStore) -> LsReport {
+async fn run_ls<S: BlackboxBackend>(store: &mut S) -> LsReport {
     let mut entries: heapless::Vec<EntrySummary, LS_MAX_ENTRIES> = heapless::Vec::new();
     let mut total: u32 = 0;
     let mut truncated = false;
@@ -465,18 +455,15 @@ async fn run_ls(store: &mut SdmmcBlockStore) -> LsReport {
             truncated = true;
             return;
         }
-        let mut n: fat::EntryName = heapless::String::new();
-        // push char-by-char so an over-long name is silently truncated
-        // rather than dropped entirely.
+        let mut n: EntryName = heapless::String::new();
         for c in name.chars() {
             if n.push(c).is_err() {
                 break;
             }
         }
-        // is_full() above guarantees this push won't fail.
         let _ = entries.push(EntrySummary { name: n, size });
     };
-    match fat::scan_root_files(store, &mut visit).await {
+    match store.scan_root_files(&mut visit).await {
         Ok(()) => LsReport::Ok {
             entries,
             truncated,
@@ -486,31 +473,25 @@ async fn run_ls(store: &mut SdmmcBlockStore) -> LsReport {
     }
 }
 
-/// [`fat::FileSink`] that forwards a file to the shell through
+/// [`FileSink`] that forwards a file to the shell through
 /// [`GET_RESULT`] (size header) and [`GET_STREAM`] (content), CRC-ing
 /// every byte on the way past.
 struct ShellGetSink {
-    crc: crc32fast::Hasher,
-    /// True once `begin` has fired — from then on errors must go
-    /// in-band via `GetChunk::Err`, not `GET_RESULT`.
+    crc: cybflight_core::crc32::Hasher,
     started: bool,
 }
 
-impl fat::FileSink for ShellGetSink {
-    async fn begin(&mut self, total: u32) -> Result<(), fat::SinkAbort> {
+impl FileSink for ShellGetSink {
+    async fn begin(&mut self, total: u32) -> Result<(), SinkAbort> {
         self.started = true;
         GET_RESULT.signal(GetReport::Ok { size: total });
         Ok(())
     }
 
-    async fn data(&mut self, chunk: &[u8]) -> Result<(), fat::SinkAbort> {
-        // A real arm preempts a download. The main loop can't service
-        // the arm-edge until this op returns, so poll here — bounds
-        // the abort latency to one chunk. (`RECORDER_HOLD` can't flip
-        // mid-op: the shell that would set it is busy running us.)
+    async fn data(&mut self, chunk: &[u8]) -> Result<(), SinkAbort> {
         if crate::motors::IS_ARMED.load(Ordering::Acquire) {
             defmt::warn!("blackbox: get aborted (armed mid-transfer)");
-            return Err(fat::SinkAbort);
+            return Err(SinkAbort);
         }
         self.crc.update(chunk);
         let mut buf = [0u8; GET_CHUNK_LEN];
@@ -524,45 +505,33 @@ impl fat::FileSink for ShellGetSink {
             }),
         )
         .await
-        .map_err(|_| fat::SinkAbort)
+        .map_err(|_| SinkAbort)
     }
 }
 
-/// Service one `blackbox get`: stream the requested window through
-/// `GET_STREAM`, terminated by `End { crc32 }` on success or an
-/// in-band `Err` chunk if the fault happened after the size header
-/// went out.
-async fn run_get(store: &mut SdmmcBlockStore, req: &GetRequest) {
-    // Chunks abandoned by a previous aborted transfer would corrupt
-    // this one's framing.
+async fn run_get<S: BlackboxBackend>(store: &mut S, req: &GetRequest) {
     while GET_STREAM.try_receive().is_ok() {}
     let mut sink = ShellGetSink {
-        crc: crc32fast::Hasher::new(),
+        crc: cybflight_core::crc32::Hasher::new(),
         started: false,
     };
-    match fat::read_file(store, req.name.as_str(), req.offset, req.len, &mut sink).await {
+    match store.read_file(req.name.as_str(), req.offset, req.len, &mut sink).await {
         Ok(_) => {
             let crc32 = sink.crc.finalize();
             let _ = with_timeout(GET_SEND_TIMEOUT, GET_STREAM.send(GetChunk::End { crc32 })).await;
         }
         Err(e) if sink.started => {
-            // Header already out — the error must travel in-band.
-            // Best-effort: if the channel is full the shell side's
-            // chunk timeout reports "task stalled" instead.
             let _ = GET_STREAM.try_send(GetChunk::Err(e));
         }
-        Err(fat::OpError::NotFound) => GET_RESULT.signal(GetReport::NotFound),
+        Err(OpError::NotFound) => GET_RESULT.signal(GetReport::NotFound),
         Err(e) => GET_RESULT.signal(GetReport::Failed(e)),
     }
 }
 
-/// Service one `blackbox rm`. Deleting the highest-numbered flight
-/// file is safe w.r.t. `next_seq` — the cached sequence only ever
-/// increments, so the name is never reused within this boot.
-async fn run_rm(store: &mut SdmmcBlockStore, path: &str) -> RmReport {
-    match fat::remove_file(store, path).await {
+async fn run_rm<S: BlackboxBackend>(store: &mut S, path: &str) -> RmReport {
+    match store.remove_file(path).await {
         Ok(()) => RmReport::Ok,
-        Err(fat::OpError::NotFound) => RmReport::NotFound,
+        Err(OpError::NotFound) => RmReport::NotFound,
         Err(e) => RmReport::Failed(e),
     }
 }

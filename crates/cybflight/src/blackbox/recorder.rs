@@ -52,31 +52,33 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::pubsub::{Subscriber, WaitResult};
 use embassy_time::{Duration, Instant, Timer};
 use embedded_io_async::Write;
-use heapless::String;
+use heapless::{String, Vec};
 
 use core::sync::atomic::Ordering;
 
 use super::cbor as cbor_result;
-use super::fat::{self, FileBody, OpError};
 use super::mcap;
 use super::record_set;
 use super::record_set::RecordSet;
-use super::sdmmc_block::SdmmcBlockStore;
 use super::should_record;
+use super::types::{BlackboxBackend, FileBody, OpError};
 #[cfg(feature = "est_eskf")]
 use super::topics::estimator_state;
+#[cfg(feature = "outer_mpc")]
+use super::topics::{mpc, mpc_cost};
 use super::topics::{
-    attitude, control_setpoint, events, gps_health, health, imu, imu_raw, motor_state, motors, mpc,
-    mpc_cost, odometry, power, rc, tracking_error,
+    attitude, control_setpoint, events, gps_health, health, imu, imu_raw, motor_state, motors,
+    odometry, power, rc, tracking_error,
 };
 use crate::control::TrackingError as TrackErrMsg;
 use crate::control::failsafe::{FAILSAFE_ACTIVE, FAILSAFE_REASON, RC_LINK_HEALTHY};
 use crate::control::indi_task::{
     INNER_SILENT_CAUSE, VOLTAGE_STALE, VOLTAGE_STALE_EPISODES, VOLTAGE_STALE_LAST_MS,
 };
+#[cfg(feature = "outer_mpc")]
+use crate::control::{MPC_COST_ADAPT, OCP_SOLVER_OUTPUT};
 use crate::control::{
-    ACTUATOR_MOTORS_TELEM, CONTROL_SETPOINT_TELEM, MPC_COST_ADAPT, OCP_SOLVER_OUTPUT,
-    PROCESSED_MOTOR_STATE, TRACKING_ERROR,
+    ACTUATOR_MOTORS_TELEM, CONTROL_SETPOINT_TELEM, PROCESSED_MOTOR_STATE, TRACKING_ERROR,
 };
 #[cfg(feature = "outer_mpc")]
 use crate::control::{MISSION_STATE, MissionState};
@@ -86,7 +88,9 @@ use crate::estimation::ESTIMATOR_READY;
 use crate::msgs;
 use crate::sensors::POWER_TELEM;
 use crate::sensors::power::PowerTelemetry;
-use crate::sensors::{BLACKBOX_ODOMETRY, IMU_1, IMU_1_RAW, MAHONY_ATTITUDE, RC_INPUT};
+#[cfg(not(feature = "board_flywoof745"))]
+use crate::sensors::IMU_1;
+use crate::sensors::{BLACKBOX_ODOMETRY, IMU_1_RAW, MAHONY_ATTITUDE, RC_INPUT};
 
 const MCAP_LIBRARY: &str = concat!("cybflight v", env!("CARGO_PKG_VERSION"));
 
@@ -238,14 +242,27 @@ const _: () = assert!(
 /// small/mid topic has had its turn, so a shortfall in a given
 /// iteration lands on IMU. See [`super::record_set`] for the full
 /// drop-priority rationale and its rate caveat.
+#[cfg(feature = "board_flywoof745")]
+const DRAIN_BUDGET_DEPRIO: usize = crate::sensors::BLACKBOX_IMU_CAP;
+#[cfg(not(feature = "board_flywoof745"))]
 const DRAIN_BUDGET_DEPRIO: usize = crate::rates::IMU_PUBSUB_CAP;
 
+#[cfg(not(feature = "board_flywoof745"))]
 type ImuSub = Subscriber<
     'static,
     CriticalSectionRawMutex,
     msgs::Imu,
     { crate::rates::IMU_PUBSUB_CAP },
     { crate::sensors::IMU_PUBSUB_SUBS },
+    1,
+>;
+#[cfg(feature = "board_flywoof745")]
+type ImuSub = Subscriber<
+    'static,
+    CriticalSectionRawMutex,
+    msgs::Imu,
+    { crate::sensors::BLACKBOX_IMU_CAP },
+    1,
     1,
 >;
 /// Raw (pre-biquad-LP) IMU subscriber over `IMU_1_RAW`. Same shape
@@ -260,7 +277,7 @@ type ImuRawSub = Subscriber<
     { crate::sensors::IMU_PUBSUB_SUBS },
     1,
 >;
-type RcSub = Subscriber<'static, CriticalSectionRawMutex, msgs::RcInput, 4, 6, 1>;
+type RcSub = Subscriber<'static, CriticalSectionRawMutex, msgs::RcInput, 8, 6, 1>;
 /// Odometry subscriber over `BLACKBOX_ODOMETRY` — the decimated mirror,
 /// NOT `VEHICLE_ODOMETRY`. CAP tracks `rates::BLACKBOX_ODOM_PUBSUB_CAP`
 /// (25 slots = 200 ms at 125 Hz); because the channel carries records,
@@ -275,11 +292,13 @@ type OdomSub = Subscriber<
 >;
 /// Attitude subscriber over `MAHONY_ATTITUDE` — the ~100 Hz IMU-only
 /// Mahony estimate, NOT the ESKF attitude (that rides `/odometry`).
-/// CAP=4/SUBS=4 matches the channel (40 ms drain-stall tolerance).
-type AttSub = Subscriber<'static, CriticalSectionRawMutex, msgs::VehicleAttitude, 4, 4, 1>;
+/// CAP=8/SUBS=4 matches the channel (80 ms drain-stall tolerance).
+type AttSub = Subscriber<'static, CriticalSectionRawMutex, msgs::VehicleAttitude, 8, 4, 1>;
+#[cfg(feature = "outer_mpc")]
 type McpSub = Subscriber<'static, CriticalSectionRawMutex, msgs::OcpSolverOutput, 4, 4, 1>;
 /// Learned-cost trace subscriber over `MPC_COST_ADAPT`. CAP=4/SUBS=2
 /// matches the channel (only the outer loop publishes, ≤ 200 Hz).
+#[cfg(feature = "outer_mpc")]
 type McpCostSub = Subscriber<'static, CriticalSectionRawMutex, msgs::MpcCostAdapt, 4, 2, 1>;
 /// Motors subscriber over `ACTUATOR_MOTORS_TELEM`. CAP=16 matches the
 /// channel (32 ms drain-stall tolerance at the sysid tier's 500 Hz);
@@ -374,7 +393,9 @@ pub struct FlightRecorder {
     rc_sub: Option<RcSub>,
     att_sub: Option<AttSub>,
     odom_sub: Option<OdomSub>,
+    #[cfg(feature = "outer_mpc")]
     mpc_sub: Option<McpSub>,
+    #[cfg(feature = "outer_mpc")]
     mpc_cost_sub: Option<McpCostSub>,
     motor_sub: Option<MotorSub>,
     motor_state_sub: Option<MotorStateSub>,
@@ -388,7 +409,9 @@ pub struct FlightRecorder {
     rc_seq: u32,
     att_seq: u32,
     odom_seq: u32,
+    #[cfg(feature = "outer_mpc")]
     mpc_seq: u32,
+    #[cfg(feature = "outer_mpc")]
     mpc_cost_seq: u32,
     motor_seq: u32,
     motor_state_seq: u32,
@@ -484,6 +507,15 @@ async fn next_or_pend<M: Clone, const C: usize, const S: usize, const P: usize>(
     }
 }
 
+#[derive(Clone, Copy)]
+struct PreparedRecord {
+    channel_id: u16,
+    sequence: u32,
+    timestamp: Instant,
+    len: usize,
+    count_msg: bool,
+}
+
 impl FileBody for FlightRecorder {
     async fn write<W: Write>(&mut self, w: &mut W) -> Result<u32, W::Error> {
         let mut total: u32 = 0;
@@ -495,12 +527,6 @@ impl FileBody for FlightRecorder {
         total += (1 + 8 + 4 + 0 + 4 + MCAP_LIBRARY.len()) as u32;
 
         // ── acquisition-provenance metadata ─────────────────────
-        // One Metadata record naming the constants a reader needs to
-        // interpret the streams: without the ODR and the *effective*
-        // LP cutoffs on disk, reconstructing /imu1 from /imu1_raw (or
-        // judging filter delay at all) requires out-of-band knowledge
-        // of this flight's tune. Values are formatted into small
-        // stack strings; the record costs ~200 bytes once per file.
         {
             use core::sync::atomic::Ordering;
             let accel_lpf = f32::from_bits(
@@ -521,17 +547,11 @@ impl FileBody for FlightRecorder {
             let _ = write!(&mut mute_s, "{:#010x}", self.knobs.mute_mask);
             let pairs: [(&str, &str); 8] = [
                 ("imu_odr_hz", odr.as_str()),
-                // Post-clamp values from the constructed filters, not
-                // the params as requested — only these describe the
-                // data actually on the card.
                 ("imu_accel_lpf_hz", accel_s.as_str()),
                 ("imu_gyro_lpf_hz", gyro_s.as_str()),
                 ("imu_filter", "biquad_lp_df2"),
                 ("board", crate::bsp::BOARD_NAME),
                 ("record_set", self.record_set.name()),
-                // Session shaping: readers must not assume nominal
-                // rates when rate_div > 1, nor a full tier topic set
-                // when mute_mask != 0.
                 ("rate_div", div_s.as_str()),
                 ("mute_mask", mute_s.as_str()),
             ];
@@ -540,11 +560,6 @@ impl FileBody for FlightRecorder {
         }
 
         // ── schemas + channels (data-driven from the active record-set) ──
-        // `def.channel_id` is stable per topic, so a Mid-tier file
-        // and a Large-tier file both call `/imu1` channel 1.
-        // Muted topics (`blackbox_mute_mask`) are absent from the file
-        // entirely — no Schema/Channel record, so readers never see a
-        // channel that carries zero messages by configuration.
         let topic_set = self.record_set.topic_set();
         for def in topic_set.iter().filter(|d| !self.knobs.muted(d.channel_id)) {
             mcap::write_schema(
@@ -570,39 +585,20 @@ impl FileBody for FlightRecorder {
             total += (1 + 8 + 2 + 2 + 4 + def.topic.len() + 4 + "cbor".len() + 4) as u32;
         }
 
-        // ── ARM event ───────────────────────────────────────────
+        // ── ARM + prior-boot post-mortem events ─────────────────
         let mut scratch = [0u8; SCRATCH_LEN];
         if self.record_set.includes_events() {
             total += self
-                .emit_event(w, &mut scratch, events::KIND_ARM, 0)
+                .write_event(w, &mut scratch, events::KIND_ARM, 0)
                 .await?;
 
-            // ── Prior-boot post-mortem mirror ───────────────────
-            //
-            // If the previous boot left a valid post-mortem record,
-            // emit it inline as `/events` records bracketed by
-            // KIND_BOOT_POSTMORTEM start/end sentinels. The opening
-            // bracket's `data` field packs `(reset_cause << 8 |
-            // fatal_kind)` so a post-flight reader can summarize the
-            // prior crash from a single record without parsing the
-            // full BKPSRAM struct.
-            //
-            // `take_pending` is single-shot: only the *first* SD
-            // session opened after a crashed boot mirrors the
-            // record. Subsequent sessions on the same boot don't
-            // re-emit it.
             #[cfg(feature = "postmortem")]
             if let Some(prior) = crate::postmortem::recovery::take_pending() {
                 let summary_data = ((prior.header.reset_cause & 0x00FF_FFFF) << 8)
                     | (prior.fatal.kind as u32 & 0xFF);
                 total += self
-                    .emit_event(w, &mut scratch, events::KIND_BOOT_POSTMORTEM, summary_data)
+                    .write_event(w, &mut scratch, events::KIND_BOOT_POSTMORTEM, summary_data)
                     .await?;
-                // If the fatal slot is populated, emit a synthetic
-                // event with the fatal kind so post-flight tools
-                // see a single explicit "this is what killed it"
-                // marker without having to inspect the bracket
-                // payload.
                 let fatal_kind = prior.fatal.kind;
                 let synth_kind = match crate::postmortem::record::FatalKind::from_u8(fatal_kind) {
                     crate::postmortem::record::FatalKind::Panic => Some(events::KIND_PANIC),
@@ -614,77 +610,37 @@ impl FileBody for FlightRecorder {
                     crate::postmortem::record::FatalKind::None => None,
                 };
                 if let Some(k) = synth_kind {
-                    // Encode CFSR low 16 bits (or panic_msg_idx for
-                    // panic) in `data` — same convention as the
-                    // event-kind docs.
                     let data = match k {
                         events::KIND_HARDFAULT => prior.fatal.cfsr & 0xFFFF,
                         events::KIND_PANIC => prior.fatal.panic_msg_idx as u32,
                         _ => 0,
                     };
-                    total += self.emit_event(w, &mut scratch, k, data).await?;
+                    total += self.write_event(w, &mut scratch, k, data).await?;
                 }
-                // Replay the prior-boot event ring. Each entry's
-                // `kind` is in the same KIND_* code space — readers
-                // see the prior session's RC/FAILSAFE/MISSION events
-                // inline, all between the BOOT_POSTMORTEM brackets.
                 for ev in prior.events_in_order() {
-                    total += self.emit_event(w, &mut scratch, ev.kind, ev.data).await?;
+                    total += self
+                        .write_event(w, &mut scratch, ev.kind, ev.data)
+                        .await?;
                 }
                 total += self
-                    .emit_event(w, &mut scratch, events::KIND_BOOT_POSTMORTEM, 0)
+                    .write_event(w, &mut scratch, events::KIND_BOOT_POSTMORTEM, 0)
                     .await?;
             }
         }
 
         // ── capture loop ────────────────────────────────────────
-        // Two-phase per iteration:
-        //
-        // 1. **Wait** on `select6` for any sub to fire (or the
-        //    DISARM_POLL deadline). Whichever arm wins consumed one
-        //    message — process it.
-        //
-        // 2. **Fairness drain.** `select6` polls left-to-right and
-        //    returns at the first-ready arm. With IMU at 8 kHz the
-        //    IMU arm is essentially always ready, so the slower
-        //    arms (`/rc`, `/odometry`, `/mpc`, `/motors`) get
-        //    woken but never reached. After the wait fires, drain
-        //    every remaining ready message on every sub
-        //    synchronously via `try_next_message`. That guarantees
-        //    forward progress on all topics each iteration
-        //    regardless of select bias.
-        //
-        // The fairness drain was added after a flight where a
-        // `Large` tier session yielded 1037 IMU messages and zero
-        // of everything else — including `/odometry`, which the
-        // ESKF publishes at 1 kHz in every build (its predict is
-        // decimated to ~1 kHz regardless of the IMU rate, see
-        // `estimation::eskf_imu_mocap::PREDICT_DECIMATION`).
-        //
-        // Loop exit: when `should_record()` flips false we don't
-        // break immediately. Instead emit the DISARM event at that
-        // moment and continue running for `POST_DISARM_GRACE` so
-        // post-disarm transitions (notably the 2 s POS_TIMEOUT_S
-        // staleness assertion) land in the log. Re-arm during the
-        // grace window doesn't cancel — we're committed to closing.
         let mut grace_deadline: Option<Instant> = None;
         let mut last_flush = Instant::now();
         loop {
             if !should_record() && grace_deadline.is_none() {
                 if self.record_set.includes_events() {
-                    // Why we're disarming, not just that we are. The
-                    // failsafe path stores FAILSAFE_REASON before
-                    // FAILSAFE_ACTIVE (both Release), so an Acquire load
-                    // of the flag orders the reason load behind it —
-                    // same handshake `emit_status_edges` relies on. No
-                    // failsafe ⇒ the disarm was commanded.
                     let cause = if FAILSAFE_ACTIVE.load(Ordering::Acquire) {
                         FAILSAFE_REASON.load(Ordering::Acquire) as u32
                     } else {
                         events::DISARM_CAUSE_COMMANDED
                     };
                     total += self
-                        .emit_event(w, &mut scratch, events::KIND_DISARM, cause)
+                        .write_event(w, &mut scratch, events::KIND_DISARM, cause)
                         .await?;
                 }
                 grace_deadline = Some(Instant::now() + POST_DISARM_GRACE);
@@ -694,31 +650,9 @@ impl FileBody for FlightRecorder {
             {
                 break;
             }
-            let timer = Timer::after(DISARM_POLL_INTERVAL);
-            // Select-arm order is **deliberate**. `select6` polls
-            // left-to-right and ties go to the leftmost ready arm,
-            // so high-level / low-rate topics (rc, att, odom, mpc)
-            // come before raw IMU. With IMU at 8 kHz and the others
-            // at 50–200 Hz, the previous ordering (IMU first) meant
-            // every wake almost always handled an IMU sample, even
-            // when ESKF / RC / MPC frames were also waiting; the
-            // fairness drain then caught the rest. Putting IMU last
-            // makes the *first* emit-per-iteration a high-level
-            // sample whenever one is ready, which keeps the
-            // high-level stream tight under SD backpressure.
-            //
-            // `/motors` now holds the arm `/attitude` used to
-            // occupy. It was previously excluded only because
-            // `select6` is the maximum named arity; dropping the
-            // redundant `/attitude` topic freed a slot, and `/motors`
-            // is the natural occupant — a 100 Hz high-level stream,
-            // so it belongs on the same side of the ordering as rc /
-            // odom / mpc. The fairness drain still covers every
-            // topic; this just means a waiting motor sample can be
-            // the first emit of an iteration rather than always
-            // waiting for the drain.
-            match select6(
-                timer,
+            #[cfg(feature = "outer_mpc")]
+            let selected = match select6(
+                Timer::after(DISARM_POLL_INTERVAL),
                 next_or_pend(&mut self.rc_sub),
                 next_or_pend(&mut self.odom_sub),
                 next_or_pend(&mut self.mpc_sub),
@@ -727,144 +661,62 @@ impl FileBody for FlightRecorder {
             )
             .await
             {
-                Either6::First(()) => {
-                    // poll-wake — re-check IS_ARMED at top of loop
-                }
-                Either6::Second(wr) => total += self.emit_rc(w, &mut scratch, wr).await?,
-                Either6::Third(wr) => total += self.emit_odom(w, &mut scratch, wr).await?,
-                Either6::Fourth(wr) => total += self.emit_mpc(w, &mut scratch, wr).await?,
-                Either6::Fifth(wr) => total += self.emit_motors(w, &mut scratch, wr).await?,
-                Either6::Sixth(wr) => total += self.emit_imu(w, &mut scratch, wr).await?,
+                Either6::First(()) => None,
+                Either6::Second(wr) => self.prep_rc(&mut scratch, wr),
+                Either6::Third(wr) => self.prep_odom(&mut scratch, wr),
+                Either6::Fourth(wr) => self.prep_mpc(&mut scratch, wr),
+                Either6::Fifth(wr) => self.prep_motors(&mut scratch, wr),
+                Either6::Sixth(wr) => self.prep_imu(&mut scratch, wr),
+            };
+            #[cfg(not(feature = "outer_mpc"))]
+            let selected = match select6(
+                Timer::after(DISARM_POLL_INTERVAL),
+                next_or_pend(&mut self.rc_sub),
+                next_or_pend(&mut self.odom_sub),
+                core::future::pending::<()>(),
+                next_or_pend(&mut self.motor_sub),
+                next_or_pend(&mut self.imu_sub),
+            )
+            .await
+            {
+                Either6::First(()) => None,
+                Either6::Second(wr) => self.prep_rc(&mut scratch, wr),
+                Either6::Third(wr) => self.prep_odom(&mut scratch, wr),
+                Either6::Fourth(()) => None,
+                Either6::Fifth(wr) => self.prep_motors(&mut scratch, wr),
+                Either6::Sixth(wr) => self.prep_imu(&mut scratch, wr),
+            };
+            if let Some(rec) = selected {
+                total += self.emit_prepared(w, rec, &scratch).await?;
             }
 
-            // Fairness drain — see comment above. Drains run in
-            // **tier order**: small (rc) → mid (attitude, odometry,
-            // mpc, motors) → large (imu). Order is what does the
-            // prioritising: IMU drains last, so when the SD
-            // pipeline can't keep up the shortfall naturally lands
-            // on IMU instead of the smaller / more-critical topics.
-            // When healthy, every drain hits `try_next == None`
-            // before its budget so order/budget are immaterial.
-
-            // ── small tier ──────────────────────────────────────
-            for _ in 0..DRAIN_BUDGET_NORMAL {
-                let next = self.rc_sub.as_mut().and_then(|s| s.try_next_message());
-                let Some(wr) = next else { break };
-                total += self.emit_rc(w, &mut scratch, wr).await?;
-            }
-            // ── mid tier ────────────────────────────────────────
-            for _ in 0..DRAIN_BUDGET_NORMAL {
-                let next = self.att_sub.as_mut().and_then(|s| s.try_next_message());
-                let Some(wr) = next else { break };
-                total += self.emit_att(w, &mut scratch, wr).await?;
-            }
-            for _ in 0..DRAIN_BUDGET_NORMAL {
-                let next = self.odom_sub.as_mut().and_then(|s| s.try_next_message());
-                let Some(wr) = next else { break };
-                total += self.emit_odom(w, &mut scratch, wr).await?;
-            }
-            for _ in 0..DRAIN_BUDGET_NORMAL {
-                let next = self.mpc_sub.as_mut().and_then(|s| s.try_next_message());
-                let Some(wr) = next else { break };
-                total += self.emit_mpc(w, &mut scratch, wr).await?;
-            }
-            for _ in 0..DRAIN_BUDGET_NORMAL {
-                let next = self
-                    .mpc_cost_sub
-                    .as_mut()
-                    .and_then(|s| s.try_next_message());
-                let Some(wr) = next else { break };
-                total += self.emit_mpc_cost(w, &mut scratch, wr).await?;
-            }
-            for _ in 0..DRAIN_BUDGET_NORMAL {
-                let next = self.motor_sub.as_mut().and_then(|s| s.try_next_message());
-                let Some(wr) = next else { break };
-                total += self.emit_motors(w, &mut scratch, wr).await?;
-            }
-            for _ in 0..DRAIN_BUDGET_NORMAL {
-                let next = self
-                    .motor_state_sub
-                    .as_mut()
-                    .and_then(|s| s.try_next_message());
-                let Some(wr) = next else { break };
-                total += self.emit_motor_state(w, &mut scratch, wr).await?;
-            }
-            for _ in 0..DRAIN_BUDGET_NORMAL {
-                let next = self.power_sub.as_mut().and_then(|s| s.try_next_message());
-                let Some(wr) = next else { break };
-                total += self.emit_power(w, &mut scratch, wr).await?;
-            }
-            for _ in 0..DRAIN_BUDGET_NORMAL {
-                let next = self
-                    .track_err_sub
-                    .as_mut()
-                    .and_then(|s| s.try_next_message());
-                let Some(wr) = next else { break };
-                total += self.emit_track_err(w, &mut scratch, wr).await?;
-            }
-            for _ in 0..DRAIN_BUDGET_NORMAL {
-                let next = self.ctrl_sp_sub.as_mut().and_then(|s| s.try_next_message());
-                let Some(wr) = next else { break };
-                total += self.emit_ctrl_sp(w, &mut scratch, wr).await?;
-            }
-            #[cfg(feature = "est_eskf")]
-            for _ in 0..DRAIN_BUDGET_NORMAL {
-                let next = self
-                    .est_state_sub
-                    .as_mut()
-                    .and_then(|s| s.try_next_message());
-                let Some(wr) = next else { break };
-                total += self.emit_est_state(w, &mut scratch, wr).await?;
-            }
-            // ── large tier (deprioritised) ──────────────────────
-            // Raw IMU drains **before** filtered IMU. Large tier
-            // exists exclusively to capture the pre-LP stream for
-            // sysid / RPM-notch fits — filtered IMU is already in
-            // Mid, so anyone who's opted into Large is asking
-            // specifically for raw. Information density also favours
-            // raw: filtered IMU is a deterministic function of raw
-            // + biquad coefficients, so preserving raw preserves
-            // both views; preserving filtered loses raw forever.
-            // Under SD backpressure the shared deprio budget
-            // therefore biases drops onto filtered IMU instead.
-            for _ in 0..DRAIN_BUDGET_DEPRIO {
-                let next = self.imu_raw_sub.as_mut().and_then(|s| s.try_next_message());
-                let Some(wr) = next else { break };
-                total += self.emit_imu_raw(w, &mut scratch, wr).await?;
-            }
-            for _ in 0..DRAIN_BUDGET_DEPRIO {
-                let next = self.imu_sub.as_mut().and_then(|s| s.try_next_message());
-                let Some(wr) = next else { break };
-                total += self.emit_imu(w, &mut scratch, wr).await?;
+            // Fairness drain: small -> mid -> large tier priority order.
+            let mut budgets = [0u16; 13];
+            while let Some(rec) = self.next_drain_record(&mut budgets, &mut scratch) {
+                total += self.emit_prepared(w, rec, &scratch).await?;
             }
 
-            // ── /health + /gps_health periodic emits ────────────
-            // Both detached from any data-topic emit so failsafe and
-            // GPS-loss progressions stay observable when their
-            // companion topics stop publishing. Each function self-
-            // throttles to `HEALTH_EMIT_INTERVAL`.
-            total += self.emit_health(w, &mut scratch).await?;
-            total += self.emit_gps_health(w, &mut scratch).await?;
+            // Periodic /health + /gps_health snapshots.
+            if let Some(rec) = self.prep_health(&mut scratch) {
+                total += self.emit_prepared(w, rec, &scratch).await?;
+            }
+            if let Some(rec) = self.prep_gps_health(&mut scratch) {
+                total += self.emit_prepared(w, rec, &scratch).await?;
+            }
 
-            // ── extraordinary-event edge poll ───────────────────
-            // Poll the failsafe + estimator atomics once per outer
-            // iteration and emit a `/events` record on each
-            // transition. Read-only access to atomics maintained by
-            // `control::failsafe` and `estimation::*`; no
-            // producer-side cooperation needed. Latency to detect
-            // an edge equals the outer-loop period (≤ a few tens
-            // of ms in steady state, ≤ 50 ms when topics are
-            // silent because of `DISARM_POLL_INTERVAL`).
+            // Edge-triggered /events + overrun notifications.
             if self.record_set.includes_events() {
-                total += self.emit_status_edges(w, &mut scratch).await?;
-                total += self.emit_drop_edges(w, &mut scratch).await?;
+                let mut edges: Vec<(u8, u32), 8> = Vec::new();
+                self.collect_status_edges(&mut edges);
+                self.collect_drop_edge(&mut edges);
+                for (kind, data) in edges {
+                    if let Some(rec) = self.prep_event(&mut scratch, kind, data) {
+                        total += self.emit_prepared(w, rec, &scratch).await?;
+                    }
+                }
             }
 
-            // ── periodic durability flush ───────────────────────
-            // Commits the FAT directory entry so the file has a
-            // real size on disk, bounded by `FLUSH_INTERVAL`. Runs
-            // last in the iteration so a flush never sits between
-            // a message and the record that explains it.
+            // Periodic durability flush.
             let now = Instant::now();
             if now.saturating_duration_since(last_flush) >= FLUSH_INTERVAL {
                 last_flush = now;
@@ -873,12 +725,9 @@ impl FileBody for FlightRecorder {
         }
 
         // ── LOG_END event ───────────────────────────────────────
-        // DISARM is emitted at the disarm-edge inside the capture
-        // loop above; LOG_END marks the actual file-close moment,
-        // ~POST_DISARM_GRACE later.
         if self.record_set.includes_events() {
             total += self
-                .emit_event(w, &mut scratch, events::KIND_LOG_END, 0)
+                .write_event(w, &mut scratch, events::KIND_LOG_END, 0)
                 .await?;
         }
 
@@ -895,191 +744,289 @@ impl FileBody for FlightRecorder {
 }
 
 impl FlightRecorder {
-    /// Per-topic emit helpers. Each takes a `WaitResult` (from either
-    /// the `select6` await or `try_next_message` in the drain loop),
-    /// runs `handle_wr` to extract `Some(m)` or count drops, encodes
-    /// to CBOR, and appends an MCAP `Message` record. Factored so
-    /// the wait-arm and the drain-arm share the same emit
-    /// implementation — saves both source duplication and codegen
-    /// (one monomorphisation per topic instead of two).
-    async fn emit_imu<W: Write>(
+    #[inline(never)]
+    async fn emit_prepared<W: Write>(
+        &mut self,
+        w: &mut W,
+        rec: PreparedRecord,
+        scratch: &[u8],
+    ) -> Result<u32, W::Error> {
+        let bytes = emit_msg(
+            w,
+            rec.channel_id,
+            rec.sequence,
+            rec.timestamp,
+            &scratch[..rec.len],
+        )
+        .await?;
+        if rec.count_msg {
+            self.messages = self.messages.wrapping_add(1);
+        }
+        Ok(bytes)
+    }
+
+    #[inline(never)]
+    async fn write_event<W: Write>(
         &mut self,
         w: &mut W,
         scratch: &mut [u8],
-        wr: WaitResult<msgs::Imu>,
+        kind: u8,
+        data: u32,
     ) -> Result<u32, W::Error> {
-        // No divider: `/imu1` is logged at the rate it is published.
-        // The one topic `blackbox_rate_div` thins is `/imu1_raw`, and
-        // `sensors::imu` does that at the publisher.
-        let Some(m) = handle_wr(wr, &mut self.imu_seq, &mut self.drops) else {
-            return Ok(0);
-        };
+        if let Some(rec) = self.prep_event(scratch, kind, data) {
+            self.emit_prepared(w, rec, scratch).await
+        } else {
+            Ok(0)
+        }
+    }
+
+    fn finish_topic(
+        &mut self,
+        channel_id: u16,
+        seq: u32,
+        timestamp: Instant,
+        encoded: cbor_result::Result<usize>,
+    ) -> Option<PreparedRecord> {
+        let len = self.note_encode(encoded)?;
+        Some(PreparedRecord {
+            channel_id,
+            sequence: seq,
+            timestamp,
+            len,
+            count_msg: true,
+        })
+    }
+
+    fn next_drain_record(
+        &mut self,
+        budgets: &mut [u16; 13],
+        scratch: &mut [u8],
+    ) -> Option<PreparedRecord> {
+        loop {
+            if (budgets[0] as usize) < DRAIN_BUDGET_NORMAL
+                && let Some(wr) = self.rc_sub.as_mut().and_then(|s| s.try_next_message())
+            {
+                budgets[0] += 1;
+                if let Some(r) = self.prep_rc(scratch, wr) {
+                    return Some(r);
+                }
+                continue;
+            }
+            if (budgets[1] as usize) < DRAIN_BUDGET_NORMAL
+                && let Some(wr) = self.att_sub.as_mut().and_then(|s| s.try_next_message())
+            {
+                budgets[1] += 1;
+                if let Some(r) = self.prep_att(scratch, wr) {
+                    return Some(r);
+                }
+                continue;
+            }
+            if (budgets[2] as usize) < DRAIN_BUDGET_NORMAL
+                && let Some(wr) = self.odom_sub.as_mut().and_then(|s| s.try_next_message())
+            {
+                budgets[2] += 1;
+                if let Some(r) = self.prep_odom(scratch, wr) {
+                    return Some(r);
+                }
+                continue;
+            }
+            #[cfg(feature = "outer_mpc")]
+            if (budgets[3] as usize) < DRAIN_BUDGET_NORMAL
+                && let Some(wr) = self.mpc_sub.as_mut().and_then(|s| s.try_next_message())
+            {
+                budgets[3] += 1;
+                if let Some(r) = self.prep_mpc(scratch, wr) {
+                    return Some(r);
+                }
+                continue;
+            }
+            #[cfg(feature = "outer_mpc")]
+            if (budgets[4] as usize) < DRAIN_BUDGET_NORMAL
+                && let Some(wr) = self
+                    .mpc_cost_sub
+                    .as_mut()
+                    .and_then(|s| s.try_next_message())
+            {
+                budgets[4] += 1;
+                if let Some(r) = self.prep_mpc_cost(scratch, wr) {
+                    return Some(r);
+                }
+                continue;
+            }
+            if (budgets[5] as usize) < DRAIN_BUDGET_NORMAL
+                && let Some(wr) = self.motor_sub.as_mut().and_then(|s| s.try_next_message())
+            {
+                budgets[5] += 1;
+                if let Some(r) = self.prep_motors(scratch, wr) {
+                    return Some(r);
+                }
+                continue;
+            }
+            if (budgets[6] as usize) < DRAIN_BUDGET_NORMAL
+                && let Some(wr) = self
+                    .motor_state_sub
+                    .as_mut()
+                    .and_then(|s| s.try_next_message())
+            {
+                budgets[6] += 1;
+                if let Some(r) = self.prep_motor_state(scratch, wr) {
+                    return Some(r);
+                }
+                continue;
+            }
+            if (budgets[7] as usize) < DRAIN_BUDGET_NORMAL
+                && let Some(wr) = self.power_sub.as_mut().and_then(|s| s.try_next_message())
+            {
+                budgets[7] += 1;
+                if let Some(r) = self.prep_power(scratch, wr) {
+                    return Some(r);
+                }
+                continue;
+            }
+            if (budgets[8] as usize) < DRAIN_BUDGET_NORMAL
+                && let Some(wr) = self
+                    .track_err_sub
+                    .as_mut()
+                    .and_then(|s| s.try_next_message())
+            {
+                budgets[8] += 1;
+                if let Some(r) = self.prep_track_err(scratch, wr) {
+                    return Some(r);
+                }
+                continue;
+            }
+            if (budgets[9] as usize) < DRAIN_BUDGET_NORMAL
+                && let Some(wr) = self.ctrl_sp_sub.as_mut().and_then(|s| s.try_next_message())
+            {
+                budgets[9] += 1;
+                if let Some(r) = self.prep_ctrl_sp(scratch, wr) {
+                    return Some(r);
+                }
+                continue;
+            }
+            #[cfg(feature = "est_eskf")]
+            if (budgets[10] as usize) < DRAIN_BUDGET_NORMAL
+                && let Some(wr) = self
+                    .est_state_sub
+                    .as_mut()
+                    .and_then(|s| s.try_next_message())
+            {
+                budgets[10] += 1;
+                if let Some(r) = self.prep_est_state(scratch, wr) {
+                    return Some(r);
+                }
+                continue;
+            }
+            if (budgets[11] as usize) < DRAIN_BUDGET_DEPRIO
+                && let Some(wr) = self.imu_raw_sub.as_mut().and_then(|s| s.try_next_message())
+            {
+                budgets[11] += 1;
+                if let Some(r) = self.prep_imu_raw(scratch, wr) {
+                    return Some(r);
+                }
+                continue;
+            }
+            if (budgets[12] as usize) < DRAIN_BUDGET_DEPRIO
+                && let Some(wr) = self.imu_sub.as_mut().and_then(|s| s.try_next_message())
+            {
+                budgets[12] += 1;
+                if let Some(r) = self.prep_imu(scratch, wr) {
+                    return Some(r);
+                }
+                continue;
+            }
+            return None;
+        }
+    }
+
+    fn prep_imu(
+        &mut self,
+        scratch: &mut [u8],
+        wr: WaitResult<msgs::Imu>,
+    ) -> Option<PreparedRecord> {
+        let m = handle_wr(wr, &mut self.imu_seq, &mut self.drops)?;
         self.last_imu_temp_c = m.temp_c;
         self.imu_seq = self.imu_seq.wrapping_add(1);
-        let Some(n) = self.note_encode(imu::encode(scratch, &m)) else {
-            return Ok(0);
-        };
-        let bytes = emit_msg(w, imu::CHANNEL_ID, self.imu_seq, m.timestamp, &scratch[..n]).await?;
-        self.messages = self.messages.wrapping_add(1);
-        Ok(bytes)
+        let seq = self.imu_seq;
+        let ts = m.timestamp;
+        let res = imu::encode(scratch, &m);
+        self.finish_topic(imu::CHANNEL_ID, seq, ts, res)
     }
 
-    async fn emit_imu_raw<W: Write>(
+    fn prep_imu_raw(
         &mut self,
-        w: &mut W,
         scratch: &mut [u8],
         wr: WaitResult<msgs::Imu>,
-    ) -> Result<u32, W::Error> {
-        // No divider here: `sensors::imu` already thinned this channel
-        // at the publisher (`record_set::rate_div`), so what arrives is
-        // the record stream itself. A `Lagged(n)` is therefore n lost
-        // *records* and plain `handle_wr` sizes the seq hole correctly —
-        // and, the point of the exercise, the channel's CAP now buffers
-        // `div ×` the wall-clock it used to instead of filling with
-        // samples the recorder was about to discard.
-        let Some(m) = handle_wr(wr, &mut self.imu_raw_seq, &mut self.drops) else {
-            return Ok(0);
-        };
+    ) -> Option<PreparedRecord> {
+        let m = handle_wr(wr, &mut self.imu_raw_seq, &mut self.drops)?;
         self.imu_raw_seq = self.imu_raw_seq.wrapping_add(1);
-        let Some(n) = self.note_encode(imu_raw::encode(scratch, &m)) else {
-            return Ok(0);
-        };
-        let bytes = emit_msg(
-            w,
-            imu_raw::CHANNEL_ID,
-            self.imu_raw_seq,
-            m.timestamp,
-            &scratch[..n],
-        )
-        .await?;
-        self.messages = self.messages.wrapping_add(1);
-        Ok(bytes)
+        let seq = self.imu_raw_seq;
+        let ts = m.timestamp;
+        let res = imu_raw::encode(scratch, &m);
+        self.finish_topic(imu_raw::CHANNEL_ID, seq, ts, res)
     }
 
-    async fn emit_rc<W: Write>(
+    fn prep_rc(
         &mut self,
-        w: &mut W,
         scratch: &mut [u8],
         wr: WaitResult<msgs::RcInput>,
-    ) -> Result<u32, W::Error> {
-        let Some(m) = handle_wr(wr, &mut self.rc_seq, &mut self.drops) else {
-            return Ok(0);
-        };
+    ) -> Option<PreparedRecord> {
+        let m = handle_wr(wr, &mut self.rc_seq, &mut self.drops)?;
         self.rc_seq = self.rc_seq.wrapping_add(1);
-        let Some(n) = self.note_encode(rc::encode(scratch, &m)) else {
-            return Ok(0);
-        };
-        let bytes = emit_msg(w, rc::CHANNEL_ID, self.rc_seq, m.timestamp, &scratch[..n]).await?;
-        self.messages = self.messages.wrapping_add(1);
-        Ok(bytes)
+        let seq = self.rc_seq;
+        let ts = m.timestamp;
+        let res = rc::encode(scratch, &m);
+        self.finish_topic(rc::CHANNEL_ID, seq, ts, res)
     }
 
-    async fn emit_att<W: Write>(
+    fn prep_att(
         &mut self,
-        w: &mut W,
         scratch: &mut [u8],
         wr: WaitResult<msgs::VehicleAttitude>,
-    ) -> Result<u32, W::Error> {
-        let Some(m) = handle_wr(wr, &mut self.att_seq, &mut self.drops) else {
-            return Ok(0);
-        };
+    ) -> Option<PreparedRecord> {
+        let m = handle_wr(wr, &mut self.att_seq, &mut self.drops)?;
         self.att_seq = self.att_seq.wrapping_add(1);
-        let Some(n) = self.note_encode(attitude::encode(scratch, &m)) else {
-            return Ok(0);
-        };
-        let bytes = emit_msg(
-            w,
-            attitude::CHANNEL_ID,
-            self.att_seq,
-            m.timestamp,
-            &scratch[..n],
-        )
-        .await?;
-        self.messages = self.messages.wrapping_add(1);
-        Ok(bytes)
+        let seq = self.att_seq;
+        let ts = m.timestamp;
+        let res = attitude::encode(scratch, &m);
+        self.finish_topic(attitude::CHANNEL_ID, seq, ts, res)
     }
 
-    async fn emit_odom<W: Write>(
+    fn prep_odom(
         &mut self,
-        w: &mut W,
         scratch: &mut [u8],
         wr: WaitResult<msgs::VehicleOdometry>,
-    ) -> Result<u32, W::Error> {
-        // No divider: `BLACKBOX_ODOMETRY` is already the decimated
-        // stream (`rates::BLACKBOX_ODOM_DECIM`), so a `Lagged(n)` here is
-        // n lost *records* and plain `handle_wr` sizes the seq hole.
-        let Some(m) = handle_wr(wr, &mut self.odom_seq, &mut self.drops) else {
-            return Ok(0);
-        };
+    ) -> Option<PreparedRecord> {
+        let m = handle_wr(wr, &mut self.odom_seq, &mut self.drops)?;
         self.odom_seq = self.odom_seq.wrapping_add(1);
-        let Some(n) = self.note_encode(odometry::encode(scratch, &m)) else {
-            return Ok(0);
-        };
-        let bytes = emit_msg(
-            w,
-            odometry::CHANNEL_ID,
-            self.odom_seq,
-            m.timestamp,
-            &scratch[..n],
-        )
-        .await?;
-        self.messages = self.messages.wrapping_add(1);
-        Ok(bytes)
+        let seq = self.odom_seq;
+        let ts = m.timestamp;
+        let res = odometry::encode(scratch, &m);
+        self.finish_topic(odometry::CHANNEL_ID, seq, ts, res)
     }
 
-    /// Emit one `/health` record if at least `HEALTH_EMIT_INTERVAL`
-    /// has passed since the last one. Called every loop iteration.
-    /// No-op when the active record set excludes health.
-    ///
-    /// Decoupled from `/odom` so the failsafe progression — which is
-    /// when `/odom` typically stops — stays observable. Worst-case
-    /// cadence is bounded by `DISARM_POLL_INTERVAL`: even if every
-    /// subscriber stalls, the loop still wakes every 50 ms and emits
-    /// one health record.
-    async fn emit_health<W: Write>(
-        &mut self,
-        w: &mut W,
-        scratch: &mut [u8],
-    ) -> Result<u32, W::Error> {
+    fn prep_health(&mut self, scratch: &mut [u8]) -> Option<PreparedRecord> {
         if !self.record_set.includes_health() || self.knobs.muted(health::CHANNEL_ID) {
-            return Ok(0);
+            return None;
         }
         let now = Instant::now();
         if now.saturating_duration_since(self.last_health_emit) < HEALTH_EMIT_INTERVAL {
-            return Ok(0);
+            return None;
         }
         self.last_health_emit = now;
         self.health_seq = self.health_seq.wrapping_add(1);
-        let Some(n) = self.note_encode(health::encode(scratch, now, self.last_imu_temp_c)) else {
-            return Ok(0);
-        };
-        let bytes = emit_msg(w, health::CHANNEL_ID, self.health_seq, now, &scratch[..n]).await?;
-        self.messages = self.messages.wrapping_add(1);
-        Ok(bytes)
+        let seq = self.health_seq;
+        let res = health::encode(scratch, now, self.last_imu_temp_c);
+        self.finish_topic(health::CHANNEL_ID, seq, now, res)
     }
 
-    /// Poll `/gps_health` at `HEALTH_EMIT_INTERVAL` and emit a record
-    /// when the snapshot changed, or when [`GPS_HEALTH_HEARTBEAT`] has
-    /// elapsed since the last one. No-op when the active record set
-    /// excludes gps_health.
-    ///
-    /// On builds without `est_pos_gps` the source enum stays
-    /// `NotConfigured` for the whole session, so the file still carries
-    /// an explicit "GPS not present" marker — it just carries it once
-    /// per second instead of twenty times, because the record is
-    /// byte-identical every time. Transitions are still caught within
-    /// one poll interval, which is what the topic is actually for.
-    async fn emit_gps_health<W: Write>(
-        &mut self,
-        w: &mut W,
-        scratch: &mut [u8],
-    ) -> Result<u32, W::Error> {
+    fn prep_gps_health(&mut self, scratch: &mut [u8]) -> Option<PreparedRecord> {
         if !self.record_set.includes_gps_health() || self.knobs.muted(gps_health::CHANNEL_ID) {
-            return Ok(0);
+            return None;
         }
         let now = Instant::now();
         if now.saturating_duration_since(self.last_gps_health_poll) < HEALTH_EMIT_INTERVAL {
-            return Ok(0);
+            return None;
         }
         self.last_gps_health_poll = now;
 
@@ -1088,278 +1035,149 @@ impl FlightRecorder {
         let heartbeat_due =
             now.saturating_duration_since(self.last_gps_health_emit) >= GPS_HEALTH_HEARTBEAT;
         if !changed && !heartbeat_due {
-            return Ok(0);
+            return None;
         }
         self.last_gps_health = Some(f);
         self.last_gps_health_emit = now;
         self.gps_health_seq = self.gps_health_seq.wrapping_add(1);
-        let Some(n) = self.note_encode(gps_health::encode(scratch, now, &f)) else {
-            return Ok(0);
-        };
-        let bytes = emit_msg(
-            w,
-            gps_health::CHANNEL_ID,
-            self.gps_health_seq,
-            now,
-            &scratch[..n],
-        )
-        .await?;
-        self.messages = self.messages.wrapping_add(1);
-        Ok(bytes)
+        let seq = self.gps_health_seq;
+        let res = gps_health::encode(scratch, now, &f);
+        self.finish_topic(gps_health::CHANNEL_ID, seq, now, res)
     }
 
-    async fn emit_mpc<W: Write>(
+    #[cfg(feature = "outer_mpc")]
+    fn prep_mpc(
         &mut self,
-        w: &mut W,
         scratch: &mut [u8],
         wr: WaitResult<msgs::OcpSolverOutput>,
-    ) -> Result<u32, W::Error> {
-        let Some(m) = handle_wr(wr, &mut self.mpc_seq, &mut self.drops) else {
-            return Ok(0);
-        };
+    ) -> Option<PreparedRecord> {
+        let m = handle_wr(wr, &mut self.mpc_seq, &mut self.drops)?;
         self.mpc_seq = self.mpc_seq.wrapping_add(1);
-        let Some(n) = self.note_encode(mpc::encode(scratch, &m)) else {
-            return Ok(0);
-        };
-        let bytes = emit_msg(w, mpc::CHANNEL_ID, self.mpc_seq, m.timestamp, &scratch[..n]).await?;
-        self.messages = self.messages.wrapping_add(1);
-        Ok(bytes)
+        let seq = self.mpc_seq;
+        let ts = m.timestamp;
+        let res = mpc::encode(scratch, &m);
+        self.finish_topic(mpc::CHANNEL_ID, seq, ts, res)
     }
 
-    async fn emit_mpc_cost<W: Write>(
+    #[cfg(feature = "outer_mpc")]
+    fn prep_mpc_cost(
         &mut self,
-        w: &mut W,
         scratch: &mut [u8],
         wr: WaitResult<msgs::MpcCostAdapt>,
-    ) -> Result<u32, W::Error> {
-        let Some(m) = handle_wr(wr, &mut self.mpc_cost_seq, &mut self.drops) else {
-            return Ok(0);
-        };
+    ) -> Option<PreparedRecord> {
+        let m = handle_wr(wr, &mut self.mpc_cost_seq, &mut self.drops)?;
         self.mpc_cost_seq = self.mpc_cost_seq.wrapping_add(1);
-        let Some(n) = self.note_encode(mpc_cost::encode(scratch, &m)) else {
-            return Ok(0);
-        };
-        let bytes = emit_msg(
-            w,
-            mpc_cost::CHANNEL_ID,
-            self.mpc_cost_seq,
-            m.timestamp,
-            &scratch[..n],
-        )
-        .await?;
-        self.messages = self.messages.wrapping_add(1);
-        Ok(bytes)
+        let seq = self.mpc_cost_seq;
+        let ts = m.timestamp;
+        let res = mpc_cost::encode(scratch, &m);
+        self.finish_topic(mpc_cost::CHANNEL_ID, seq, ts, res)
     }
 
-    async fn emit_motors<W: Write>(
+    fn prep_motors(
         &mut self,
-        w: &mut W,
         scratch: &mut [u8],
         wr: WaitResult<msgs::ActuatorMotors>,
-    ) -> Result<u32, W::Error> {
-        let Some(m) = handle_wr(wr, &mut self.motor_seq, &mut self.drops) else {
-            return Ok(0);
-        };
+    ) -> Option<PreparedRecord> {
+        let m = handle_wr(wr, &mut self.motor_seq, &mut self.drops)?;
         self.motor_seq = self.motor_seq.wrapping_add(1);
-        let Some(n) = self.note_encode(motors::encode(scratch, &m)) else {
-            return Ok(0);
-        };
-        let bytes = emit_msg(
-            w,
-            motors::CHANNEL_ID,
-            self.motor_seq,
-            m.timestamp,
-            &scratch[..n],
-        )
-        .await?;
-        self.messages = self.messages.wrapping_add(1);
-        Ok(bytes)
+        let seq = self.motor_seq;
+        let ts = m.timestamp;
+        let res = motors::encode(scratch, &m);
+        self.finish_topic(motors::CHANNEL_ID, seq, ts, res)
     }
 
-    async fn emit_motor_state<W: Write>(
+    fn prep_motor_state(
         &mut self,
-        w: &mut W,
         scratch: &mut [u8],
         wr: WaitResult<msgs::MotorStateTelemetry>,
-    ) -> Result<u32, W::Error> {
-        let Some(m) = handle_wr(wr, &mut self.motor_state_seq, &mut self.drops) else {
-            return Ok(0);
-        };
+    ) -> Option<PreparedRecord> {
+        let m = handle_wr(wr, &mut self.motor_state_seq, &mut self.drops)?;
         self.motor_state_seq = self.motor_state_seq.wrapping_add(1);
-        let Some(n) = self.note_encode(motor_state::encode(scratch, &m)) else {
-            return Ok(0);
-        };
-        let bytes = emit_msg(
-            w,
-            motor_state::CHANNEL_ID,
-            self.motor_state_seq,
-            m.timestamp,
-            &scratch[..n],
-        )
-        .await?;
-        self.messages = self.messages.wrapping_add(1);
-        Ok(bytes)
+        let seq = self.motor_state_seq;
+        let ts = m.timestamp;
+        let res = motor_state::encode(scratch, &m);
+        self.finish_topic(motor_state::CHANNEL_ID, seq, ts, res)
     }
 
-    async fn emit_power<W: Write>(
+    fn prep_power(
         &mut self,
-        w: &mut W,
         scratch: &mut [u8],
         wr: WaitResult<PowerTelemetry>,
-    ) -> Result<u32, W::Error> {
-        let Some(m) = handle_wr(wr, &mut self.power_seq, &mut self.drops) else {
-            return Ok(0);
-        };
+    ) -> Option<PreparedRecord> {
+        let m = handle_wr(wr, &mut self.power_seq, &mut self.drops)?;
         self.power_seq = self.power_seq.wrapping_add(1);
-        let Some(n) = self.note_encode(power::encode(scratch, &m)) else {
-            return Ok(0);
-        };
-        let bytes = emit_msg(
-            w,
-            power::CHANNEL_ID,
-            self.power_seq,
-            m.timestamp,
-            &scratch[..n],
-        )
-        .await?;
-        self.messages = self.messages.wrapping_add(1);
-        Ok(bytes)
+        let seq = self.power_seq;
+        let ts = m.timestamp;
+        let res = power::encode(scratch, &m);
+        self.finish_topic(power::CHANNEL_ID, seq, ts, res)
     }
 
-    async fn emit_track_err<W: Write>(
+    fn prep_track_err(
         &mut self,
-        w: &mut W,
         scratch: &mut [u8],
         wr: WaitResult<TrackErrMsg>,
-    ) -> Result<u32, W::Error> {
-        let Some(m) = handle_wr(wr, &mut self.track_err_seq, &mut self.drops) else {
-            return Ok(0);
-        };
+    ) -> Option<PreparedRecord> {
+        let m = handle_wr(wr, &mut self.track_err_seq, &mut self.drops)?;
         self.track_err_seq = self.track_err_seq.wrapping_add(1);
-        let Some(n) = self.note_encode(tracking_error::encode(scratch, &m)) else {
-            return Ok(0);
-        };
-        let bytes = emit_msg(
-            w,
-            tracking_error::CHANNEL_ID,
-            self.track_err_seq,
-            m.timestamp,
-            &scratch[..n],
-        )
-        .await?;
-        self.messages = self.messages.wrapping_add(1);
-        Ok(bytes)
+        let seq = self.track_err_seq;
+        let ts = m.timestamp;
+        let res = tracking_error::encode(scratch, &m);
+        self.finish_topic(tracking_error::CHANNEL_ID, seq, ts, res)
     }
 
-    async fn emit_ctrl_sp<W: Write>(
+    fn prep_ctrl_sp(
         &mut self,
-        w: &mut W,
         scratch: &mut [u8],
         wr: WaitResult<msgs::AttitudeControlSetpoint>,
-    ) -> Result<u32, W::Error> {
-        let Some(m) = handle_wr(wr, &mut self.ctrl_sp_seq, &mut self.drops) else {
-            return Ok(0);
-        };
+    ) -> Option<PreparedRecord> {
+        let m = handle_wr(wr, &mut self.ctrl_sp_seq, &mut self.drops)?;
         self.ctrl_sp_seq = self.ctrl_sp_seq.wrapping_add(1);
-        let Some(n) = self.note_encode(control_setpoint::encode(scratch, &m)) else {
-            return Ok(0);
-        };
-        let bytes = emit_msg(
-            w,
-            control_setpoint::CHANNEL_ID,
-            self.ctrl_sp_seq,
-            m.timestamp,
-            &scratch[..n],
-        )
-        .await?;
-        self.messages = self.messages.wrapping_add(1);
-        Ok(bytes)
+        let seq = self.ctrl_sp_seq;
+        let ts = m.timestamp;
+        let res = control_setpoint::encode(scratch, &m);
+        self.finish_topic(control_setpoint::CHANNEL_ID, seq, ts, res)
     }
 
     #[cfg(feature = "est_eskf")]
-    async fn emit_est_state<W: Write>(
+    fn prep_est_state(
         &mut self,
-        w: &mut W,
         scratch: &mut [u8],
         wr: WaitResult<msgs::EstimatorBias>,
-    ) -> Result<u32, W::Error> {
-        let Some(m) = handle_wr(wr, &mut self.est_state_seq, &mut self.drops) else {
-            return Ok(0);
-        };
+    ) -> Option<PreparedRecord> {
+        let m = handle_wr(wr, &mut self.est_state_seq, &mut self.drops)?;
         self.est_state_seq = self.est_state_seq.wrapping_add(1);
-        let Some(n) = self.note_encode(estimator_state::encode(scratch, &m)) else {
-            return Ok(0);
-        };
-        let bytes = emit_msg(
-            w,
-            estimator_state::CHANNEL_ID,
-            self.est_state_seq,
-            m.timestamp,
-            &scratch[..n],
-        )
-        .await?;
-        self.messages = self.messages.wrapping_add(1);
-        Ok(bytes)
+        let seq = self.est_state_seq;
+        let ts = m.timestamp;
+        let res = estimator_state::encode(scratch, &m);
+        self.finish_topic(estimator_state::CHANNEL_ID, seq, ts, res)
     }
 
-    /// Encode + emit one Event record on `/events`. Returns the byte
-    /// count. Inlined here rather than going through TOPIC_SET because
-    /// events have a tiny per-emit cost and the kind/data payload is
-    /// dynamic.
-    async fn emit_event<W: Write>(
+    fn prep_event(
         &mut self,
-        w: &mut W,
         scratch: &mut [u8],
         kind: u8,
         data: u32,
-    ) -> Result<u32, W::Error> {
+    ) -> Option<PreparedRecord> {
         let now = Instant::now();
-        let Some(n) = self.note_encode(events::encode(scratch, now, kind, data)) else {
-            return Ok(0);
-        };
+        let len = self.note_encode(events::encode(scratch, now, kind, data))?;
         self.ev_seq = self.ev_seq.wrapping_add(1);
-        emit_msg(w, events::CHANNEL_ID, self.ev_seq, now, &scratch[..n]).await
+        Some(PreparedRecord {
+            channel_id: events::CHANNEL_ID,
+            sequence: self.ev_seq,
+            timestamp: now,
+            len,
+            count_msg: false,
+        })
     }
 
-    /// Edge-detect every health atomic the firmware exposes
-    /// (`FAILSAFE_ACTIVE`, `ESTIMATOR_READY`, `RC_LINK_HEALTHY`)
-    /// and emit a `/events` record on each transition. Called
-    /// once per outer-loop iteration so latency to detect a
-    /// transition is bounded by the loop period.
-    ///
-    /// **Failsafe entry carries a reason code** in the `data`
-    /// field. The failsafe task stores `FAILSAFE_REASON` *before*
-    /// `FAILSAFE_ACTIVE` (program order, both `Release`); we load
-    /// `FAILSAFE_ACTIVE` first with `Acquire` and then load the
-    /// reason. The Release/Acquire pair ensures we see whichever
-    /// reason store happened-before the rising edge.
-    ///
-    /// **The three atomics are independent.** A Phase::GuardPeriod
-    /// → Phase::Idle transition (RC blip recovered before guard
-    /// expired) flips `RC_LINK_HEALTHY` twice without ever flipping
-    /// `FAILSAFE_ACTIVE`, so a tier-Small log captures marginal
-    /// RC-link conditions even when no hard failsafe occurs.
-    async fn emit_status_edges<W: Write>(
-        &mut self,
-        w: &mut W,
-        scratch: &mut [u8],
-    ) -> Result<u32, W::Error> {
-        let mut total = 0u32;
-
+    fn collect_status_edges(&mut self, out: &mut Vec<(u8, u32), 8>) {
         let now_failsafe = FAILSAFE_ACTIVE.load(Ordering::Acquire);
         if now_failsafe != self.prev_failsafe {
             if now_failsafe {
-                // Rising edge — read REASON now (after the Acquire
-                // load above ordered everything happens-before the
-                // FAILSAFE_ACTIVE store).
                 let reason = FAILSAFE_REASON.load(Ordering::Acquire);
-                total += self
-                    .emit_event(w, scratch, events::KIND_FAILSAFE, reason as u32)
-                    .await?;
+                let _ = out.push((events::KIND_FAILSAFE, reason as u32));
             } else {
-                total += self
-                    .emit_event(w, scratch, events::KIND_FAILSAFE_CLEAR, 0)
-                    .await?;
+                let _ = out.push((events::KIND_FAILSAFE_CLEAR, 0));
             }
             self.prev_failsafe = now_failsafe;
         }
@@ -1371,7 +1189,7 @@ impl FlightRecorder {
             } else {
                 events::KIND_ESTIMATOR_DOWN
             };
-            total += self.emit_event(w, scratch, kind, 0).await?;
+            let _ = out.push((kind, 0));
             self.prev_est_ready = now_est;
         }
 
@@ -1382,20 +1200,10 @@ impl FlightRecorder {
             } else {
                 events::KIND_RC_LOSS
             };
-            total += self.emit_event(w, scratch, kind, 0).await?;
+            let _ = out.push((kind, 0));
             self.prev_rc_link_healthy = now_rc;
         }
 
-        // ── trajectory tracking status (outer_mpc only) ─────────
-        // Edge-detect `MISSION_STATE` transitions. The state machine
-        // is Idle → Planning → Executing → Idle, but the recorder
-        // doesn't assume a specific transition order — we just emit
-        // an event whenever the value changes. For Idle entries we
-        // pack the *previous* state into `data` so post-flight
-        // analysis can distinguish "rejected mid-plan"
-        // (data=Planning) from "trajectory finished or failsafe-
-        // aborted" (data=Executing) without joining against
-        // `MissionStatus.solve.reject_reason`.
         #[cfg(feature = "outer_mpc")]
         {
             let now_mission_raw = MISSION_STATE.load(Ordering::Acquire);
@@ -1406,17 +1214,11 @@ impl FlightRecorder {
                     MissionState::Executing => events::KIND_MISSION_EXECUTING,
                     MissionState::Idle => events::KIND_MISSION_IDLE,
                 };
-                total += self.emit_event(w, scratch, kind, prev as u32).await?;
+                let _ = out.push((kind, prev as u32));
                 self.prev_mission_state = now_mission_raw;
             }
         }
 
-        // ── inner-loop power / trip status ──────────────────────
-        // Soft battery-telemetry staleness. Episodes are >= 500 ms by
-        // construction (`VOLTAGE_STALE_TIMEOUT`), comfortably longer
-        // than this poll's worst observed period, so a single episode
-        // is not aliased away — but a *burst* of them can be, which is
-        // what the episode index in `data` exists to expose.
         let now_v_stale = VOLTAGE_STALE.load(Ordering::Acquire);
         if now_v_stale != self.prev_voltage_stale {
             let (kind, data) = if now_v_stale {
@@ -1430,56 +1232,30 @@ impl FlightRecorder {
                     VOLTAGE_STALE_LAST_MS.load(Ordering::Acquire),
                 )
             };
-            total += self.emit_event(w, scratch, kind, data).await?;
+            let _ = out.push((kind, data));
             self.prev_voltage_stale = now_v_stale;
         }
 
-        // The inner loop deciding to go silent. Latched for the boot,
-        // so this fires at most once — and it must be logged eagerly:
-        // the disarm it causes arrives ~`fs_ctrl_timeout_s` later as a
-        // ControllerTimeout failsafe that names the symptom instead of
-        // the cause.
         let now_silent = INNER_SILENT_CAUSE.load(Ordering::Acquire);
         if now_silent != self.prev_inner_silent {
-            total += self
-                .emit_event(w, scratch, events::KIND_INNER_SILENT, now_silent as u32)
-                .await?;
+            let _ = out.push((events::KIND_INNER_SILENT, now_silent as u32));
             self.prev_inner_silent = now_silent;
         }
-
-        Ok(total)
     }
 
-    /// Emit `KIND_RECORDER_OVERRUN` when the session's drop count has
-    /// moved, at most once per [`DROP_EVENT_INTERVAL`].
-    ///
-    /// Reports the *cumulative* count rather than the delta so a
-    /// reader that loses one of these records still knows the true
-    /// total from the next one — the topic that reports loss must
-    /// itself be robust to being lost.
-    async fn emit_drop_edges<W: Write>(
-        &mut self,
-        w: &mut W,
-        scratch: &mut [u8],
-    ) -> Result<u32, W::Error> {
+    fn collect_drop_edge(&mut self, out: &mut Vec<(u8, u32), 8>) {
         if self.drops == self.last_drops_reported {
-            return Ok(0);
+            return;
         }
         let now = Instant::now();
         if now.saturating_duration_since(self.last_drop_event) < DROP_EVENT_INTERVAL {
-            return Ok(0);
+            return;
         }
         let drops = self.drops;
-        let n = self
-            .emit_event(w, scratch, events::KIND_RECORDER_OVERRUN, drops)
-            .await?;
-        // Latch the count that was actually written, not `self.drops`
-        // as it stands now — an emit that awaited a slow FAT write can
-        // return with more drops already accumulated, and those belong
-        // to the next record.
-        self.last_drops_reported = drops;
-        self.last_drop_event = now;
-        Ok(n)
+        if out.push((events::KIND_RECORDER_OVERRUN, drops)).is_ok() {
+            self.last_drops_reported = drops;
+            self.last_drop_event = now;
+        }
     }
 }
 
@@ -1584,8 +1360,8 @@ pub struct SessionSummary {
 /// [`RecordSet::None`] — that's a "muted" tier and the file should
 /// not be opened at all. The blackbox task gates on `enabled()`
 /// before calling.
-pub async fn run_session(
-    store: &mut SdmmcBlockStore,
+pub async fn run_session<S: BlackboxBackend>(
+    store: &mut S,
     sequence: u32,
     record_set: RecordSet,
 ) -> Result<SessionSummary, OpError> {
@@ -1623,8 +1399,12 @@ pub async fn run_session(
         }
     }
     let imu_sub = if record_set.includes_imu() && !knobs.muted(imu::CHANNEL_ID) {
-        Some(IMU_1.subscriber().map_err(|_| {
-            defmt::warn!("recorder: IMU_1 SUBS exhausted");
+        #[cfg(not(feature = "board_flywoof745"))]
+        let chan = &IMU_1;
+        #[cfg(feature = "board_flywoof745")]
+        let chan = &crate::sensors::BLACKBOX_IMU_1;
+        Some(chan.subscriber().map_err(|_| {
+            defmt::warn!("recorder: IMU SUBS exhausted");
             OpError::NoSubscriberSlot
         })?)
     } else {
@@ -1662,6 +1442,7 @@ pub async fn run_session(
     } else {
         None
     };
+    #[cfg(feature = "outer_mpc")]
     let mpc_sub = if record_set.includes_mpc() && !knobs.muted(mpc::CHANNEL_ID) {
         Some(OCP_SOLVER_OUTPUT.subscriber().map_err(|_| {
             defmt::warn!("recorder: OCP_SOLVER_OUTPUT SUBS exhausted");
@@ -1670,6 +1451,7 @@ pub async fn run_session(
     } else {
         None
     };
+    #[cfg(feature = "outer_mpc")]
     let mpc_cost_sub = if record_set.includes_mpc_cost() && !knobs.muted(mpc_cost::CHANNEL_ID) {
         Some(MPC_COST_ADAPT.subscriber().map_err(|_| {
             defmt::warn!("recorder: MPC_COST_ADAPT SUBS exhausted");
@@ -1751,7 +1533,9 @@ pub async fn run_session(
         rc_sub,
         att_sub,
         odom_sub,
+        #[cfg(feature = "outer_mpc")]
         mpc_sub,
+        #[cfg(feature = "outer_mpc")]
         mpc_cost_sub,
         motor_sub,
         motor_state_sub,
@@ -1765,7 +1549,9 @@ pub async fn run_session(
         rc_seq: 0,
         att_seq: 0,
         odom_seq: 0,
+        #[cfg(feature = "outer_mpc")]
         mpc_seq: 0,
+        #[cfg(feature = "outer_mpc")]
         mpc_cost_seq: 0,
         motor_seq: 0,
         motor_state_seq: 0,
@@ -1802,7 +1588,7 @@ pub async fn run_session(
         name.as_str(),
         record_set.name(),
     );
-    let bytes = fat::write_file(store, name.as_str(), &mut body).await?;
+    let bytes = store.write_session(name.as_str(), &mut body).await?;
 
     Ok(SessionSummary {
         bytes,
