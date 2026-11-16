@@ -94,6 +94,14 @@ pub static MAHONY_READY: AtomicBool = AtomicBool::new(false);
 pub static MAHONY_ATTITUDE_DEG: Mutex<CriticalSectionRawMutex, Cell<Option<(f32, f32, f32)>>> =
     Mutex::new(Cell::new(None));
 
+/// Latest finite Mahony attitude quaternion (FLU body -> ENU world),
+/// updated at the full ~1 kHz Mahony step cadence for low-latency consumers
+/// such as `outer_rate` self-leveling Angle mode.
+pub static MAHONY_QUAT: Mutex<
+    CriticalSectionRawMutex,
+    Cell<Option<nalgebra::UnitQuaternion<f32>>>,
+> = Mutex::new(Cell::new(None));
+
 /// Decimated bias telemetry for the blackbox recorder.
 ///
 /// The Signals above publish at the predict rate (~1 kHz) and use

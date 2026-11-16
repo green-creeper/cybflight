@@ -221,6 +221,11 @@ async fn main(spawner: embassy_executor::Spawner) {
     cybflight::sensors::rc::init_arm_config();
     cybflight::control::failsafe::init_fs_config();
 
+    #[cfg(feature = "outer_rate")]
+    ctrl_spawner
+        .spawn(cybflight::control::rc_interpreter::rc_interpreter_task())
+        .unwrap_or_else(|_| defmt::panic!("failed to spawn RC interpreter task"));
+    #[cfg(not(feature = "outer_rate"))]
     spawner
         .spawn(cybflight::control::rc_interpreter::rc_interpreter_task())
         .unwrap_or_else(|_| defmt::panic!("failed to spawn RC interpreter task"));

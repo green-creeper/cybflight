@@ -30,35 +30,39 @@ default-members = [
 ]
 
 [profile.release]
+opt-level = "s"
 debug = 2
 lto = true
 codegen-units = 1
 panic = "abort"
 overflow-checks = false
 
-# Compile the top-level firmware shell crate with `opt-level = "s"` (preserving
-# loop unrolling unlike `"z"`) while keeping `cybflight-drivers` and `embassy-stm32`
-# at `opt-level = 2` and `cybflight-core`/`nalgebra`/`air-filters` at `opt-level = 3`,
-# so real-time loops on 216 MHz STM32F745 run fast and onboard NOR blackbox fits in 512 KiB Flash.
-[profile.release.package.cybflight]
-opt-level = "s"
+# Default firmware crates (`cybflight`, `embassy-*`, `embedded-fatfs`, `cybflight-msgs`,
+# BSPs, etc.) and LTO use `opt-level = "s"` so STM32F745 fits comfortably inside its
+# 512 KiB firmware Flash window (~12 KiB headroom), while keeping hot real-time math
+# (`cybflight-core`, `nalgebra`, `air-filters`, `flight-solver`, `libm`) at `opt-level = 3`
+# and peripheral drivers (`cybflight-drivers`) at `opt-level = 2`.
+[profile.release.package.cybflight-core]
+opt-level = 3
+[profile.release.package.nalgebra]
+opt-level = 3
+[profile.release.package.air-filters]
+opt-level = 3
+[profile.release.package.flight-solver]
+opt-level = 3
+[profile.release.package.libm]
+opt-level = 3
 [profile.release.package.cybflight-drivers]
 opt-level = 2
-[profile.release.package.embassy-stm32]
-opt-level = "s"
-[profile.release.package.embassy-usb]
-opt-level = "s"
-[profile.release.package.embassy-usb-synopsys-otg]
-opt-level = "s"
-[profile.release.package.embedded-fatfs]
-opt-level = "s"
 
 # Host-side profile for cybflight-sim. Inherits optimization from `release`
+# (pinned to `opt-level = 3` for numeric regression snapshot parity)
 # but disables LTO and loosens codegen-units so incremental rebuilds don't
 # pay the cross-crate LTO tax that the embedded firmware needs. Use via
 # `cargo <cmd> --profile release-host`. Embedded builds still use `release`.
 [profile.release-host]
 inherits = "release"
+opt-level = 3
 lto = false
 codegen-units = 16
 

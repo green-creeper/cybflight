@@ -124,6 +124,7 @@ pub struct IndiController {
     thrust_model: ThrustModel,
 
     indi_enabled: bool,
+    spf_indi_enabled: bool,
     rate_gains: Vector3<f32>,
     /// Effective (Nyquist-clamped) cutoff shared by every sync filter.
     sync_filter_hz: f32,
@@ -290,6 +291,7 @@ impl IndiController {
             linearization,
             thrust_model: config.thrust_model,
             indi_enabled: config.indi_enabled,
+            spf_indi_enabled: true,
             rate_gains: config.rate_gains,
             sync_filter_hz,
             ground_gyro_rad_s: config.ground_gyro_rad_s,
@@ -442,6 +444,16 @@ impl IndiController {
     /// clamped (core stays log-free).
     pub fn effective_sync_filter_hz(&self) -> f32 {
         self.sync_filter_hz
+    }
+
+    /// Enable (`true`, default for position/MPC outer loops) or disable (`false`,
+    /// manual `outer_rate` acro mode) incremental accelerometer feedback on row 2
+    /// (`dv.z`). When `false`, `dv.z` subtracts modeled actuator specific force
+    /// `G1_z · u_state_fs` instead of `spf_fs.z`, keeping collective thrust equal
+    /// to `spf_sp_z` across ground contact (`+1g` floor normal force) and inverted
+    /// attitudes while preserving full incremental INDI on Roll/Pitch/Yaw.
+    pub fn set_spf_indi_enabled(&mut self, enabled: bool) {
+        self.spf_indi_enabled = enabled;
     }
 
     /// Update actuator state estimation from last motor command.
@@ -638,8 +650,15 @@ impl IndiController {
         // --- 3. Pseudo-control ---
         // (The rate controller, when used, ran in `step` — `rate_dot_sp`
         // arrives here as the α-space pseudo-control input.)
+        let spf_fb_z = if self.spf_indi_enabled {
+            spf_fs.z
+        } else {
+            (0..NU)
+                .map(|i| self.effectiveness.g1[(2, i)] * self.u_state_fs[i])
+                .sum()
+        };
         let dv = stack![
-            Vector3::new(0.0, 0.0, spf_sp_z - do_indi_f * spf_fs.z);
+            Vector3::new(0.0, 0.0, spf_sp_z - do_indi_f * spf_fb_z);
             *rate_dot_sp - do_indi_f * rate_dot_fs
                 + do_indi_f * self.effectiveness.g2 * omega_dot_fs
         ];
@@ -2362,6 +2381,95 @@ mod tests {
             assert!(
                 (probe(&ctrl, i) - reference.output_curve(0.5, V_NOM)).abs() < 1e-6,
                 "motor {i} nonlinearity mismatch"
+            );
+        }
+    }
+
+    #[test]
+    fn rate_mode_spf_indi_disabled_ramps_smoothly_on_ground() {
+        let mut ctrl = IndiController::new(&test_config(), LOOP_HZ);
+        ctrl.set_spf_indi_enabled(false);
+        let gyro = Vector3::zeros();
+        let accel = Vector3::new(0.0, 0.0, GRAVITY);
+        let rate_sp = Vector3::zeros();
+        let g2 = [false; NU];
+
+        let mut prev_mean = -1.0f32;
+        for spf_sp_z in [0.0, 2.0, 3.5, 5.0, 8.0, GRAVITY, 14.0] {
+            let mut out = ctrl
+                .step(
+                    &gyro,
+                    &accel,
+                    &rate_sp,
+                    spf_sp_z,
+                    true,
+                    &g2,
+                    MotorState::Internal,
+                    V_NOM,
+                )
+                .0;
+            for _ in 0..400 {
+                out = ctrl
+                    .step(
+                        &gyro,
+                        &accel,
+                        &rate_sp,
+                        spf_sp_z,
+                        true,
+                        &g2,
+                        MotorState::Internal,
+                        V_NOM,
+                    )
+                    .0;
+            }
+            let mean = out.motor_commands.iter().sum::<f32>() / NU as f32;
+            assert!(
+                mean > prev_mean + 1e-3,
+                "spf_sp_z={spf_sp_z}: expected monotonic thrust ramp on ground, got mean={mean} vs prev={prev_mean}"
+            );
+            prev_mean = mean;
+        }
+    }
+
+    #[test]
+    fn rate_mode_spf_indi_disabled_stays_zero_when_inverted_at_zero_throttle() {
+        let mut ctrl = IndiController::new(&test_config(), LOOP_HZ);
+        ctrl.set_spf_indi_enabled(false);
+        let gyro = Vector3::zeros();
+        let accel = Vector3::new(0.0, 0.0, -6.0);
+        let rate_sp = Vector3::zeros();
+        let g2 = [false; NU];
+
+        let mut out = ctrl
+            .step(
+                &gyro,
+                &accel,
+                &rate_sp,
+                0.0,
+                true,
+                &g2,
+                MotorState::Internal,
+                V_NOM,
+            )
+            .0;
+        for _ in 0..200 {
+            out = ctrl
+                .step(
+                    &gyro,
+                    &accel,
+                    &rate_sp,
+                    0.0,
+                    true,
+                    &g2,
+                    MotorState::Internal,
+                    V_NOM,
+                )
+                .0;
+        }
+        for (i, &c) in out.motor_commands.iter().enumerate() {
+            assert!(
+                c <= 1e-4,
+                "motor {i} fired while inverted at zero throttle: cmd={c}"
             );
         }
     }

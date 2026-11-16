@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:29f619ddd23078501d7cba3c32bf0647112a3cb6914b8f68e919a394c1aafeba",
+  "claims": [
+    {
+      "id": "claim_f86ab45216ef4bba99e9b1497aea5d87",
+      "statement": "Cybflight's Error-State Kalman Filter (ESKF) uses a 15-state error state vector (delta pos, delta att, delta vel, delta accel_bias, delta gyro_bias) to estimate 3D position, unit quaternion orientation, linear velocity, accelerometer bias, and gyroscope bias in the ENU reference frame, propagating nominal states via boxplus updates.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/eskf/eskf.rs#L203-L236",
+          "version": "repo-lines-v1:sha256:2bd1f5bed11bdffcffb10ee823332e31cd1c6bfc330ce4cda74ac62793cb9210:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkYWNhMzQ2ZWI5Yjg5MTJmMDEwYTY3NWMxNjc0ZmE5ZWQzNzgwMTI0Mzc0MjFmM2FjZDkyMWM1Y2MwOTdlMDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzNDFlYWU4ODgwOTlkZjI4OWYwNjVhY2FkMDQ5NzQwYTI0NzExNjgyM2EzOGU4MTk4OWU5NDllM2IzMDg3OTAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_1b7ac3f8ee674d1d84ad91e7e9d46d56",
+      "statement": "The ESKF provides a block-sparse prediction step (predict_sparse) that exploits the structural zeros of the 15x15 error state transition matrix F to compute F P F^T + Q in ~1,100 FMAs compared to ~6,750 FMAs for the dense product while enforcing exact upper-triangle symmetry.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/eskf/eskf.rs#L400-L639",
+          "version": "repo-lines-v1:sha256:15dbaecc33e142116aa321314ce0da3fdd92f5e8ad26ca289ffebf14883fa7e2:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQwLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIwMWJhNDcxOWM4MGI2ZmU5MTFiMDkxYTdjMDUxMjRiNjRlZWVjZTk2NGUwOWMwNThlZjhmOTgwNWRhY2E1NDZiIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ODkzZjQwZTM3ODFlYjg5NmM4MmQwNDZhMDgwNjdhMTFlMzVjZGYyZjFkZmFmMjZmZWE5MGI4ZGI2Njc2NDEzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI5NGRiZWU5Nzg0ZjAzNTQ5NmVmOGE1ZDE5ZDBlYTI3OWFlOWIyMTQzZTE5ODA3OTVmZDNmMWY0OWM3NzcwYzY1IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI5NTIxMmI1MmYwYTEwNmRkZTFiOTM0OTA2NjE5NjJjYTg4NWIyNDAzZDcyYjQ5Yzc4YmNmMmQwYzA5NWZmZTAwIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_f6706f3c8faa49d5ab0c6bf4405b9375",
+      "statement": "Motion capture pose observations update position and orientation simultaneously in a joint 6-D measurement step (update_pose / update_pose_sparse) to preserve cross-covariance pathways between position and attitude error.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/eskf/eskf.rs#L659-L858",
+          "version": "repo-lines-v1:sha256:aeb1f232e699b4e70004eaa5b9c74e246d1bcfb46e4fc5c86ad18c01a683c39b:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAwLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJiODcxYjI1OGNlMmI3NzY0Njg1OTBiNzdmNGQyODg4NzUxODVhMmQwNWU4ZTRkYmRlMDMzMDM3ZWEwNTRkMzhmIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ODkzZjQwZTM3ODFlYjg5NmM4MmQwNDZhMDgwNjdhMTFlMzVjZGYyZjFkZmFmMjZmZWE5MGI4ZGI2Njc2NDEzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJlNDM2MGQ0MjE4NGU3NTQyYmY1N2QzZjU1NTYxZmFiZDQzNjJlZDczOGM0YzJjMGIyYmI0ODJiZWE2NWYzYTdkIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI1NmFlODJiMWJlMDVmNTEzZGQ2ZTEwOWFlZmM3MTRmODc3M2Y3NjBhNjI4NDY3YzU3MmEzYTZlMjQ4MWYyN2I1In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_0c53b355136f4d7dad25a8905d8fbda4",
+      "statement": "GPS position updates scale noise standard deviation floors by carrier solution status (carr_soln 2 for RTK fixed at 0.05 m, 1 for RTK float at 0.30 m, 0 for stand-alone at 2.0 m), while dual-antenna heading fusion predicts the body baseline in world coordinates to eliminate Euler angle singularities during acrobatic maneuvers.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/eskf/eskf.rs#L1236-L1335",
+          "version": "repo-lines-v1:sha256:c7b8a9bdf03e0dba3143469c8f7e74e502dbe08f5795c4e083552943d91f86b4:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAwLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIzNjIzZWRkNzEyNDE5NGE0NWIzYzE3NDIwMmU5NTI1NzgxYWQwM2JjNjU5ZTE3OWY2MGM1ZWJjNGE3NTU3NjUyIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ODkzZjQwZTM3ODFlYjg5NmM4MmQwNDZhMDgwNjdhMTFlMzVjZGYyZjFkZmFmMjZmZWE5MGI4ZGI2Njc2NDEzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI5NTQxNTg0NjdkZjAwNjFkOTZiMDJiYmY5ODRjOGM2YjdhMDEwOTMzNWE4OWY1NDdlNjEwNzllNDFkNzhlNmQ4IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI1YWFiZjcxMjc3YzhjN2QzNWIxNTEzMjUyNDNlMGQ0OGUwODFlMTY4NWExZGE0NDEyNDczYjU0YjRiY2M5ODRlIn0"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/eskf/gps_guard.rs#L177-L197",
+          "version": "repo-lines-v1:sha256:3f3a0d77777df41e2d1c7ab658eb44c65181df140d3b7dd25110aa89db33eae6:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM1MzgxMTcyYjA0OWVhOWVhNWM1MzM0ZWQ0ZjMyODBkZGE5YTA4NzhlMzdmNTY0NDExNWE2OTVlYzgyMjAyMmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEwOTRlYWZlZjNjMzgyY2I0OWIyOWNlZGU4YzMyMWQ4YzhkOWU1YzdiMjE4ZGY3OTg4MzRkMGI4MzdjNjM2NGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY3ZjU1MzNlMDBmODVlNTIxZDE0MjYxZDVkYzcwNDgxMjNjMzExNmU1ODZmNjhhNDE0NGE2YmM1MjY2MGQyYTkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a170c92182d84d5baab12080bb232463",
+      "statement": "Measurement updates evaluate pre-inflation absolute jump gates (max_pos_jump_m and max_att_jump_rad) to reject catastrophic frame swaps, and apply Huber-style R-inflation when normalized innovations exceed gate_sigma squared up to a hard cap (inflation_cap = 100).",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/eskf/eskf.rs#L712-L730",
+          "version": "repo-lines-v1:sha256:ea823391f53bba7eaada52e342caf23d0b046c428dc468adbc0ba1e2450003fb:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1YTE2ZWZiOTljMDg5NDAzMzkwZTUxNzZjNjdhMTUxZTM1Y2U1NjVkMmUxZDdkMWRmNTQyMmE5YjhkZDI2ZmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJhYzJiYzc1YjdhMWI4N2QwZjFlMjJjMGMyNDVmYmM5MzZiNmVkYzAyYzI2NjQ4OWMxMzliYWMxNjJhMjIwNzciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZkMjVkZDNlM2QyYjhlOTk0ZTdiMWVlY2YzZTIyOGE3NWY4MGMwYmI0YWRmM2Y3ZWJmYjc3YmU0YWE0MTM0ZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY1ZmRjYWEyMWNmZTFmNWU0ZTE2OTJjNjc2MzgyOTU1OWJmNTIyZDhjZjJjMDA4OGRlNTQyNjUzODI4ZGJjNTQifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/eskf/eskf.rs#L861-L904",
+          "version": "repo-lines-v1:sha256:b9e66adfcbb1f5ebc56c0a93361cdd7a3ebb3eea9b7d8d6c8242b4355fd1a524:eyJzZWxlY3RlZExpbmVDb3VudCI6NDQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQyOTM0ODU5NjkyMzY1NmI0NzNlMjIwYTcwOTExYzU4MDI1ZTJmMzMyNDgxMGJhZGM0Yzc4YjBmZjE4NDkzZmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM1Y2RlZjgwODVhZTc0YWI2MzZkNjQ1OWY1YzZkNWZiZmIwZGIyNjRmMWIwZDc1YmFjNTE5YzliM2Y2NzE3YWMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQxNWJhYmQ0NmRiYzg0ZTM0YjZmN2JlYzQ4ZGI4MDc4ZTcwODQ3Y2VmMTdiZTI2NDllZDFmNGYyZTNiNTg5ZDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdjMTllNWVkMjkxNTlkOTM5OGEzNWY3ODkwZDdjYjBmZTZmZDU3ODhmNmM3ZWFkMjI3Y2MzYmJkM2ExNTljZTAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_767a3f03558b4c2d9bc8c207ea28f615",
+      "statement": "Covariance measurement updates use the Joseph stabilized form (I - KH) P (I - KH)^T + K R_eff K^T, enforce matrix symmetry, and clamp diagonal variances to a minimum floor of 10^-10 (MIN_VAR) to prevent loss of positive definiteness in single-precision floating point.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/eskf/eskf.rs#L1394-L1405",
+          "version": "repo-lines-v1:sha256:cf4a54231694e8dbf785857acd7d68dc732e563a2a658d8ad53bd30d545a15aa:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRjNzc3YTczYWNmZWRkYjI5MTlmMjE5ZWI5NmQ1ZGUxMTkwZTRhNDdlOWJjNGY0YjAyNTk5YzNhYmRlNjQ4MmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE2YmVmNDY4MDQ5ODBjYzZjMzgwYzUyNzY0ZDRiZGZkNjZhNTkzNTJlNDgwMTQ4ZjhjZTVlMjk0Yzk5ZWNmNGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImMyMDZiNTZjYjdiODllNDhhZDgzYTNiNTQ0MmRlNGI5ZTU4YjdlODI5ZGY2YjZiODYwMzUzNzlkZjZlOWNmMWYifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/eskf/eskf.rs#L736-L743",
+          "version": "repo-lines-v1:sha256:8d298fb44ec326cb11a1cf93f652fd9eec6b255fba39bf137034219f7f77cc98:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTY0Y2NiMjNkOGY4M2VmZjQ4YjVjMTBlYzE4ZjdiZTg3MWU5NjNlMzYyZjFkZTk2OWE4MDM1Mzc0ZjJlMjdmMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZDUwODdkNDlkYWEwNjU3OGEzYTZmZGRlZWNjZWY5NjFiOGZkZTA2NGZlZDgzNTQxMTg2NzY2MzM4NjAzZThmNyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjc0MDc5N2Y2NDcyNjA0ODQxMWE4OGRjN2E2MmVhMmVhYWJlZjc3YTU5ZjFlMjNjZDljNWRiY2QxNDQxMzdmYiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiY2IwMWNmYzY1N2M5ODk2NjNmMmU2NWMwNjVmOTY0MGRkYmE0ODBkYmVkZjI2Y2NiYmQ1OWQwMGE5ODI0YzczMSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_1c35f998cd944b5392a85668a1f2bdbc",
+      "statement": "EskfGpsGuard re-initializes the filter on consecutive jump cascades only when RTK fixed (carr_soln >= 2), whereas EskfMocapGuard never re-initializes on jump cascades while armed, instead riding out IMU dead-reckoning bounded by staleness timeouts and offering a stationary re-anchor escape hatch when disarmed.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/eskf/gps_guard.rs#L169-L175",
+          "version": "repo-lines-v1:sha256:23ae7869a287b3c4c1e315ee2eb09a5a4ff63ef415e3b19eee4fc30d9edc3f6a:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOGE3NThiOTJlZjg3MDgzNjBjODc2Y2QxMWI4NzQyZmRkZjRlZGMwMzM0ZTNhYjAxYmExMTg0NTY1ZTQxNzgzOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjUwMTRlNzQyMTk0YjY4Yjc4M2E3NDNjODQ3N2I4ODU4N2U4ZmYxNTZiNDFhNWEzZmQ1MTIzYmUyN2VlYzg1NiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNGI2NzhiNDkzNzNlOGY1ZjFmOTcxM2Y3MThmNjg3NjU5OTc5ZWMzMTk3ZmQ4ZjgxOTJkODEyOWRkMzkxNjQyOCJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/eskf/mocap_guard.rs#L19-L56",
+          "version": "repo-lines-v1:sha256:6043182709be1da8747b87b5ac5af434d73a5d02855a9714ebf3d13c598f2f6c:eyJzZWxlY3RlZExpbmVDb3VudCI6MzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ1YzVmNzY2ZDA1YzYyODA0YjJkYzljZDgwYjAxYmM5ODM1YmE4ZGQ5YTlhMWNhYTczZjQzNDUyMTBhNDgxZDIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjUwOTU0MWNiM2E1NjZmYWFkOGUxNjE4MTRiOGUzYmFkZDM2MzZhYzJjZTkyYjI2MzRiMTlhNWNkYmZhYmE1YmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ0M2QzZTRiN2I1NDgzMmQ2MDEyYzhlNzIzZTU2MWM4YTRiNWFkZTRiOWYyN2UyZGQ1NmRkNmM2OTczZDIwYjMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_4d56e04fd7e14315a2848763a5181e47",
+      "statement": "System arming readiness (is_ready / ESTIMATOR_READY) requires gyro-bias covariance trace convergence below configured thresholds (gyro_bias_cov_trace_thresh), using 2-axis (XY) trace monitoring for GPS-only configurations where yaw is unobservable in hover.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/eskf/failsafe.rs#L30-L48",
+          "version": "repo-lines-v1:sha256:8980bf177296890107253abcb1a4658d544340caf176de8428ef3783d7e4fa45:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE1ZTczZmJhNzE2YjJiNzZmMDZjZjdiNTQ2NTBlMzMxYmM4MGFiNDc3ODFlMzlhNmIzZjg3YjRhOGY2ZTA0YjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNkZGVkYjllMDY2NjhmZDljZGM0NWI0MWJjNzlmNjU0ODNiOTQ3MDg5OGNhNGVkZjg0YTNiZDI1Mzk0MGNlOTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI3MGQyMDljNGZmMDU0ZmViNDEyZGRmY2U1YjViNDJkNDk4ZDIyOWNkMTk3ODZjMGU0ZjZjODdlZjc3ODhhMTUifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/eskf/gps_guard.rs#L288-L290",
+          "version": "repo-lines-v1:sha256:1396c2e2882ed4551c0bd24d32e5d875d8ef6eb2651c2ec3c4a8c02387f144ce:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNWU0NmVjNzI4NzhlOTIyNjAzZThhZGQxOTZmMjQ0ZDM0MmEyYmJiOGUyMmNkNmNmYzJiZTU3OWVkZTA5MzFkNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjk1NzFjODcxNmRkYmFkMDNlN2JiN2U2MmVlNDQyOWMwMWE2OWM2NTEyMDdiNDNjOTY4MGU3ZDVlMzVjYmFiNCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNmJlMDllMWQ2YTU5ODA0MmYzZGEyMDY2YzNhNzA1OGFmNGJiNWY1ZDMyNjQ3ZGMxZWFmMmI0NjdkMGI2YTg3NCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_1de2ecadd8f24b718110dcf0cea1566a",
+      "statement": "Magnetometer updates (update_mag) measure 3D body-frame vectors against a world reference and reject updates when the field norm deviates by more than 30 percent (mag_norm_gate) to prevent hard-iron distortion from corrupting the state.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/eskf/eskf.rs#L1189-L1233",
+          "version": "repo-lines-v1:sha256:192d5af551477d08b9ab6982b10c18bf3399e4196b803c5f7bef18a2dbe4a04e:eyJzZWxlY3RlZExpbmVDb3VudCI6NDUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMwZjY4MTMyODY4YmEyYWFkNDFiZWNmYzVhMzg5ZGYxMzJjOTJkODMzMzJmZDU3ZjYwNjdhZDAwZmUwNThkODIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU2MjMzZjgwMmMwMDBlYmZmN2EyNGQ4Mjk2M2JlNGRhMTM1ZDc2NzBhNzNhZmE3YjliOWJkMWUxMDVhZGYyNDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRkOTEyYzQ4NGNkMjhjM2U0M2Y2OTFmYWFkZmE2YWM3MzViMDkzMDVkOTU5YTA0NGVhNGFiOWVhNTVjODFmZTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE1MmYyODc0NzkwY2Y0NTAwNmE2OTAwZTY3N2YwMzhlMzIwNDljMjVmNWYxYWFmMDVmMWRjMGY1ZjI3OWUxNWEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2e898c24bf58437c9d3bdd2fa1abe6f1",
+      "statement": "The Mahony nonlinear complementary filter estimates SO(3) orientation by integrating gyro rates corrected by accelerometer gravity alignment and optional magnetometer heading errors, compensating gyro bias online while rejecting acceleration updates below a minimum norm threshold.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/mahony.rs#L17-L147",
+          "version": "repo-lines-v1:sha256:8637d2561083e66dca4b8c7e1ab90ebe5fa1883b7ad9657c6a861b148d16108d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMxLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJiNmU1NWZlNzc2YTcxOGRiMDdmNTUyMjZhMjAyZWMzNzgxYjcwY2ZjYmMwYTg1MTAyMjkxZDRmYjQzNDk3ODJlIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ODkzZjQwZTM3ODFlYjg5NmM4MmQwNDZhMDgwNjdhMTFlMzVjZGYyZjFkZmFmMjZmZWE5MGI4ZGI2Njc2NDEzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJmNTllNzczMWMxNWU4ZjRiMmFjZWNiNzU2NDljNzU5ZTBhZjM4MjA1YjFjMTBhZjI5ZGU1MmExZjNmMzU4ZjM4IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJmM2Q5OTFhZThmNDA2ZDc4ZGYzZWNiMmE1ZTk5NjhmMTNkODJlMDc3MGUwM2UxNWEyMGIyYTE5OTY0MWZjYjc4In0"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-30T14:16:13.882Z"
+  }
+}

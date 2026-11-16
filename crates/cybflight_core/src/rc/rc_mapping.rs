@@ -304,6 +304,83 @@ impl RcMapper {
     }
 }
 
+/// Apply symmetric deadband rescaled to `[-1.0, 1.0]` and cubic stick expo.
+///
+/// `expo` in `[0.0, 1.0]` blends linear (`0.0`) with pure cubic (`1.0`).
+#[inline]
+pub fn apply_deadband_and_expo(x: f32, deadband: f32, expo: f32) -> f32 {
+    let a = if x < 0.0 { -x } else { x };
+    let db = if deadband.is_finite() {
+        deadband.clamp(0.0, 0.99)
+    } else {
+        0.0
+    };
+    let d = if a <= db {
+        0.0
+    } else {
+        let scaled = ((a - db) / (1.0 - db)).clamp(0.0, 1.0);
+        if x >= 0.0 { scaled } else { -scaled }
+    };
+    let e = if expo.is_finite() {
+        expo.clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    (e * d * d * d + (1.0 - e) * d).clamp(-1.0, 1.0)
+}
+
+/// Compute yaw-decoupled self-leveling Angle-mode body-rate setpoints in FLU.
+///
+/// Uses the current Mahony yaw so IMU-only yaw drift does not induce roll/pitch
+/// cross-coupling, converts normalized roll/pitch stick inputs (`[-1, 1]`) into a
+/// desired tilt quaternion bounded by `max_angle_rad`, evaluates tilt-prioritizing
+/// attitude error to compute roll/pitch body rates clamped to `max_rate_rp`, and
+/// passes `yaw_stick * max_rate_yaw` on Z.
+#[allow(clippy::too_many_arguments)]
+pub fn compute_angle_mode_rates(
+    q_body_to_enu: &nalgebra::UnitQuaternion<f32>,
+    roll_stick: f32,
+    pitch_stick: f32,
+    yaw_stick: f32,
+    max_angle_rad: f32,
+    angle_kp: f32,
+    max_rate_rp: f32,
+    max_rate_yaw: f32,
+) -> (nalgebra::UnitQuaternion<f32>, nalgebra::Vector3<f32>) {
+    let yaw_cur = crate::rotation::quaternion_to_euler_angles_rpy(q_body_to_enu)[2];
+    let roll_des = roll_stick.clamp(-1.0, 1.0) * max_angle_rad;
+    let pitch_des = pitch_stick.clamp(-1.0, 1.0) * max_angle_rad;
+    let q_des = crate::rotation::euler_angles_rpy_to_quaternion(&nalgebra::Vector3::new(
+        roll_des, pitch_des, yaw_cur,
+    ));
+
+    // Body-frame attitude error qe = q_cur^-1 * q_des, canonicalized to w >= 0.
+    let qe = q_body_to_enu.inverse() * q_des;
+    let (qw, qx, qy, qz) = if qe.w < 0.0 {
+        (-qe.w, -qe.i, -qe.j, -qe.k)
+    } else {
+        (qe.w, qe.i, qe.j, qe.k)
+    };
+
+    // Brescianini & D'Andrea reduced-attitude (tilt-prioritizing) error:
+    // q_red = qe * q_yaw^-1 has vector_xy = (qw*qx - qz*qy, qw*qy + qz*qx) / sqrt(qw^2 + qz^2).
+    let qt_w_sq = qw * qw + qz * qz;
+    let (ex, ey) = if qt_w_sq > 1e-6 {
+        let inv = 1.0 / libm::sqrtf(qt_w_sq);
+        (
+            2.0 * inv * (qw * qx - qz * qy),
+            2.0 * inv * (qw * qy + qz * qx),
+        )
+    } else {
+        (2.0 * qx, 2.0 * qy)
+    };
+
+    let rx = (angle_kp * ex).clamp(-max_rate_rp, max_rate_rp);
+    let ry = (angle_kp * ey).clamp(-max_rate_rp, max_rate_rp);
+    let rz = (yaw_stick.clamp(-1.0, 1.0) * max_rate_yaw).clamp(-max_rate_yaw, max_rate_yaw);
+    (q_des, nalgebra::Vector3::new(rx, ry, rz))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -366,5 +443,89 @@ mod tests {
         let out = mapper.map(&channels);
         assert!((out.thrust - 1.0).abs() < 0.02);
         assert!((out.roll_rate - 1.0).abs() < 0.02);
+    }
+
+    #[test]
+    fn test_apply_deadband_and_expo_response() {
+        assert_eq!(apply_deadband_and_expo(0.0, 0.05, 0.6), 0.0);
+        assert_eq!(apply_deadband_and_expo(0.04, 0.05, 0.6), 0.0);
+        assert_eq!(apply_deadband_and_expo(-0.05, 0.05, 0.6), 0.0);
+        assert!((apply_deadband_and_expo(1.0, 0.05, 0.6) - 1.0).abs() < 1e-6);
+        assert!((apply_deadband_and_expo(-1.0, 0.05, 0.6) - (-1.0)).abs() < 1e-6);
+
+        let linear_mid = apply_deadband_and_expo(0.5, 0.0, 0.0);
+        let expo_mid = apply_deadband_and_expo(0.5, 0.0, 0.6);
+        assert!((linear_mid - 0.5).abs() < 1e-6);
+        // 0.6 * 0.125 + 0.4 * 0.5 = 0.075 + 0.2 = 0.275
+        assert!((expo_mid - 0.275).abs() < 1e-6);
+        assert!(expo_mid < linear_mid);
+    }
+
+    #[test]
+    fn test_compute_angle_mode_rates_flu_signs_and_yaw_invariance() {
+        use crate::rotation::euler_angles_rpy_to_quaternion;
+        use core::f32::consts::PI;
+
+        let max_angle = 30.0_f32.to_radians();
+        let kp = 4.5_f32;
+        let max_rp = 8.0_f32;
+        let max_yaw = 4.0_f32;
+
+        // Level frame: +1 roll stick requests positive roll rate (+omega_x right-wing down)
+        let q_id = nalgebra::UnitQuaternion::identity();
+        let (_, r_roll) = compute_angle_mode_rates(&q_id, 1.0, 0.0, 0.0, max_angle, kp, max_rp, max_yaw);
+        assert!(r_roll.x > 0.5, "expected positive roll rate, got {:?}", r_roll);
+        assert!(r_roll.y.abs() < 1e-5);
+        assert_eq!(r_roll.z, 0.0);
+
+        // Level frame: +1 pitch stick (forward, nose down in FLU) requests positive pitch rate (+omega_y)
+        let (_, r_pitch) = compute_angle_mode_rates(&q_id, 0.0, 1.0, 0.0, max_angle, kp, max_rp, max_yaw);
+        assert!(r_pitch.y > 0.5, "expected positive pitch rate, got {:?}", r_pitch);
+        assert!(r_pitch.x.abs() < 1e-5);
+        assert_eq!(r_pitch.z, 0.0);
+
+        // Tilted right (+15 deg roll) across arbitrary yaw headings, centered sticks -> returns left (-omega_x)
+        let tilt = 15.0_f32.to_radians();
+        let expected = -kp * tilt;
+        for yaw_deg in [0.0_f32, 90.0, -135.0, 180.0] {
+            let q_tilted_r = euler_angles_rpy_to_quaternion(&nalgebra::Vector3::new(
+                tilt,
+                0.0,
+                yaw_deg.to_radians(),
+            ));
+            let (_, rate_r) =
+                compute_angle_mode_rates(&q_tilted_r, 0.0, 0.0, 0.0, max_angle, kp, max_rp, max_yaw);
+            assert!(
+                (rate_r.x - expected).abs() < 0.02,
+                "yaw={yaw_deg}: expected rate_r.x ~ {expected}, got {:?}",
+                rate_r
+            );
+            assert!(
+                rate_r.y.abs() < 1e-4,
+                "yaw={yaw_deg}: expected negligible pitch cross-coupling, got {:?}",
+                rate_r
+            );
+
+            // Tilted nose-down (+15 deg pitch), centered sticks -> pulls nose up (-omega_y)
+            let q_tilted_p = euler_angles_rpy_to_quaternion(&nalgebra::Vector3::new(
+                0.0,
+                tilt,
+                yaw_deg.to_radians(),
+            ));
+            let (_, rate_p) =
+                compute_angle_mode_rates(&q_tilted_p, 0.0, 0.0, 0.5, max_angle, kp, max_rp, max_yaw);
+            assert!(
+                (rate_p.y - expected).abs() < 0.02,
+                "yaw={yaw_deg}: expected rate_p.y ~ {expected}, got {:?}",
+                rate_p
+            );
+            assert!(
+                rate_p.x.abs() < 1e-4,
+                "yaw={yaw_deg}: expected negligible roll cross-coupling, got {:?}",
+                rate_p
+            );
+            assert!((rate_p.z - 0.5 * max_yaw).abs() < 1e-6);
+        }
+        let _ = PI;
     }
 }

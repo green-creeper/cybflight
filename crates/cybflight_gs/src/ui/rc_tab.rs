@@ -1,5 +1,7 @@
 use cybflight_core::param_registry::ParamGroup;
-use cybflight_core::rc::rc_mapping::{ChannelCalibration, StickEndpoints};
+use cybflight_core::rc::rc_mapping::{
+    ChannelCalibration, StickEndpoints, apply_deadband_and_expo,
+};
 use egui::{Align, Color32, CornerRadius, FontId, Layout, Pos2, Rect, RichText, Sense, Stroke, StrokeKind, Slider, Vec2, pos2, vec2};
 
 use crate::backend::mock_fc::MockFcBackend;
@@ -121,6 +123,15 @@ pub fn show_rc_tab(
     let thr_deadband = param_table.get_value("rc_throttle_deadband", 0.12);
     let max_rate_rp = param_table.get_value("rc_max_rate_rp", 8.0);
     let max_rate_yaw = param_table.get_value("rc_max_rate_yaw", 4.0);
+    let expo_rp = param_table.get_value("rc_expo_rp", 0.0).clamp(0.0, 1.0);
+    let expo_yaw = param_table.get_value("rc_expo_yaw", 0.0).clamp(0.0, 1.0);
+    let angle_ch_raw = (param_table.get_value("rc_angle_channel", 16.0).round() as usize).min(16);
+    let angle_ch_opt = (angle_ch_raw < 16).then_some(angle_ch_raw);
+    let angle_thresh_us = param_table
+        .get_value("rc_angle_threshold_us", 1500.0)
+        .round() as u16;
+    let max_angle_deg = param_table.get_value("rc_max_angle_deg", 30.0);
+    let angle_kp = param_table.get_value("rc_angle_kp", 4.5);
     let xy_rate_m_s = param_table.get_value("rc_xy_rate_m_s", 1.0);
     let z_rate_m_s = param_table.get_value("rc_z_rate_m_s", 0.5);
     let land_rate_m_s = param_table.get_value("rc_land_rate_m_s", 0.3);
@@ -176,9 +187,27 @@ pub fn show_rc_tab(
     } else {
         xy_deadband
     };
-    let roll_cmd = apply_deadband(roll_raw, active_xy_db);
-    let pitch_cmd = apply_deadband(pitch_raw, active_xy_db);
-    let yaw_cmd = apply_deadband(yaw_raw, active_xy_db);
+    let has_rx = is_mock || telem.rc_frame_count > 0;
+    let angle_us = angle_ch_opt
+        .map(|c| telem.rc_channels_us[c])
+        .unwrap_or(1000);
+    let angle_sw_active =
+        outer_kind == OuterLoopKind::Rate && angle_ch_opt.is_some() && has_rx && angle_us > angle_thresh_us;
+
+    let (roll_cmd, pitch_cmd, yaw_cmd) = if outer_kind == OuterLoopKind::Rate {
+        let rp_expo = if angle_sw_active { 0.0 } else { expo_rp };
+        (
+            apply_deadband_and_expo(roll_raw, active_xy_db, rp_expo),
+            apply_deadband_and_expo(pitch_raw, active_xy_db, rp_expo),
+            apply_deadband_and_expo(yaw_raw, active_xy_db, expo_yaw),
+        )
+    } else {
+        (
+            apply_deadband(roll_raw, active_xy_db),
+            apply_deadband(pitch_raw, active_xy_db),
+            apply_deadband(yaw_raw, active_xy_db),
+        )
+    };
     let thr_cmd = if outer_kind == OuterLoopKind::Rate {
         if thr_raw < rate_deadband { 0.0 } else { thr_raw }
     } else {
@@ -200,7 +229,6 @@ pub fn show_rc_tab(
         .rc_last_rx
         .is_none_or(|t| t.elapsed() > std::time::Duration::from_millis(1500));
 
-    let has_rx = is_mock || telem.rc_frame_count > 0;
     let arm_us = telem.rc_channels_us[arm_ch];
     let thr_us = telem.rc_channels_us[2];
     let arm_sw_on = arm_us > arm_thresh_us;
@@ -452,17 +480,36 @@ pub fn show_rc_tab(
                                 .weak(),
                         );
                     } else if outer_kind == OuterLoopKind::Rate {
-                        let r_dps = (roll_cmd * max_rate_rp).to_degrees();
-                        let p_dps = (pitch_cmd * max_rate_rp).to_degrees();
-                        let y_dps = (yaw_cmd * max_rate_yaw).to_degrees();
                         let thrust_n = rate_stick_to_thrust_n(
                             thr_cmd,
                             hover_thrust_n,
                             max_collective_thrust_n,
                         );
                         let thrust_gf = thrust_n * (1000.0 / 9.80665);
-                        ui.monospace(format!("Roll : {:+6.1} °/s", r_dps));
-                        ui.monospace(format!("Pitch: {:+6.1} °/s", p_dps));
+                        let y_dps = (yaw_cmd * max_rate_yaw).to_degrees();
+                        if angle_sw_active {
+                            let r_deg = roll_cmd * max_angle_deg;
+                            let p_deg = pitch_cmd * max_angle_deg;
+                            ui.label(
+                                RichText::new(format!("Mode : ANGLE (±{:.0}° kp={:.1})", max_angle_deg, angle_kp))
+                                    .small()
+                                    .monospace()
+                                    .color(widgets::OK_GREEN),
+                            );
+                            ui.monospace(format!("Roll : {:+5.1} °", r_deg));
+                            ui.monospace(format!("Pitch: {:+5.1} °", p_deg));
+                        } else {
+                            let r_dps = (roll_cmd * max_rate_rp).to_degrees();
+                            let p_dps = (pitch_cmd * max_rate_rp).to_degrees();
+                            ui.label(
+                                RichText::new(format!("Mode : ACRO (expo {:.2})", expo_rp))
+                                    .small()
+                                    .monospace()
+                                    .color(widgets::INFO_BLUE),
+                            );
+                            ui.monospace(format!("Roll : {:+6.1} °/s", r_dps));
+                            ui.monospace(format!("Pitch: {:+6.1} °/s", p_dps));
+                        }
                         ui.monospace(format!("Yaw  : {:+6.1} °/s", y_dps));
                         ui.monospace(format!(
                             "Thr  : {:5.1}% ({:.2} N | {:.0} gf)",
@@ -519,9 +566,14 @@ pub fn show_rc_tab(
             ui.spacing_mut().item_spacing.y = 3.0;
             for ch_idx in 0..count_shown {
                 let us = telem.rc_channels_us[ch_idx];
-                let role = channel_role_label(ch_idx, arm_ch, mission_ch);
+                let angle_role_ch = (outer_kind == OuterLoopKind::Rate)
+                    .then_some(angle_ch_opt)
+                    .flatten();
+                let role = channel_role_label(ch_idx, arm_ch, mission_ch, angle_role_ch);
                 let marker_us = if ch_idx == arm_ch {
                     Some(arm_thresh_us)
+                } else if Some(ch_idx) == angle_role_ch {
+                    Some(angle_thresh_us)
                 } else if ch_idx == mission_ch {
                     Some(mission_high_us)
                 } else if ch_idx == 2 {
@@ -538,7 +590,7 @@ pub fn show_rc_tab(
                     mid_us as u16,
                     max_us as u16,
                     marker_us,
-                    ch_idx == arm_ch || ch_idx == mission_ch,
+                    ch_idx == arm_ch || ch_idx == mission_ch || Some(ch_idx) == angle_role_ch,
                     has_rx,
                 );
             }
@@ -597,6 +649,19 @@ pub fn show_rc_tab(
                         mock_fc.mock_rc_channels[3] = mid_us as u16;
                     }
                 });
+                if outer_kind == OuterLoopKind::Rate
+                    && let Some(ach) = angle_ch_opt
+                {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(format!("Stab Switch ({}):", ch_short_name(ach)));
+                        if ui.button("ACRO (1000)").clicked() {
+                            mock_fc.mock_rc_channels[ach] = 1000;
+                        }
+                        if ui.button("ANGLE (2000)").clicked() {
+                            mock_fc.mock_rc_channels[ach] = 2000;
+                        }
+                    });
+                }
             });
         }
     };
@@ -663,12 +728,21 @@ pub fn show_rc_tab(
                     )
                 }
             } else if outer_kind == OuterLoopKind::Rate {
-                (
-                    "ARMED",
-                    "ARMED — MANUAL ACRO RATE (INDI)",
-                    "Sticks command body angular rates [roll, pitch, yaw] + collective thrust via INDI.",
-                    widgets::OK_GREEN,
-                )
+                if angle_sw_active {
+                    (
+                        "ARMED",
+                        "ARMED — SELF-LEVELING ANGLE (INDI)",
+                        "Roll/Pitch sticks command tilt angle (±rc_max_angle_deg via Mahony); Yaw commands rate.",
+                        widgets::OK_GREEN,
+                    )
+                } else {
+                    (
+                        "ARMED",
+                        "ARMED — MANUAL ACRO RATE (INDI)",
+                        "Sticks command body angular rates [roll, pitch, yaw] with cubic expo + collective thrust.",
+                        widgets::OK_GREEN,
+                    )
+                }
             } else if thr_us < land_us {
                 if state.launched_latched {
                     (
@@ -760,6 +834,15 @@ pub fn show_rc_tab(
                     h_bg,
                     h_brd,
                 );
+                if outer_kind == OuterLoopKind::Rate {
+                    let (sw_lbl, sw_col) = if angle_sw_active {
+                        ("Switch: ANGLE", widgets::OK_GREEN)
+                    } else {
+                        ("Switch: ACRO", widgets::INFO_BLUE)
+                    };
+                    let (s_bg, s_brd) = widgets::pill_colors(sw_col);
+                    widgets::pill_badge(ui, Some((sw_col, rc_live)), sw_lbl, sw_col, s_bg, s_brd);
+                }
             });
 
             if !rc_live
@@ -910,6 +993,45 @@ pub fn show_rc_tab(
                 "Schmitt-trigger switch: rising edge while ARMED engages autonomous/offboard mode; flipping LOW returns immediately to manual stick control.",
             );
 
+            if outer_kind == OuterLoopKind::Rate {
+                ui.add_space(6.0);
+                let angle_desc = if let Some(ach) = angle_ch_opt {
+                    format!(
+                        "{}  (Acro <= {} µs | Angle > {} µs)",
+                        ch_full_name(ach),
+                        angle_thresh_us,
+                        angle_thresh_us
+                    )
+                } else {
+                    "Disabled (rc_angle_channel = 16 — Always Acro)".to_string()
+                };
+                draw_mode_range_card(
+                    ui,
+                    "ACRO RATE <-> SELF-LEVELING ANGLE",
+                    &angle_desc,
+                    angle_us,
+                    &[
+                        (
+                            US_VIEW_MIN,
+                            angle_thresh_us as f32,
+                            Color32::from_rgba_unmultiplied(80, 175, 250, 75),
+                            "ACRO (DEFAULT)",
+                            "ACRO",
+                        ),
+                        (
+                            angle_thresh_us as f32,
+                            US_VIEW_MAX,
+                            Color32::from_rgba_unmultiplied(85, 225, 140, 85),
+                            "ANGLE (SELF-LEVEL)",
+                            "ANGLE",
+                        ),
+                    ],
+                    angle_sw_active && rc_live,
+                    has_rx && angle_ch_opt.is_some(),
+                    "Default LOW = Acro Rate with cubic expo; HIGH (> threshold) engages Mahony self-leveling Angle mode.",
+                );
+            }
+
             ui.add_space(6.0);
 
             // Mode Card C: Throttle Stick Safety & Launch/Land Thresholds
@@ -1036,6 +1158,56 @@ pub fn show_rc_tab(
                         edit_u16_param(ui, param_table, "rc_mission_low_us", 900, 2100);
                         ui.label("..");
                         edit_u16_param(ui, param_table, "rc_mission_high_us", 900, 2100);
+                    });
+                    ui.end_row();
+
+                    // Acro <-> Angle Switch Channel & Threshold
+                    ui.label("Angle Switch:");
+                    let mut new_angle_ch = angle_ch_raw;
+                    egui::ComboBox::from_id_salt("rc_angle_ch_combo")
+                        .width(126.0)
+                        .selected_text(if new_angle_ch >= 16 {
+                            "Disabled (Acro)".to_string()
+                        } else {
+                            ch_full_name(new_angle_ch)
+                        })
+                        .show_ui(ui, |ui| {
+                            for c in 0..16 {
+                                ui.selectable_value(&mut new_angle_ch, c, ch_full_name(c));
+                            }
+                            ui.selectable_value(&mut new_angle_ch, 16, "Disabled (Acro)");
+                        });
+                    if new_angle_ch != angle_ch_raw {
+                        param_table.set_edit_value("rc_angle_channel", new_angle_ch as f32);
+                    }
+                    if !wide_grid {
+                        ui.end_row();
+                    }
+
+                    // Angle Switch Threshold
+                    ui.label("Angle Thresh (µs):");
+                    edit_u16_param(ui, param_table, "rc_angle_threshold_us", 900, 2100);
+                    ui.end_row();
+
+                    // Angle Max Tilt & Kp
+                    ui.label("Angle Max / Kp:");
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 4.0;
+                        edit_f32_param_w(ui, param_table, "rc_max_angle_deg", 5.0, 75.0, "°", 58.0);
+                        ui.label("Kp:");
+                        edit_f32_param_w(ui, param_table, "rc_angle_kp", 0.5, 20.0, "", 50.0);
+                    });
+                    if !wide_grid {
+                        ui.end_row();
+                    }
+
+                    // Cubic Stick Expo (R/P & Yaw)
+                    ui.label("Expo R/P & Yaw:");
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 4.0;
+                        edit_f32_param_w(ui, param_table, "rc_expo_rp", 0.0, 1.0, "", 54.0);
+                        ui.label("/");
+                        edit_f32_param_w(ui, param_table, "rc_expo_yaw", 0.0, 1.0, "", 54.0);
                     });
                     ui.end_row();
 
@@ -1283,6 +1455,18 @@ fn edit_f32_param(
     max_v: f32,
     suffix: &str,
 ) {
+    edit_f32_param_w(ui, param_table, key, min_v, max_v, suffix, 74.0);
+}
+
+fn edit_f32_param_w(
+    ui: &mut egui::Ui,
+    param_table: &mut ParamTable,
+    key: &str,
+    min_v: f32,
+    max_v: f32,
+    suffix: &str,
+    width: f32,
+) {
     let cur = param_table.get_value(key, min_v);
     let mut fv = cur;
     let mut dv = egui::DragValue::new(&mut fv)
@@ -1292,7 +1476,7 @@ fn edit_f32_param(
     if !suffix.is_empty() {
         dv = dv.suffix(format!(" {suffix}"));
     }
-    if ui.add_sized([74.0, 20.0], dv).changed() {
+    if ui.add_sized([width, 20.0], dv).changed() {
         param_table.set_edit_value(key, fv);
     }
 }
@@ -1779,16 +1963,33 @@ fn apply_deadband(x: f32, deadband: f32) -> f32 {
     }
 }
 
-fn channel_role_label(ch_idx: usize, arm_ch: usize, mission_ch: usize) -> String {
+fn channel_role_label(
+    ch_idx: usize,
+    arm_ch: usize,
+    mission_ch: usize,
+    angle_ch_opt: Option<usize>,
+) -> String {
+    let is_arm = ch_idx == arm_ch;
+    let is_mis = ch_idx == mission_ch;
+    let is_ang = angle_ch_opt == Some(ch_idx);
     match ch_idx {
         0 => "Roll (A)".to_string(),
         1 => "Pitch (E)".to_string(),
         2 => "Throttle (T)".to_string(),
         3 => "Yaw (R)".to_string(),
-        i if i == arm_ch && i == mission_ch => format!("AUX{} [ARM+MODE]", i - 3),
-        i if i == arm_ch => format!("AUX{} [ARM]", i - 3),
-        i if i == mission_ch => format!("AUX{} [MODE]", i - 3),
-        i => format!("AUX{}", i - 3),
+        i => {
+            let aux = i - 3;
+            match (is_arm, is_mis, is_ang) {
+                (true, true, true) => format!("AUX{aux} [A+M+L]"),
+                (true, true, false) => format!("AUX{aux} [ARM+MOD]"),
+                (true, false, true) => format!("AUX{aux} [ARM+ANG]"),
+                (false, true, true) => format!("AUX{aux} [MOD+ANG]"),
+                (true, false, false) => format!("AUX{aux} [ARM]"),
+                (false, true, false) => format!("AUX{aux} [MODE]"),
+                (false, false, true) => format!("AUX{aux} [ANGLE]"),
+                (false, false, false) => format!("AUX{aux}"),
+            }
+        }
     }
 }
 
@@ -2137,5 +2338,55 @@ mod tests {
         run_headless_rc_tab(vp, &mut state, &telem, &mut param_table, &mode, &mut mock_fc);
         assert!(!state.armed_latched);
         assert!(!state.mission_schmitt_latched);
+    }
+
+    #[test]
+    fn acro_default_and_angle_switch_toggle_render_cleanly_in_gs() {
+        let ws = workspace_root();
+        let mut param_table = ParamTable::from_vehicle_yaml(&ws, "goku_f745");
+        let mut mock_fc = MockFcBackend::from_vehicle_yaml(&ws, "goku_f745");
+        let mode = ConnectionMode::MockFc {
+            vehicle_name: "goku_f745".into(),
+        };
+        let vp = vec2(1180.0, 720.0);
+
+        let mut telem = TelemetrySnapshot {
+            rc_channels_us: [
+                1500, 1500, 988, 1500, 2000, 1000, 1000, 1000, 1500, 1500, 1500, 1500, 1500, 1500,
+                1500, 1500,
+            ],
+            rc_frame_count: 50,
+            rc_channel_count: 16,
+            rc_lq_pct: 100,
+            rc_last_rx: Some(Instant::now()),
+            ..Default::default()
+        };
+        telem.build_facts.insert("outer_loop".into(), "rate".into());
+        let mut state = RcTabState::default();
+
+        // Default: CH6/AUX2 (index 5) at 1000 us -> Acro active by default
+        let (_, out_acro) =
+            run_headless_rc_tab(vp, &mut state, &telem, &mut param_table, &mode, &mut mock_fc);
+        assert_no_overlapping_texts(vp, "Acro default", &out_acro.shapes);
+        let acro_texts = collect_visible_texts(&out_acro.shapes);
+        assert!(
+            acro_texts
+                .iter()
+                .any(|(_, t)| t.contains("Switch: ACRO") || t.contains("ARMED — MANUAL ACRO RATE")),
+            "expected ACRO indicator when CH6 is low"
+        );
+
+        // Flip CH6/AUX2 (index 5) to 2000 us -> Angle mode engaged
+        telem.rc_channels_us[5] = 2000;
+        let (_, out_angle) =
+            run_headless_rc_tab(vp, &mut state, &telem, &mut param_table, &mode, &mut mock_fc);
+        assert_no_overlapping_texts(vp, "Angle switched on", &out_angle.shapes);
+        let angle_texts = collect_visible_texts(&out_angle.shapes);
+        assert!(
+            angle_texts
+                .iter()
+                .any(|(_, t)| t.contains("Switch: ANGLE") || t.contains("ARMED — SELF-LEVELING ANGLE")),
+            "expected ANGLE indicator when CH6 is high"
+        );
     }
 }

@@ -1,7 +1,7 @@
 # Parameter reference
 
 Auto-generated from the `#[derive(Params)]` registry by
-`just params-doc` — do not edit by hand. 318 parameters.
+`just params-doc` — do not edit by hand. 324 parameters.
 
 Values shown by `param list`/`get`; set with `param set <name> <value>`
 (disarmed), persist with `param save`, inspect overrides with
@@ -164,6 +164,12 @@ only records the current baked value (the log has no tombstone).
 | `rc_land_lead_m` | m | 0.2 | 5 | reboot | How far below the vehicle's own *measured* altitude the landing |
 | `rc_max_rate_rp` | rad/s | 0.1 | 50 | reboot | Full-stick roll/pitch body-rate command in `outer_rate` mode |
 | `rc_max_rate_yaw` | rad/s | 0.1 | 50 | reboot | Full-stick yaw-rate command [rad/s]. Same stick-scaling |
+| `rc_expo_rp` | — | 0 | 1 | reboot | Cubic stick expo on roll and pitch in `outer_rate` mode [0 = linear, 1 = full cubic]. |
+| `rc_expo_yaw` | — | 0 | 1 | reboot | Cubic stick expo on yaw in `outer_rate` mode [0 = linear, 1 = full cubic]. |
+| `rc_angle_channel` | — | 0 | 16 | reboot | 0-indexed RC channel toggling Acro <-> Angle in `outer_rate` mode (0..=15 = CH1..CH16, 16 = disabled / always Acro). |
+| `rc_angle_threshold_us` | us | 900 | 2100 | reboot | Pulse-width threshold [us] above which `rc_angle_channel` engages self-leveling Angle mode (<= threshold stays Acro). |
+| `rc_max_angle_deg` | deg | 5 | 75 | reboot | Full-stick roll/pitch tilt angle limit in Angle mode [deg]. |
+| `rc_angle_kp` | 1/s | 0.5 | 20 | reboot | Proportional tilt-error -> body-rate gain in Angle mode [1/s]. |
 | `gravity_m_s2` | m/s^2 | 9.6 | 10 | reboot | Local gravitational acceleration [m/s²]. Varies ~0.5% between the |
 | `fence_enable` | — | — | — | reboot | Enable the stick-integrator position envelope. Defaults **off**, |
 | `fence_x_m` | m | 0.1 | 1000 | reboot | Envelope half-extent along world X [m] (±). |

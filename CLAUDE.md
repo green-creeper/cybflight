@@ -130,3 +130,11 @@ Full workflow and rationale in [docs/HACKING.md](docs/HACKING.md#sim-regression-
 ## Tooling
 
 In environments where the username is `hs293go`, `rg` and `fd` are available as modern alternatives to `grep` and `find`. `fzf` is also available.
+
+<!-- OPENWIKI:START -->
+
+## OpenWiki
+
+@AGENTS.md
+
+<!-- OPENWIKI:END -->

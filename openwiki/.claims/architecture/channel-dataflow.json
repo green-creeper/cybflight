@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:f0c20aad90e17cbefadbb2de412e40760b024233ea3085e1b29dfa453f1a10c6",
+  "claims": [
+    {
+      "id": "claim_09e1a3975af24d6e94c5b758cf08932e",
+      "statement": "Cybflight's static Embassy channel infrastructure uses CriticalSectionRawMutex across all channels, signals, and shared mutexes, disabling interrupts on Cortex-M microcontrollers to guarantee thread-safe data access without dynamic heap allocation.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/control/mod.rs#L117-L118",
+          "version": "repo-lines-v1:sha256:fd2aa69b7d39e6cd8e775890235bcd634a308eadb9263a5cc089e9396b4c2d8b:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzBjODlhYTFjZjVkM2UyYWY2YTI3ZmVmYTFkN2E3MjlhNjU1MDc4ZTMwNTU1MDhiNGVmNWU2OTMwNjQ3NzRhZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg2M2E1OTJmNGIwNjBjMGZlNjc5NTJkMDEwY2JhZmYyMjYyYTc5NGRmZDk5MTI1ZWFmNjE5ZGIwOWU0MGNmYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTQxYTU1OTEzZWI4YWZhNTgyNmU5MjYzN2FlMmI4NmYzOTJlMDVhZTVkMGI5MjY0YTRkYzUwMjZiMTVmZTcxOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDBkMGIyODQ5ZmZkZjlhY2RiYWEwNTMyZDAxZTY5MGYwZmEwNDA0NGNjY2I3NmU5OWFkOWM0ODQ3NjY2YmY0NiJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/lib.rs#L74-L74",
+          "version": "repo-lines-v1:sha256:ed2fc4b188f4e36b96bf396db36ba77afcf5ecf70cd138bf17c2a5b997fb8707:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZWQyZmM0YjE4OGY0ZTM2Yjk2YmYzOTZkYjM2YmE3N2FmY2Y1ZWNmNzBjZDEzOGJmMTdjMmE1Yjk5N2ZiODcwNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZWQyZmM0YjE4OGY0ZTM2Yjk2YmYzOTZkYjM2YmE3N2FmY2Y1ZWNmNzBjZDEzOGJmMTdjMmE1Yjk5N2ZiODcwNyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTllNzYzNTVjZjExOTk0ODBjM2Y5OTgzNmIxNDg2Yzg0MWQ4OTFmYWFkOTA0YzYwOGUwOTMwMjJkMzc1N2FlZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZGFlZTliM2ZjNDQxYzI1YTVmMzY5OGY3YTVlNDJmNDhjMTJmM2NjNjI2ZGI1ZGE2ZjEyMjQwYThhMTRjOThkMSJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/sensors/mod.rs#L31-L37",
+          "version": "repo-lines-v1:sha256:2fda79187b1f6bb6f9fa7209c057f3119576ca479ebfae4a6c1aecfe2c7c7dbb:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiM2RhMjM4M2EzMmRkODEwM2M4MTIwMGI4ZDJhYjJkOGQzYjhlNjBkMTFmYTkzNDU0MGFiZGFmMGJlOWI2ZmRhYyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNmQ4MThkNTg5YzdmNGY1M2RkZjBkY2ZiZDBjYjg2ODNlMmU5NzRhNDI5ZjNlNmU1YzA4NTFjZjFjYWIzZjBlYyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjQ4NzI2NWU4MzlhOWQxMDY3ZDIzNDczMDAyZGVjN2EwYTRlNTBlYmFlOTE5M2RmZjkzZWUwODg0ZmQxZjc1NCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNmJjYWJmMmNlMmQ5YzA1MzE3NjMwNWI1Y2Q0NjA3ODYzOGVhYTZhYjJiYjA2NmFjNGNmMTliYzk1MDZkOTBkZSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_32db7cc1b43d43eaa31c56dcf88343d5",
+      "statement": "The subscribe_or_park! macro prevents executor panics on PubSubChannel subscriber slot exhaustion by logging an error and parking the calling task on pending forever while allowing the remaining firmware tasks to continue executing.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/lib.rs#L100-L116",
+          "version": "repo-lines-v1:sha256:363c0262436029bed1c84fa0865a1b6c5e6618763d5ca8414bc2202963f27d57:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJiYmJkNjNlMGQyMmI2NDhkODFkNjIyNTcyMzAyMWEzOTc3ZTZkZTMyYzczZTg4NTM3YzFmNjNhMDgwYWRmOTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE1ZThiYWZhNDdhN2Y5NGNkYzljMWU3NzUwZDVmN2IzZDI5ODIzYjQ2N2U5ODEzZGQ1ZGI3Yzg5ZDAxNzMwZmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdjMTRmYjI5YjYwZjE4YjliYjhkYWI3NTY0ZTE4ZDI2NjNlZWFhYmZiNmJjMDY1YWYyYTkyN2E1MjdjYjdkZWIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a1fba44eacb4401db8e38be98007b6b7",
+      "statement": "Cybflight uses dual-executor scheduling where safety-critical motor output runs on an InterruptExecutor bound to the CRS NVIC interrupt vector at priority level P6, preempting all tasks on the thread executor.",
+      "evidence": [
+        {
+          "resource": "repo://docs/executor_priority.md#L9-L28",
+          "version": "repo-lines-v1:sha256:274542c0f7f6cebdf5a57470b25f67f6fff90b469d659cb961a4089b606e4755:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc0OTYyYjg2NjRhYWE3ZTVlNDAzYjBjODJkYjRjMjA0MzA4NDI4ODhjM2QzYmMxNzBhNWRiYzIyYzM1MDQ2ZmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM3NDYxYWZjYzk1MDU5OGVmYWQ4MTgyYTZjZWU0YTA0N2I4OGI4Y2EwZWMxYWRlYjgwMDhiMGRkNzk3NDQ5YTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjUzOTg3YTM2NDg1MDdlOTQxNzc1ZDZmOGIxMTYzYjMxMWZkYzFjZTFmMTEyMDdkZDdhMjkzZWJjYTk0YWJhODMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_394bf4da6fda429b8e169f8ef752c1c2",
+      "statement": "The IMU processing pipeline buffers raw and filtered IMU data at native ODR into the IMU_1 PubSubChannel with a 24 ms wall-clock depth (CAP=192 at 8 kHz) and publishes a decimated ~1 kHz mirror on IMU_1_DECIM for lower-rate consumers.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/rates.rs#L103-L132",
+          "version": "repo-lines-v1:sha256:cf5b9a3f3852e0fcb5f4fecf38037bbc2cb549ab34983602120aa5520b89db9a:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ3NjRlMDBkNzg2MTEwZGIyYmM0MjFhMmI1MjVmY2RiZGUxZGJlZDM0NWYzYzIxYWI4YTUwYzY2NjE4YTUwNmMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJmZjE5OGI5YTRiODg2ODMwMWY1NGQyNTFmNGZlOTkxMjE2ZmM2YzU0Zjg0NzgzN2U0NTViMTBiYWI0NDkxN2QiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQwNTQ0YjM0NmEzYWFmMGU0ZmM1NWU5MDVlMmRhMjcyYzE0YmJlNjU4MTk2NjAzN2UxMGYwNjNlYjNjNzVjMGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ4OThlZTNmMGE2ZWZiNjAxYTUyYmE3ZDRkYjZiMTlkOTk0MzIwNmI3YWFhZDZmNTM4NWJlNGM3M2M5N2RlOGEifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/rates.rs#L15-L19",
+          "version": "repo-lines-v1:sha256:d992aec262078e4d3ec5b0a975ebb5ac1e71d72ea797b54ad9896d0102639c75:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMWUwYTJhOGJiOWRiN2E2ZDc3YzhkYzFiY2Q5OGQyNjQ2OWNkZTkxMWE0M2E0ZTQ4ZGExNjhjYWIyOWEzYTU1NyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYWExZDFhNjMzOTAyMjljNzk4MzQ3ZTgzYTA0MDU0NDFjOTQwMDAzNTI4NGFkMTY4YzFiZjZjZGYxZDcwYTM3MCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOGViYjYzNjNhYjFlYjI2MTg4NTkwYTRiNzU3NmZiMzUzODQxODYwMTZkY2UwOTgwNDQyMWMzOGQzZTI3ZmQ3MyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTI3ODMzYmYzYjIyOTI3ZGNiZmE1M2Q3MDgyNjhlYjhkYjg3YzU4ZTU5ZDJmMzI4N2RlMTc3NjAyOTQ5NzRmYyJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/rates.rs#L244-L247",
+          "version": "repo-lines-v1:sha256:3e541ce174717bc5f3bf37cb1a40bc2c8b6b6c95b0c045a1f66ac67f0999696a:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTdmZTM0NjMxYjgwYjExZDA4YjkwZWExMmJmNTBhN2Q4NzBiMWY4MDE2OWM2MTY0OWFkODUwMGQ4YTgxMjZmNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYWExZDFhNjMzOTAyMjljNzk4MzQ3ZTgzYTA0MDU0NDFjOTQwMDAzNTI4NGFkMTY4YzFiZjZjZGYxZDcwYTM3MCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMDUzYmQwN2JlZjc5MDYzNWUyZTA2MmYwZTJkNDExNWQwODRjYTI1Nzg0ZTVkMGEzMjMxMTMzNmE0NjA0ZTcxNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYzA2ZmM5MWIzZTgyNmI1ODU1ODIxMjNiNTU5MGZlZGE2NzJhYzNhMmRkODY2NTllZDk1NmE3YjVjOTE0NDM2ZSJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/sensors/mod.rs#L31-L37",
+          "version": "repo-lines-v1:sha256:2fda79187b1f6bb6f9fa7209c057f3119576ca479ebfae4a6c1aecfe2c7c7dbb:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiM2RhMjM4M2EzMmRkODEwM2M4MTIwMGI4ZDJhYjJkOGQzYjhlNjBkMTFmYTkzNDU0MGFiZGFmMGJlOWI2ZmRhYyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNmQ4MThkNTg5YzdmNGY1M2RkZjBkY2ZiZDBjYjg2ODNlMmU5NzRhNDI5ZjNlNmU1YzA4NTFjZjFjYWIzZjBlYyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjQ4NzI2NWU4MzlhOWQxMDY3ZDIzNDczMDAyZGVjN2EwYTRlNTBlYmFlOTE5M2RmZjkzZWUwODg0ZmQxZjc1NCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNmJjYWJmMmNlMmQ5YzA1MzE3NjMwNWI1Y2Q0NjA3ODYzOGVhYTZhYjJiYjA2NmFjNGNmMTliYzk1MDZkOTBkZSJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/sensors/mod.rs#L80-L81",
+          "version": "repo-lines-v1:sha256:945ef52f05cbd09d54da7e4be5b71883eac6bba57c4d1d95cf270f8beb243519:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZmQzM2EyZmQ4NTgwNDliYWFkYmQ4N2I2OTNkYmYxMzRiYzVjMmNkM2U4Y2JhOGE1NjUyMjg3ZmQwZmZmOGNkYyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZDhiZTI5ZWY1NTcyYzdlNWJlODg3OTllNDdlZWVjYzg3ZmVlMmUyYzc3OWZhNmQxYjAyMmMzNjljNzU4ZjM1MyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTcwYzJlNTlmNzM0ZmUyNGY5NTUzMDIzODEwZmIyYzY1ZDUzMjNhMTAxNTk2ZGE1ODU1MjU4Mjk0MTg3YWY1MSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzkwYjgzODM0MGYwZTQzOGM4YzE1YmM1Y2ZjZjYyODdiOTFlYzgwOTcwN2I0ZGFjMWZiNTIwYzdiODg3ZDdlOCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_3891b3de9ffe4f2ca8cc90fdabc094ec",
+      "statement": "The ESKF estimator task drains IMU_1 and decimates predict steps to approximately 1 kHz, publishing VEHICLE_ODOMETRY at 1 kHz and decimating BLACKBOX_ODOMETRY by 8 to 125 Hz for Blackbox logging.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/estimation/eskf_imu_gps.rs#L83-L89",
+          "version": "repo-lines-v1:sha256:c873385186c250f8e3b5f5c76d93a98e534d4f631eb640d44cc9d7b096528160:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzYzMjIyMWY1YTg4ZDVlZTY2ZTQ4N2EzYTU4MzQ1ZDM2MzU4ZjYzOTdjZjgxOWJmMWQ0Y2Y4NGNlNjBlMTQ2NCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZWFmOWJjMThjZGE2M2JiZWQ5NDkzYjFlMDZiN2ZhZDNhZjk4ZjAyYzJhMTYxZjExYTU1ZWVkZWZlMWMwMjYxOCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNmFhODk4Yjg5MmFlZGM0ZTA4NjhmMmRlNjAxY2IyMDkzNjM1OWE4YzEwMmNkMTJiMjU1MzU3MjY5MTQwYjk0MiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiODI0YzZhYjUwNmE5NzA0ZTdiMDQ5NDg2YTU3MGY3YzRiNzllYzllYzhmYjZmNjA0ZTJmODM5ZDFhYzNjZjM4NCJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/rates.rs#L139-L162",
+          "version": "repo-lines-v1:sha256:d40d7d0f440e510e43aff83e95dfd110047e43104fbb7e8d0165f5d44904b4e0:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYzZjFlNGRiMzJkNDU2NDA4YzZlNjg2MzIyOWQ0ZDE1Y2RkMjY4YjUxMDcyNjEwMjUzMTA1YTZkMWU1OTYyZWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc0ZDA4M2NlMWVkYWY0YjQ3NzkyNTYwNzNkYjE0YzkxYTdjMjFlMWViODQ1NWRmOWI1ZGEzMDI4MmZjZDY4NjEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjcxNTdhNGQ4YTI2ZDcwOThjMzMyN2M1NmEyMDllZGU5OWQ2ODA2ZGRjYmExYmFkZjA0MjNlMjEyZWRlNDQwMzEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQzOGUyYTBkNDQ0ZWQwZjliOWIzMmQ4MzM4Mzg3YTIwNDEyNDQwYzIyMTg4ZjdhMWI3M2EyMDhhZWZjYWIzZTcifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/sensors/mod.rs#L134-L140",
+          "version": "repo-lines-v1:sha256:0b887461362b28ff960c6115520133fa0c3587fa524de7387a7f2301c379b431:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzUwMDMyZjliMTQ1OTVmOThjMjBjZDk0MTExODIzMjVkYWEzNDE2YTZlYzhkNjQxYTQyMjc0ZWM3OGQzODIyMSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNmQ4MThkNTg5YzdmNGY1M2RkZjBkY2ZiZDBjYjg2ODNlMmU5NzRhNDI5ZjNlNmU1YzA4NTFjZjFjYWIzZjBlYyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZDgwYWZhZmQzYzE1N2RkZmI4NDJlZGRhYzE2ZmQwODc2NDUxOTBhZGExOTRlYjE5NDNlYTA2OWRmYjUwMTI3YSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjEyMWExMzI2YWUxZGFkNGY1NmM4MzViZjk4YzM0ZmJiY2Q0YzljZjZkY2JhZjM3MjM1NGYwMTE1NDdiMTFmNyJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/sensors/mod.rs#L152-L158",
+          "version": "repo-lines-v1:sha256:3a618ecfe4031bfe2a5ce621d30400058fd8d242cc4e742412bba17967d0f467:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZjhiNzQ0NTI2NjJmODI5ZDViYjhmYWJjMjQzYTZiMjY0NGViZTY3NzZiYTMxYmE3OWY3MTk2NmUwYTRlNmVkYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNmQ4MThkNTg5YzdmNGY1M2RkZjBkY2ZiZDBjYjg2ODNlMmU5NzRhNDI5ZjNlNmU1YzA4NTFjZjFjYWIzZjBlYyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZDNiMThhMDBjYWVmNzJmZGZlODlkNWViZDQ1YjZhYTRkYWNhMmIxZTY0Yjk0Y2U3OWY0MzlmYjExOWUzN2RhMSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjc5YjYwZTdjMzZkZThlZmE3MzdlZmRiMTMyNzAzYTI3ODg2MzYyNzk4ZjFlMWM2NGFhMGU5YzEyYzdjMjk4MSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_9e958d75bf5341b8a173d6feec865bdb",
+      "statement": "The INDI inner-loop task steps on every div-th IMU sample, applying a rate-dependent Savitzky-Golay FIR filter window for angular rate derivative estimation before writing motor commands to ACTUATOR_MOTORS.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/control/indi_task.rs#L380-L381",
+          "version": "repo-lines-v1:sha256:2f4897fdb8c254b827ad0d15c78bab26c6848709b827bb4eb6ab4cbfcc5e74e5:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzM0YTliZmQ1MmQ2YWI4ZWM0NzUyNzIyOTJhNGJkY2YxNmNiMWY4YmExYjVkNzVlMTNkMGNiMTk3ZThlY2JhMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNzQ5ZTE5YjE0MTYyYTk3Y2QyMjE1OGJmNTkzYTFhNmMxNjkzNzJjMmVmY2JhOWU4NjA1NDA0MTU4M2Y4NzM0OCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZGI2MzhkNTQ5NGM1YjQzZGEyYmVmMWJjM2M4YWU2MmJkZDIyY2Q1YTU5Yzk2ZDg3NjM0ODI5ODdhZGNjMGIwNCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNjA3ODU5MzFlYzVlZTI0NmZkN2VkZWNjMjA1MzgxOTI1YzgxNmM2ZTlkMjg3ZDc5Nzk5NGU3YzdhODAwNzVlYyJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/motors/mod.rs#L13-L13",
+          "version": "repo-lines-v1:sha256:73832123ff68738db72e174af734e99aa93a963559ff7d38ba7bffbd6f25a826:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzM4MzIxMjNmZjY4NzM4ZGI3MmUxNzRhZjczNGU5OWFhOTNhOTYzNTU5ZmY3ZDM4YmE3YmZmYmQ2ZjI1YTgyNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNzM4MzIxMjNmZjY4NzM4ZGI3MmUxNzRhZjczNGU5OWFhOTNhOTYzNTU5ZmY3ZDM4YmE3YmZmYmQ2ZjI1YTgyNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWNjYTcyN2E0NjViMjI1OTBlYzg3NmIxZjcwNjUzZjcxYzVlYmYwNzcyNGFhYTg1OTQwZGMwYzEzMThhMzdkOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzQ5OWI3N2JjMzNkNDM2NTcxMDM4YzkzMmFhN2Q3OThiZmNjZTYzNDgwYzE1NDY2MTY3ZDAyZjZhYTk2NmFmMCJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/rates.rs#L61-L71",
+          "version": "repo-lines-v1:sha256:21432aa222d245286ab33e751f01f6a227d884806633383cf061c86682a8af1a:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEzNzIyN2FhZDEyOWI0OGFiYzk2NDY0ZjFkOGY1YTQyZjAzOWEyODlkZGM4MzA1ZTE3NDM5YWRhNzBmZTU2NTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZhNTU4NDA4ZTJjYzg5ODM1ZDc3NDZkYzRmOGFiNzcwMDg1MjdiYjc3MDdkYjFmMTU3Zjc5ODMyMzBjYzA4OWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjcyODBmMGJmYjYwM2VlZDE5YWM5ODJiNzhmOTQwMDQ0NjVjNzkyODcwNTllODc4ODYwMDk3OWYyMmM3YjUyZmYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c996299e5df744448bb37bbcffd027b3",
+      "statement": "The cascade outer loop runs on a 100 Hz timer, draining VEHICLE_ODOMETRY, validating timestamp staleness within cascade_odom_stale_s, and publishing body-rate and thrust commands to RATE_COMMAND.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/control/cascade_task.rs#L134-L207",
+          "version": "repo-lines-v1:sha256:4f75afe86f656c54a351efc45a345fee759e03f38d97a89be90dbbbb2b097fe0:eyJzZWxlY3RlZExpbmVDb3VudCI6NzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk4YjRjYmIxMmYxMjA1ZDI4YWI0NTM3ZDhjMmU3MTE1Zjk4YmNmNjZmY2EwNDY4ZGYyODNjZWY0NTZiNGU2ZGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVhNWRhOTA3MWM5MTFjYTYwMmJjNTU4MDQyOTIzNDdlMzllMzA3MGY3YzQyNGZmYWNlYjY1NmE0MDU0NjRmZDIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI5MWFlYWI2MzQ3NGM4N2Y4ZDYwYmVkMzRmYWI4YWI5NGM0ODczMjNjYzhlNTdkMWUzNGRlZGI3NzVmNjA1ODAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJlODJkZDU2MjYxODJiYmY4NmU4MDdiYTZhN2FlNmJmODJiYTdiZDhmYzYzZDRhMzQ0MGRkNWUwYmUxMjc3ZDAifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/control/cascade_task.rs#L33-L34",
+          "version": "repo-lines-v1:sha256:1f00c46ce4bec73e3a567b16e02b5b6ba9f81d3f2c24a483fd39470a70e91fde:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZmQ2ZTJlNmI3YzIwMmMyNTU4MzBkMzU0YWYxM2Y1YmU2ZTQzMmEyMDFjZDAwMzMxMThlY2Q5ZWJhMGIxOTA4ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYWUxYzk0ZThhYWNjNTQxZDYzNGExM2RlN2ZlMmNhM2Q1ZmNmOWNiMDRhODk2NGIxYzEyZWUxOGNlZGQ4YTI4OCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMmIyYzFkNDVkNWY1YzhlNmY2ZWMyYWViNDZlYjU0NWIzNjRlMTIxMmQzZDY4YTY2YWUyODQ2OGQxZDVlN2U5YiJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/control/mod.rs#L117-L118",
+          "version": "repo-lines-v1:sha256:fd2aa69b7d39e6cd8e775890235bcd634a308eadb9263a5cc089e9396b4c2d8b:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzBjODlhYTFjZjVkM2UyYWY2YTI3ZmVmYTFkN2E3MjlhNjU1MDc4ZTMwNTU1MDhiNGVmNWU2OTMwNjQ3NzRhZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg2M2E1OTJmNGIwNjBjMGZlNjc5NTJkMDEwY2JhZmYyMjYyYTc5NGRmZDk5MTI1ZWFmNjE5ZGIwOWU0MGNmYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTQxYTU1OTEzZWI4YWZhNTgyNmU5MjYzN2FlMmI4NmYzOTJlMDVhZTVkMGI5MjY0YTRkYzUwMjZiMTVmZTcxOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDBkMGIyODQ5ZmZkZjlhY2RiYWEwNTMyZDAxZTY5MGYwZmEwNDA0NGNjY2I3NmU5OWFkOWM0ODQ3NjY2YmY0NiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_ae3ac1a9efe44d20983995eb62310471",
+      "statement": "When armed, the dshot_task falls back to idle throttle if no fresh motor command arrives on ACTUATOR_MOTORS within MOTOR_CMD_STALE (10 ms), preceding a full disarm by the failsafe controller watchdog.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/control/mod.rs#L273-L276",
+          "version": "repo-lines-v1:sha256:c49d74ef869b63170ebf1ca91f27964b716a441429b84322c7681cf117a114b3:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDE3YTFkYWEzNTZjNDQ0YjYxMmQ1MTgyMTY4NDExOWE1MjRjYjE2OGZiY2M2YzE0MzY2YzkzMTAxZDk5MDA0NyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTc0ZGUyMzBiNGY1YTdiMzEzZWY4NTc1ODYyYmU3ZGI1MWYyYjg0MGU0ZGRiZjZkNDRmM2E5NWY4MzY3MTA4MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOGE5MGRiODY4ZDY1ZTM5MDRmMjQ0YzcxZTE4YzZmMjkxYTMxZTVmNDg4MzFhMjRkZWY2ZDBlN2IwNDVmNzkzZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNmY4ZDA0YzYyMTUzMWE4MTc1Y2Y3NWIzMTBiYmUzZWQxZmU5ZTFiOWJkOTkyZjQ5MzliZGNkNTM5ZTJjMjRlOSJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/motors/dshot.rs#L26-L26",
+          "version": "repo-lines-v1:sha256:8d6e4d1a02014235eea1540d609c3ee5d2d43c042b481483ee048db56660244f:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOGQ2ZTRkMWEwMjAxNDIzNWVlYTE1NDBkNjA5YzNlZTVkMmQ0M2MwNDJiNDgxNDgzZWUwNDhkYjU2NjYwMjQ0ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOGQ2ZTRkMWEwMjAxNDIzNWVlYTE1NDBkNjA5YzNlZTVkMmQ0M2MwNDJiNDgxNDgzZWUwNDhkYjU2NjYwMjQ0ZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOGZlYTZiZWU5NDJlMDY0N2I4YmRiZjNlMjdjNjQ5NzczZmE5NTgwYzVmYTk1YzMxMWJhODllOTI1MTYzMWRkNiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzQwMTY5OTg5MTE5NjAxYjllYTgzN2RiZDgxOTM1ZjliNzZlN2Y1MzRjMjdiMzZlNDIwY2FlNmJkYTk5OGVjZSJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/motors/dshot.rs#L75-L75",
+          "version": "repo-lines-v1:sha256:e2f0914c3cce32e15f4314aacd38c31549f37f8713e216fc7596219d7dcb7c4f:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTJmMDkxNGMzY2NlMzJlMTVmNDMxNGFhY2QzOGMzMTU0OWYzN2Y4NzEzZTIxNmZjNzU5NjIxOWQ3ZGNiN2M0ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTJmMDkxNGMzY2NlMzJlMTVmNDMxNGFhY2QzOGMzMTU0OWYzN2Y4NzEzZTIxNmZjNzU5NjIxOWQ3ZGNiN2M0ZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMzAwNTE1Y2RhY2MyZGUxYjc4YjYxNDk0YmUyNDFkY2VmYmEyZjY5MDkxYzA0ZmFlNTliZmVjNmVkOTc0YjZjMSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYzY1ZmUwNTgwYjc4YzA3OGM5ODJkZTliZWE4YTQzYzZhNGIyYzg2YTc0NGNhZjYzOTc1NmMxZDhkNzBmNWM3ZCJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-30T14:16:13.882Z"
+  }
+}

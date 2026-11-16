@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:74c2d908ed474cf1f74255ab4aedfc2e7ecd764e991a28aa0ac034199c710988",
+  "claims": [
+    {
+      "id": "claim_abe88b2bfae34a098a81712acda93205",
+      "statement": "The firmware target triple thumbv7em-none-eabihf disables double-precision hardware floating-point support via -fp64 in .cargo/config.toml to prevent hardware execution faults on Cortex-M7 targets lacking double-precision FPUs such as the STM32F745.",
+      "evidence": [
+        {
+          "resource": "repo://.cargo/config.toml#L1-L7",
+          "version": "repo-lines-v1:sha256:b15fcb9d9e8b7616d9441c8ed2826e82da16b15c2aca9aea9dbe3a16bc45f40d:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjFlZDM5ZjgwNWI4YjQ3MTM1OTBmYzc3ZWQxOWMyNGMwY2M2Mzc1YmRhN2IxNzcwYTYwYjNmMmFmMThlMjNkNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMWFlZjZiOGIyMDE0MDgwZDcyNDcyNzQ0OTdlZWNjYjc3NWIwYjkyN2UwNWNkMDhjNjlmYmNkMmMzNmY3MmIyMiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZDZiODdiOTc0ZDA5MWY5MjgzOGFkMDg4ODg0ZWIzNGE1MjBhYmY1Y2I0NWJhOWVmYmZiMDQ2NDk4Y2Q3NTdkMSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_7ef6ddbbf1e34c669b5ec272f07e05cf",
+      "statement": "The workspace Cargo configuration applies granular package opt-levels under [profile.release], compiling real-time control logic (cybflight-core, nalgebra) at opt-level = 3, HAL and drivers (embassy-stm32, cybflight-drivers) at opt-level = 2, and the top-level shell (cybflight) at opt-level = \"s\" to meet execution rate and flash memory constraints.",
+      "evidence": [
+        {
+          "resource": "repo://Cargo.toml#L32-L51",
+          "version": "repo-lines-v1:sha256:315fd950cd77cadbd400bd04e121bb0896c912eaabca6d52ca787849a4c864d6:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU2MWI5OTBhZDhmNDI4NGMzNTRjZDhmOWI2YjFiMGQwMTU2NTAyYWJiMDhhYjI5YWI1MDgyNDk0ZDdhMDc2MGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI3OGVhYTRmNzZkMGYxNjliOWIzOGQ0N2NhNWZiYzZhYjk3YTlhMzQ5MmY3ZDU2MjhmZGIxODRhZDk0MGVhMDYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAyMjlmNDdlN2E0Njg1MWVlNjIwMGM3YTNiODdiNmY4MGRlZTY5NzdiYWFmMWZhYWUwMjM4MjhlNmRkYTdmOGEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_70ec73cab36f4790bb0bded01c9d1dac",
+      "statement": "Build feature resolution is driven by tools/vehicle_features.sh calling vehicle-features, which parses vehicles/<VEHICLE>.yaml to map build parameters (board, rc_protocol, outer_loop, pos_source, imu_rate, indi) into Cargo feature flags while warning on developer environment overrides.",
+      "evidence": [
+        {
+          "resource": "repo://crates/vehicle_yaml/src/bin/vehicle-features.rs#L47-L100",
+          "version": "repo-lines-v1:sha256:b7a8a6794c22a045730aca571e7af87441e855dcca867ac30c1f30b26d51db7d:eyJzZWxlY3RlZExpbmVDb3VudCI6NTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBmNWVlMmJhOWU4ODM4M2IzM2Y0NmYwOWYyOTE5N2NjNTc1YmNkODQyMWUyMDQ5YzE1NGMwZjVkN2FjOTM1YzkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE0NDdhYjVmZDU2MzA3ZDVlYzU1MGViMzM0ZGQ2ODI3MWJiNzU4ZDVlYWM0MzY2ZWUwYmM0NmM3ZGMzMGE5OTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdhZjg5ZjI5NDBmNzMwN2Q2YjYxODllZDhiZDVlZjk3MzAxYzFjMjZlMDI1MjM1OTUxNmYyODgyOGY4MjI3ZTYifQ"
+        },
+        {
+          "resource": "repo://tools/vehicle_features.sh#L1-L7",
+          "version": "repo-lines-v1:sha256:10e980d650b9ab955cfb832872d293240551711154b616e96f4b64acf491df2c:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMWQ5NWZjMDRhODBjOTUyZjQ5Y2U0MTg4NjI3YzUzYjBmYmU4YzQ0MDQxYjk1MmQ1OTJhY2QxZGU5OTg2MTQ2NiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZWZmZDUyZWEyZjJkMGJmZmMzZTkyYjYwMmM1MmI3YzAyYzQwZGMwYWQ2Mzg0YTNmNDM4MmVkNDQyYjY2NWMxYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_de1b8dd351ba4d28ae5d8266c95a1512",
+      "statement": "The build script crates/cybflight/build.rs overrides linker scripts (memory.x or memory_f745.x) in OUT_DIR to reserve flash Bank 2 sectors 6 and 7 for parameter storage on H743 targets and customize flash boundaries on F745 boards.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/build.rs#L8-L15",
+          "version": "repo-lines-v1:sha256:fa55f3eec46901a88d6c5d9c6a0344b51e8d4c941d6684c2f5a3a301f5081034:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNGNkMWU1MTQyN2MxOTc3OGYyYzEzMTg0YTVjOTE5NmM1NWIyMjM1YTZhNTUyZmZhNDhlOWQzOWVmYmMzYTEzNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTk3NjcyOWQ0ZGVmNGRmYjZhNGYxZjMzODRjODRiZWM5MzI2NjZjMTFhOTljN2VmOTRkYzcxMWRmZTA4MjQ1NyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTEwMTFkZTc1NThmMWU2MmFhOTlmMTVjZGZiNzEyN2Y2MWI3NGYwMWVlOWE5NTBjOTRhZjI5YTE3OWJiOTgwOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYTM1OGYzMzE4MTVlNDk5MWQ5YTRhYTVlNmI1ZDg3OTQ4OTUzZjQ2YTUzNjQxZDU1ZWMwYjVjOGRhNmI4YTIyZiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_7619eb200a024f67b641b4de930930b9",
+      "statement": "During compilation, crates/cybflight/build.rs validates and bakes offline missions (missions/*.yaml), 50x50 thrust linearization grids (data/thrust_tables/*.csv), and neural cost policies (data/cost_policies/*.bin) directly into initialized .rodata static arrays.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/build.rs#L253-L395",
+          "version": "repo-lines-v1:sha256:e727a17f7b1e13a4ca066ede009b0edb2b8c29fca4160620ea8dd991d4a44a37:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQzLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJhM2EyNDNkYjI1YzI4MzE3YjlmOTg5N2RjNmMzODZmNTYxYmUyMzI0YjViMDFiZWQ1MDVjY2YzZjE2Njg0YmM1IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJjODJiYTYwODY1MWM2Y2NlNmEyMmFmZTVmNTE1MmRjNmQzMzhmOGQ0NmZlZTM5OWY2Y2EzOWQ5ZGZiOWMzYjA2IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI5NGYwZjE5MzlkZDliNDhkMzZiOWU3M2I2ZDQ4YTI1MDY3NTkzZTRiMDVjY2UxYmJjNzhjNjc1YmJjY2EyMjBlIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiIyMjBiZTNkMjg1OGU3YmNiZGNjNTc0YWYxZWY5YWNkZGM0N2IzMjA3NWNkN2JlZmYxNDQwN2JkMDY2YzYyMjExIn0"
+        },
+        {
+          "resource": "repo://crates/cybflight/build.rs#L53-L220",
+          "version": "repo-lines-v1:sha256:b669c9de1a4efc23447a14cadff06985e00ebfe2f7a72734f137c1398d270399:eyJzZWxlY3RlZExpbmVDb3VudCI6MTY4LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJiNDRjYjQ3NTBhMGVlM2FjNDYzZWI2NjcwZDkzNGY5NGI0YjRmZDE2ZmIzZDJkYmRmZWU2OGU3OGRiYWYzNDkxIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0MTJjYTM0NWNjZjc1YmY5YzA4MDZiY2U2OTViZThkZTgwOGI3OTk4NDI1MWE3YTU0ZDIwMmNmNjEwMWRkNDUxIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJmNDcxZmQ1YTkwYTNjYmQyNmYzN2NhZmQ0NzUwMjVlZTQ5YjgyZjRiY2NjYWI2OGI3ZDgwMWJhN2YwZGU2OGI3IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI5YjBhNGVlZThlODNmNWM4MzNiZmZhYTlkNTIwMTdkNDlhOTczOGRiYzFmYjFhZjRkOTA3YjhlZDdlYzE3YmU3In0"
+        },
+        {
+          "resource": "repo://crates/cybflight/build.rs#L775-L926",
+          "version": "repo-lines-v1:sha256:a8454030d3147249d42c3e2a81961c0c209a171d1265fce9b2fb82f34570ab8c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUyLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJjMWZhNzFjNzRiZDNhYWEyYTc0MGVkNTkzYzBlNzVmOTRlZWIyYTM2NjAyYjNmOGZmZGZiZDA3ZmEwNDYwOWY2IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ODkzZjQwZTM3ODFlYjg5NmM4MmQwNDZhMDgwNjdhMTFlMzVjZGYyZjFkZmFmMjZmZWE5MGI4ZGI2Njc2NDEzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI1NGU2Nzk2NTczODM5ZGNkNDdmOGQ3ZGU0NWQxMTYzNTkyMjY2ZTFiNmE5ZmJmNDJhNDRlZWRiZTU1YjcwM2RkIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI0MDA0MzA2MjY1YWNlYmQ2ZjQzMjUyMDk3OGM2NzNhY2U3ZGJhNDFjZDhlZGE3YjI4ZWQwNjM1OTk0YzljZTMwIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_b082e74b150d4d9bb611b039b2dbe432",
+      "statement": "The build script crates/cybflight/build.rs enforces vehicle parameter integrity, requiring mass and airframe identity declarations and aborting the compilation if active Cargo feature flags conflict with the configuration declared in vehicles/<VEHICLE>.yaml.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/build.rs#L423-L541",
+          "version": "repo-lines-v1:sha256:6bbd36c07915bc6324bec0d37cd33af42c52770b0ff81d1b0b9fc97147b0e5da:eyJzZWxlY3RlZExpbmVDb3VudCI6MTE5LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIyNjc5ZGUxMDY5ZjE5MzAwMmU2Zjk2Y2E1NzYwNmJiOGE4MDU0M2VkYzA5MzFhNTIwN2MzZjY5ZWRmMDdmZDcxIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJlNmIwNDQ5MTQ2OTcyMmU4MzYzYTk0ZTQwNDQ1MzhlMDEzYTJhMjE3ZTM2YjFlNTY4YmE2MGFjYjdiNGM4ZjJlIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJlOTZmYWE1NTI2OGU0ZGExYWMwMGYyZDM1ZjFhNjFmNGRlNDIxYzI2YzJmNzkxN2U1OTJkMjdhOGZiOGFiNTIyIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiIyYTI1MTgxNjQ2ZTBmMThhYWQ2MGI0NWFkMWQzYzY0MGYzYjdmNjUyM2NkMDg4YzE3M2NiMTNlMDQ4YzI3ZWM2In0"
+        },
+        {
+          "resource": "repo://crates/cybflight/build.rs#L960-L1184",
+          "version": "repo-lines-v1:sha256:f95bf6ad12c38bd363fb21b32831c28be334959b2ee15ac2c4a76ba27d3953a0:eyJzZWxlY3RlZExpbmVDb3VudCI6MjI1LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJkMmZmNzkxMWExYjI0Y2RkZjBmYzI0Yjc2MjE4ZjQ3NjAxY2FkMTEzOTBiNDI3NThhMjY2MzcxNDUxYzNlNzFhIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ODkzZjQwZTM3ODFlYjg5NmM4MmQwNDZhMDgwNjdhMTFlMzVjZGYyZjFkZmFmMjZmZWE5MGI4ZGI2Njc2NDEzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJhMDZmM2UxOTY5MjYyM2ZlMGVlZWQ0MDc3OWY3Y2QxZjcwMmMwNjY3MzczMTE2ZGRiNTg0ZGI0YWJjYjUwMTU4IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MSwiZm9sbG93aW5nQ29udGV4dEhhc2giOiI0MTJjYTM0NWNjZjc1YmY5YzA4MDZiY2U2OTViZThkZTgwOGI3OTk4NDI1MWE3YTU0ZDIwMmNmNjEwMWRkNDUxIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_bd54c17fccc64bfd8dedeabb344760c4",
+      "statement": "The Cargo runner script tools/build.sh invokes llvm-objcopy to convert compiled target ELFs into raw .bin binaries for flashing.",
+      "evidence": [
+        {
+          "resource": "repo://.cargo/config.toml#L8-L8",
+          "version": "repo-lines-v1:sha256:035f31836fa1ded2cb4c26ee18bd482e931c87eb393b6da96498d8a633a2b6d1:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDM1ZjMxODM2ZmExZGVkMmNiNGMyNmVlMThiZDQ4MmU5MzFjODdlYjM5M2I2ZGE5NjQ5OGQ4YTYzM2EyYjZkMSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDM1ZjMxODM2ZmExZGVkMmNiNGMyNmVlMThiZDQ4MmU5MzFjODdlYjM5M2I2ZGE5NjQ5OGQ4YTYzM2EyYjZkMSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOTI2ZWNlMWQwNzJiOTM4Y2NlOGY0MWU0MjUwMzY2ZGM5MzE2NWZlZWM0YTIxNmVjYmE0ODA2OTUxOGZhZDI5YyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiN2ZjMGVmOTc0MzRhMDZkYTRhOTViYjU0Y2VmMTg2YTkwMjJlYzRjZTQzOGNkZmRjNDg3ZmU1ZTUxNDIyNGY1YSJ9"
+        },
+        {
+          "resource": "repo://tools/build.sh#L10-L17",
+          "version": "repo-lines-v1:sha256:66b2b30acfb2517c7b2eb0e6520824f6a64699423a253624b6ed96bd33656b22:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNmM1MWU0MDk4NzliZDJhNWFjOTVlZTEyOWJhYzg0NDkwN2E3YzUwYjFlMzA4OGIzMjcyNjk2ZjBmMjA5N2ExNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiODc3ZTJiZjFhODdjMjdjZWM0OGRjOGVlZGY3Mjc2YjRlZGU4MDgwYmEzZGRkMjgwYmI1NWU5MmVhOTE1NDAwNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNWIxZDVmMzc1ZTczMmRjYjViMDIyOWE4MDBmOWE0ZjRmY2UwMTM2MWZiMmJmNWZlZTcyOGQ4YzMxODEyMWRjYSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_2affd0c697704e1686038ad32159d342",
+      "statement": "The just size workflow runs tools/size_report.py to calculate total flash usage, static RAM allocation, top .bss/.data symbols, and stack headroom within the single shared AXI SRAM region.",
+      "evidence": [
+        {
+          "resource": "repo://Justfile#L67-L69",
+          "version": "repo-lines-v1:sha256:32ce8add69587362c55319fec935383fb924db89f8b742bd0204a3017f0d07e1:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzY5Yjc3ODFhNjE2YTJhOWI4NDY3ODNkYWM0ZmZlODc0MWMzZGM5YWFjYzNhZTE4OTY2NTA5MzliMmRiNjRlNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNTA0NTRjMzc4MjBmMzY0N2QzZjFlMGY2MTRlNTAxNTMyZjgwNDdhZDJmMmZmZDM2MGU0YThmYWMwZmQyM2Y3MCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTQzZTY4ZWE5ZTYxZWI5Y2RkZTZlYzIzM2JiNDgyZjgwYWRjNDBiNjI1NTU0Yzk2MmMxMzVlMTI4OTlkODhlMyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYzAxYzlkNTk4MDA2Yzk3MzBmYTUxOTk1YzUwMDJkNmM5ZTI3ZTUyZTA1NDA1YmJlY2M2NDgzMzllZTg1ZGI2NiJ9"
+        },
+        {
+          "resource": "repo://tools/size_report.py#L47-L89",
+          "version": "repo-lines-v1:sha256:0ca2f314e627d5a936673bd820470550b1861e475b76484cacbffdfa796dbe49:eyJzZWxlY3RlZExpbmVDb3VudCI6NDMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwOGI1MjkwMjIzZjE5NjdjZTMxMDMxNGI4MGE0YzZlZjU5YmJmYjZjYjgyNzA2MjdjOThjMGJhOGM1ZGI4ZGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVlYTA3MjYyMzczYjAyNDk2NTJmMDBlOGU5NDBiMjc1ZWZhNjg0ZjEzZjE3M2M5YzBjOWEwNjQ2ODk0N2NjNWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAzMmU2OTIyNTE4NDY1ZGVlOTg3MGU3NjAxNjU0YWVkZWI4OThiODQ5ZmJmNmMzZjA0OGM4YzE5MmY3M2JmMGUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5d7e415adc95475a928b53e4e5468f35",
+      "statement": "The just flash recipe uploads binary images using dfu-util over USB DFU mode (0483:df11), retries partial transfers up to 3 times, triggers an application boot jump via :leave, and polls for USB CDC serial shell enumeration to confirm startup.",
+      "evidence": [
+        {
+          "resource": "repo://Justfile#L264-L360",
+          "version": "repo-lines-v1:sha256:a0a24763d54813b51f0f8281518d7476980d12307f20a0cb959baaf781fd16ce:eyJzZWxlY3RlZExpbmVDb3VudCI6OTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY1ZTRkODM5MWJmMDU5MzU0NDViZjMzODA0YzAyZTU2YmU4MGRiMmE0ZTc3MmI1ZWMyZDM5YzRiYTFlY2VkZDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYwMDIxYWUzYmE1MzQxNzIyNGQxYmQzMzU0ZDY1YjVjNDNlZjAyZjlkYzU4MDg2YTAwOTliOGNjYzcxZWQxYjQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE5ZTRjY2QxMTc1YjMxYTk0ZDU3Mzk5NWNkZDAyNWY1ZmM2NWE4Y2U5MWIwNjMzMjM4NThlMjI1NjY3NDZkNzIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_29c0bc0447b44d3b9c58e2682e55ff52",
+      "statement": "The just flash-verify workflow uploads the written flash range back from target hardware and performs byte-for-byte comparison against cybflight.bin to ensure memory integrity before flight.",
+      "evidence": [
+        {
+          "resource": "repo://Justfile#L362-L386",
+          "version": "repo-lines-v1:sha256:6086de98e53078cb746991d6d59483c8720b53d3094a4c8168a7b1a0f25d38fc:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ5MDEzZmFiNDMyOWVhMzM5ZWViYjI0OWM0YWYxNDY4Njg3Njc2ZjZhZWFhMmU3OGJjN2Y0MmIwODVkZjRjZjkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg0ZTc2MDQyNmE4ZTNhODYwZGQxNTBlNmMxMTc4YmFhNmJmMTgyNGM1N2ZlODI3M2IwMmI0YTVjZTQ1M2FhNzEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYyODhiYzYwM2FkMGM1ODliMTg5ZTFkY2FlMDgzYTc3MDc2NWY4YzE5NWY3NTNkNDVhZjE5YjU5N2MyZDY5MjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdmYTk4NzllZWMyZTQ2ZmFjOWQ3ODRkNjQ5ODc5Y2JiN2YwMjM4ODBiMjE4NGQ3OGE3MDMxNmU5M2ZlZWRjNGUifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-30T14:16:13.882Z"
+  }
+}

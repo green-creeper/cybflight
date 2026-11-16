@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:b83ea6f41951fe0cd427fe0ace5ba9c2f277058a9e482f9a3f2a6aafe1b23cb8",
+  "claims": [
+    {
+      "id": "claim_2e484d765632415ca1845fde27868f36",
+      "statement": "The ESP32 bridge decodes wire messages for attitude setpoints, manual control, and direct motor commands, routing them to control channels when offboard mode is active.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/comm/esp_bridge.rs#L93-L192",
+          "version": "repo-lines-v1:sha256:6e087075a65e98d0af008cd8cd398f73e151c3106829f84a30ca97283ac007ca:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAwLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI2M2IzZTEwODc2Y2E0OTkyNTc3MWUxMDhmN2I2MjNjNzBjMzIxMDQ2ZTJiODk2ZWFhMGIxMjNhMDFmYjgzY2U0IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJlN2I0ZTFmMWNhYzliZmQ2ZmQwYjM1MDg2NGY2NWI3OWU3MWZkOTNmMGVhMjFlMDkxZDQ3ZDYzYTE4OTBlNTYwIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJkNjI3MDBlNDRlOWM3MDlhNzMzZDlhOGZjYTAyYmI1NDBmMzEzNzYyMWZmNDljMTZjOTIzYTM1NTdjOWQwYWE5IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI4OGU4NWI0OGFkNDk1ZjUwNGY5NmFlOTI0MjU5MjQ0ZTRiMGZmZmU4NmMyYzFmNDU3NTlkODFkMzZkNmEwMGUxIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_36ed0aca43c746f68b4948c889da5f11",
+      "statement": "Offboard control activation is gated by the atomic state flag OFFBOARD_ACTIVE, which is engaged via an RC switch rising edge when armed and cleared immediately on disarm or switch lowering.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/control/rc_interpreter.rs#L131-L152",
+          "version": "repo-lines-v1:sha256:9443b7df01aac4391ee72f1421bd9f5c8c95646bbae7893b3e19687480cfb7a8:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYzMzUxMzlhNTI1MjljY2YyNmYyYmZmOWJjN2I1YWVmNzM5YWIwOWY0NjFhMzQ2MWJiZmNmMWIzYTQ5N2VlMDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJhYzdlNmFlYWY4N2RhYWNlMjZkZjY4ZjgwZjk4OTU0MmI5ZDMxZDcyODc2ZjA1Mjk2NTdjYjljMTRkMmFhYTkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA5YzRiMTk1MGRmMmRlNWEyMmZhMmNjYWM0MjQ4ZTE4OTdlZGJkMjk3ZWFmZDE1ZTE4NjgyNzdjMmY2YmMyOTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFkMGJhNWFlZWMyYjk5N2UxZDc5N2M2NjAxNTMyMWQ2YzIzMGU2YzYxYTY3MWU4ODllMDkxZGI5YTdjMzllMTAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_792d502acaf349c1bcee0c8bb9c09d6c",
+      "statement": "In the inner loop task, direct motor commands override INDI controller outputs when OFFBOARD_ACTIVE is true, but go silent if no fresh command is received within a 100 ms timeout.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/control/indi_task.rs#L1410-L1437",
+          "version": "repo-lines-v1:sha256:d516e8010907590cb504eaeb9113de18a0535a330445524db2ce6f729f30b51e:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY0YWY4Njk0ZDBmY2I3ZmJlMjFkYTk1NzE0NTE1NDE1Nzk1NzExYmRlMmY2MmYwNWIyNGE1MTVlNzdmY2UwZDAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI1YjhhYTk4ZGU2NWIxODgyMjQzMTM2ZjE2MzQ2ZjAwNjQ5MDQ4NzY1NWI1M2I3NGY3ZGFhNjc2ZGQ5MDE5OGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjMxMjM3NjEzMzgxODBjNjI1MzkzMWQ4NDVmNjU0ZmVkNjUwNDMyZjVlMzY3ZTI3MzdjOTg0N2E2ZDEwZWYzN2IifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_8ef56f25cf5e4451947741bf3973a244",
+      "statement": "The cybflight_rl Python bridge uses Rayon parallel environment stepping to expose a vector environment interface that reports OBS_DIM, NZ, and COST_MAP_VERSION constants.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_rl/src/lib.rs#L278-L288",
+          "version": "repo-lines-v1:sha256:f07f980a26f2c98b65ab7c2397e5bb2202cbb1246e9c46c529cd8fe576acfe7d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFkNjQ4ZGRmYjEwOWE5ZDRhOTEwOWNlZDc5MDIzODFmMmQ3OTA0NGEyMzliMjgzZWVjNjliMTRhZjExMjQ2YjQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBiMzBhOTY4NWRhNzZlYjYwMDQwODM4NjY3MGI4ZTA0NjZmMWE0NGZkNWU4Y2E0ZmRkYjQ4NGFlZmYwMjg4ODUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_rl/src/lib.rs#L39-L133",
+          "version": "repo-lines-v1:sha256:9efd9a813b2265004fdbb4ecbdaa7d61f654f2953bb838d7cbcc9999cba2483b:eyJzZWxlY3RlZExpbmVDb3VudCI6OTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ3NTc1MjNjNmY2MDE1YjA1NmI4OGRlNGY3ZDBiODE0ZGQ3NTY1NGVmZjc3MTA0Njg3YTg0MTZlNzNmNzEwNmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRhYTk2N2VlN2MwYzgyYjg1OTE4ZWY3MmIzN2U2YTkyZDI3YTMwZTYzOTgwNDFhNTdkNTYzZDRjMDdjMThmNWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY5MjJmZmY5YjY5ZjI0MTUyYWZkNmNlMzg0NDE5MjM3Njg4YmQxMmNiMmNhYjA1OTkwMzY4MGY0YTY3NGY5ODQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_1c74409287d841dd8ec75721402ae773",
+      "statement": "Firmware builds validate cost policy binary headers against magic bytes, format version, COST_MAP_VERSION, input observation dimension, and output residual width before emitting static rodata arrays.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/build.rs#L775-L890",
+          "version": "repo-lines-v1:sha256:ea9d3f109e0fc8bab8423588a7d72c7d08d545383ca0067efa92a59c01b95852:eyJzZWxlY3RlZExpbmVDb3VudCI6MTE2LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJjMWZhNzFjNzRiZDNhYWEyYTc0MGVkNTkzYzBlNzVmOTRlZWIyYTM2NjAyYjNmOGZmZGZiZDA3ZmEwNDYwOWY2IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI5OTJjODVlN2I1NWJkZDQ0ZDIwYmJlZDQyZTU1MjVlZjAwZjY1NGFlM2MzOTM0N2FmZDgxYjc2NTEzYmE2Y2Q0IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI1NGU2Nzk2NTczODM5ZGNkNDdmOGQ3ZGU0NWQxMTYzNTkyMjY2ZTFiNmE5ZmJmNDJhNDRlZWRiZTU1YjcwM2RkIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJjYjk3OTI3MmE3MThjYTQzMzIwNTA2MDViNjBkZDM3MzhiZjg0ZDIwMmNhODVhNjM5OWQ0ZDFhMmE0NmEzZjFlIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_25b24aa6874a45728b082bfd7ece20e5",
+      "statement": "The onboard race policy task steps a compiled-in RacePolicy allocation-free on the Embassy executor while armed and OFFBOARD_ACTIVE, publishing direct motor commands.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/control/rl_policy_task.rs#L28-L140",
+          "version": "repo-lines-v1:sha256:0ac96586981d2d0d751b4629339d68baebedc2248cf0bf910799dd96ac740ce0:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEzLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJkNWI2MjIwYjU3YjQzZjYxNmRlZTMzYjdlMzFkYjY0NGNhNjRjNjQyNjIwNmIxMDcwMDkxOWZjY2NjN2MzMDFiIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJlNmIwNDQ5MTQ2OTcyMmU4MzYzYTk0ZTQwNDQ1MzhlMDEzYTJhMjE3ZTM2YjFlNTY4YmE2MGFjYjdiNGM4ZjJlIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI5MWI4ZTJkY2JmOWY3NWQzOWViMzhhMzI5MDAzMGRlMDViNWRjNmE4MWQyMjNmZWZkY2NhMTQ0MWUwYWZiYzA0IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MiwiZm9sbG93aW5nQ29udGV4dEhhc2giOiIzNzk0ZDAyYTgxMjE5NDRkMTc2ZDI2NWU5YmI5Y2M1OWY2YWI4OTBiY2FkZjhhZWZkZWJkYmJiNGYyZWE4NDQ0In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_de04c24cd6cc4a5cb06795d22c61c0ba",
+      "statement": "The learned MPC cost policy evaluates situation-conditioned observations in the path frame after publishing outer-loop rate commands, applying asymmetric channel fences to modulate next-tick SQP state weights.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/mpc/cost_adapt.rs#L56-L100",
+          "version": "repo-lines-v1:sha256:14c0f1fda24f75aa7002152a308428f20a4acd6d944c486d5a2d5e28317c0288:eyJzZWxlY3RlZExpbmVDb3VudCI6NDUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg4NmEwZmFiM2I0OTUwMmQ0MGZlNDRiNjhmYTJkMzNhYjM4YTU1MGY0OTMzYjcyMmE4YWNiMzU5ODM5NjUyNDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkY2YyYjExOWUxYWQ4MzA5MjljZDBlMmZlNWVkNDIzNzI0MmU3MTRhYWVjMDgxMWVmMzk5ZTE5OTAyMTlkZDIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFkNTI3NzQxNzI1NjkwNjRhYTc5OWY3NmE0Y2I2ZDkyNzJiZTIyZDA5ZDBjNTM0YjM4M2Q3NjBhYzJjMTgxZGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFjNWRjNjE0MjdkYWRlNzA0NDlmNTkzMjJkNTAxMmJmNmY5Y2FiYTZlODJhNGZjMjlhMzc3YTVmYjVlM2JhMjMifQ"
+        },
+        {
+          "resource": "repo://docs/learned_mpc_cost_deploy.md#L128-L160",
+          "version": "repo-lines-v1:sha256:502f1a39d39790995599b44c721987c89fe13def36ef9cb8d78ace5b4d8a42c6:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU3OTRjOGZmMWU3NjM1ZmEwMWE4MDkyNmI0NzNhZGFiODgzYTE0NTgxOGI0YzgwZTJjYjI5NWI5YWFlYzU4ZjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg4MGQxZDQ5YzNmOTMxZDg1YTBjNGFkOGYwNzliODNkZWEyYzZlNDg2MzZmOGU0YzE5M2ZlMDk1Yjg1ZDA3YmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEyODdkMDI1OTdkYWU0OGNhMzQ0NjM4MTI5NTFjNWJjZTkwYjFhYTZmZWZkZDUxM2IzYjgxZDM2YjQwYzM2OTkifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-30T14:16:13.882Z"
+  }
+}

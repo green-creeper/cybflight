@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:cad90b1e19cd4724a3aed7fd5ec7483833e914e21f28cb42797e142acd27cd83",
+  "claims": [
+    {
+      "id": "claim_32dbc874cb644985be79f9504464c559",
+      "statement": "The flight recorder starts logging to an MCAP file on the rising edge of the arming predicate (IS_ARMED or RECORDER_HOLD) and finalizes the file with closing event records and metadata on the falling edge.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/blackbox/mod.rs#L5-L11",
+          "version": "repo-lines-v1:sha256:d95a99a276cb1c05ef8145f3e0dbfc907bf48a7f5703f7b13f6332e83ff23738:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDViNjg1NGVhNDdiMTg4ZGY2MDZkMzdhYmNhNGI1MjM4OTQwNTM5Mzc2YTcwYWU5YTA0MDI3ODJlOThiOGFkYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZjA2NTczN2UwNzFmOWZiY2RmNTRiOGFkMzhlNjZlNGI2ZjFmOWZhMWMwMWVkNmFmOWQ5NjY0ZDIyMmE5NjQwMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTcyNjVjMmI3M2M0MjdiNTRjMjRhMzA1MmZiOTE0OGY0YTU4MzU0ODcxOTk2OWU0MjRlM2IwZWI1YTVmNGE1NiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZGFkMjc1NDU1N2FjOWJmZDRlZjlkZTk0MGMyOTk4ZTI4MWMxMGU5ZWEyZjk0OWM1NDJkOGEyNDVjN2Y1MTIwNyJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/blackbox/recorder.rs#L1-L46",
+          "version": "repo-lines-v1:sha256:d3831fb666420b4d6302028c25335f8a54046856b5ed588f86218e41fc8e75da:eyJzZWxlY3RlZExpbmVDb3VudCI6NDYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZiODMwOGVjNzQwNzBjNWNjNDFiNDA4ZDc1ZjJhY2U5MTY4YmMyNTlkMGY3YmViZTJmODU2ZjUwOGMzMWQ3MTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZlN2NhMTljNTA0MmE4MTU2NmMxMTFhZTFhYzI3ZTIyNDdjZTY5YjU1MjNmZmQ0MTg0OGE1NTJkN2M2MWZhNjMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5e2215e48790405caf2e97d761cf602a",
+      "statement": "Topics logged to blackbox storage are governed by a monotonic tier hierarchy (none, small, mid, large) and a specialized sysid tier, with topic rate decimation applied to cap overall SD card bandwidth.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/blackbox/record_set.rs#L1-L75",
+          "version": "repo-lines-v1:sha256:dd361fc3ec8c5de22486a91677489e2a5a93d8ee6b64e5cc89ad0961abdc4e17:eyJzZWxlY3RlZExpbmVDb3VudCI6NzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZkZjI2ZmQzODE4NTg1Nzc3MjBkMmJlYTk3MTA3OGVlNDQ5MDcyNTA1YWVhMjE0NmZkNmRiMzdmY2IzMTUxMzkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZmOWVmNzE1YmIwOTI2YTBhMjZiZTkyMGFjODkxNjM4MDkxNDc4OTZhYTZhMTM1NGE3OTNiZDQ1YzNhZDg4YjUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFiZjA0YzkwMzQ2NDkwM2NmN2ZkYTlkOWE3MzJlZTczNzZkMzViOWQ1NTNiNzI3YzEyZjNmZGFmMjYyZDlhZGUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a6955595011142589e9a7a38809076a6",
+      "statement": "The LazyBufStream cache defers card reads until required by partial or unaligned writes, eliminating read-modify-write block operations during continuous sequential blackbox logging.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/blackbox/lazy_stream.rs#L1-L27",
+          "version": "repo-lines-v1:sha256:3dda217b0cff5163de4c80c31d507438be622748619dd3b83d2db2b15041817a:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg0MThkY2Q4NThjYTkxZmQ0NjYzMzUwYzkzMDk3ZGRlYThlZGM4MjM5MGYwNTZjNWFjMmU5MzMyMzk3N2YxMDQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBlZmVjM2U1ODBjYmMyM2E0MTFjMjZjNTVmYWRjZTAxZDlmZmY2YWY4NTRkNzBlOWQxOWQ1ZmZhZDM4ZTA4ODUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_fee1f3644b114dbb87661f4e909bd57e",
+      "statement": "SdmmcBlockStore uses a static 32 KB batch buffer to combine block write operations into multi-block CMD25 SDMMC transfers matching FAT cluster boundaries.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/blackbox/sdmmc_block.rs#L42-L78",
+          "version": "repo-lines-v1:sha256:ad79a3d2e2a017ef57b13da110cd2d332d3154bd63c4d4fe4bea8a4bf2bf4d7a:eyJzZWxlY3RlZExpbmVDb3VudCI6MzcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRlMmMzNTk0MmVhOWMxODE4OTE4YTQwYjQxYzQxOWQ4YzQ4OWQzNTM2MWY2NmUzZmJmYTQwZWFiZDFlMjQ1OWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVmNzMwYWU2NmRkNWZlZjk3OGVlMzIxNDQ1MmNiNDQ5OTk0YzVjNGU4ZTI3NDNkMzExZDVkYzQ3MzUwMTg1YWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRkMjRiZjE4YmRhNjQ5ZWY1ODcxNGQ2NzEwMGZiMGNhM2JkYmRiODU0YWQ5NjQyMDk2NWExYmQ4ZTI4M2VlMTkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_84cb36bb133842a096a73f5e2c95d1f1",
+      "statement": "Shell file operations on blackbox logs are rejected with a busy response while a recording session is active to prevent concurrent SDMMC access.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/blackbox/fat.rs#L73-L100",
+          "version": "repo-lines-v1:sha256:6f07ab9e8f0052e935f90a9b60d84cbe3419391aa8e4945bbd89fac103da81d3:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkyYTVjN2QzZGMyNjg4ZGMxNTM3Y2VhNmE3ODJjOTk1MWJkZDM2OGY5ZDEzZDA4MWM3YWI3NjQ5MDJiYzEyYWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYxZTJiODkxMDk4NWE3MWZmNGU5OWQ2Y2E1ZjdjODYzMjYzZTFmOTljNGE1YjhhZWQzMjI1YTlkNmM1Y2UyNzEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk0Yzc2NjgyMGE2OWIzZTIxMjhkNjFjOTM0MWU3YWQ2MjA4YzFmYmQ1YmJkMDk0YTA3ZjA0ZWY3MjE1YTczYTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEzMGY4M2FiMWMyNjBlMmMzZjExM2UwN2YzODE0YzIxZjcxODBkMzM1N2MzZWFlZWUzOTMzZWNkM2E4N2IwYWYifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/blackbox/mod.rs#L90-L101",
+          "version": "repo-lines-v1:sha256:b966e97e889b1fa6e15339f9588e199236220c96640d157b6990bef27cb6d1fd:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY5MzRjYzljMTQ1MTU5MjQ4Y2FmZTNhNmY2OWRjN2U4NjZhMjQyOTNjOGZkYWI3MTExYmI4ZjBiY2ViMTcyYzUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE3ZTQ2MDZmZjIyZTViZTQ1NjVhMTVmZDgwNzY3MzdlMWVkMzg3MTE3NTE0MjU5MjdlMDJlN2FjODlmNGJmMGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZlY2QwZGRhZDQ5ODViZmZmZGQ1YmNiYTk4MTNhMzc3MjgxOTllNTAyMDJkN2M1YmM1ZTQyMDYwNWYzNTc0MjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVhZmRmMDU5MGM0N2MwMjA5ODAzNGE5Mjk0ZjczNmNkNzY4ZTY0OTJhNjdmZTgzZGUyYTgzZjU2ZGNlY2U5NmIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_163f7926b1dd4e9d95f5ef9c0e8ff69b",
+      "statement": "Topic payloads are serialized as CBOR documents and framed inside a no-std MCAP binary format containing Header, Schema, Channel, Message, DataEnd, and Footer records.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/blackbox/cbor.rs#L1-L12",
+          "version": "repo-lines-v1:sha256:fb25911a2d9216e0ac7acc78b5edc2d9d9ee7a27c809947fb691466368cf7fe4:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQzOGNmOTg4NTcyYTI3NTEwYWY4Nzg5MWFjYzgwMjcxY2YwNzkxODE4YTRkNDUyMWYyNzg4MDM4ZDlhMjA2ZmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA2MWI0YzI0NWMxYWJjMzJjOWJmYWYzNTkyMWE0Nzg1OWI2NzkxMmQzYTZhZmE4YzllOTU5ZDE2OTU2M2RiMDQifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/blackbox/mcap.rs#L1-L45",
+          "version": "repo-lines-v1:sha256:0b510e3a58a3350b89653f50930e910bd78a75df3cf20bcaaea2dd7a10cb0c10:eyJzZWxlY3RlZExpbmVDb3VudCI6NDUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU3YWQ5OWM1MjcyZWU3NzQ0ZDk5NjcwNmU0NTA3NDA5YjM3ZTEzYzEzYjdkOTVlYjE4MWE1MWNhODliMDdiZDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjcwNTU0NjMxN2EyYTM3YjhlNDE5ZDY1ZWM2YzlmYzRkODIwMTIwMDQ1YzFjMDZiNGVlZWIxODNlZGQ3ZmE3NzcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b404c993dbd14402b2cbed7ad243872c",
+      "statement": "The ESP32 telemetry bridge uses UART DMA with idle line detection to process incoming COBS-encoded wire frames and transmit rate-decimated flight state telemetry.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/comm/esp_bridge.rs#L1-L30",
+          "version": "repo-lines-v1:sha256:accd91e89688e5939a0ebfe50dd6d7be53dbb4787a45c8b291f5a25202d065e5:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQyNTVlMTNhYzI5YmI1Y2U3ODRjZGRhZTIwMmZhOGRhZGMyMjI5MGYyZjMwNGI5OGY3NDgyYTg2NWZmMGNlNjciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZhYWE4ZGEzNmExYTNlOWQ3NzdkYTczMmMzOGNmMzQxZGY1YjhiOTY2NjI0Y2M0NzhhYTQwNWFiMDNlNDAwZWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjMzYTk3Zjk3YjE1ZGE4ODU3OGU5ODdhYmE0MTEyNTE4MjNmNTU5OTllMjA2N2M3YTU3N2Q4M2ZmYTZkMjZkNDIifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/comm/esp_bridge.rs#L36-L74",
+          "version": "repo-lines-v1:sha256:fa7331b3bcb8890c551c7fee8235964ff45e7d0e5e7664b160f494c97fd71c53:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY2OTEzYzkwYmJlZmE5YWM1NzEwOWZhYmQ5YjEzMWYxYWRkMDYyOWNhYjQ0MGQyZDRlOGFjNWJjNmE3YjYyYzQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU3YjRlMWYxY2FjOWJmZDZmZDBiMzUwODY0ZjY1Yjc5ZTcxZmQ5M2YwZWEyMWUwOTFkNDdkNjNhMTg5MGU1NjAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQwMjc2ZGIzZmQ1ODM5ZmM4NWI1ZjQzNDcxZjI2ZmFjMDI5MDIzN2M0YmQ2MzhjOGE1MTM4ZWUyMGNlZDNlZTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU5ZTlmZDk2N2E3MTY4Yjg1YWMxNTQyZGI0ZTU2YzhmZDA2MTUyMjkyMDRiM2M0MWY3YjRjOTY4ZGUxNmEyNzMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ccf473f32661470d8d42e1b49adb6d1c",
+      "statement": "The CRSF protocol driver unpacks packed 11-bit and subset variable-resolution RC channels, parses link statistics, and constructs telemetry frames for battery, attitude, flight mode, heartbeat, and GPS.",
+      "evidence": [
+        {
+          "resource": "repo://crates/drivers/src/rc/crsf.rs#L148-L241",
+          "version": "repo-lines-v1:sha256:06f0f660fc381fce9a503ef84aab59d84681b06945a0b4fc218006ad9527f6d7:eyJzZWxlY3RlZExpbmVDb3VudCI6OTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI5ZjNiMTlmMWExN2VjN2RlMTU5N2YzMmE3N2NmYmMyZjFmOWRhOGQ2OGZmZDI4Y2JkMmVlYTM1ZTk4MGU4MDMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM1ODcxZWRjZjYzMWVkMGZkZDMwMGE0NTZhYTQwYjI0MWM5MTBlZWY4NzIwNjcxMjc5M2I4N2VmM2VmZTM5NjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA5MmFjZmVlM2M2MGNiYmYzN2YwMjQwZGM1ZTdhM2ZmOTNkNGYxNWRlZGZmZDAzZTNlMzRmNWI3YjQ1OTM3ODgifQ"
+        },
+        {
+          "resource": "repo://crates/drivers/src/rc/crsf.rs#L523-L600",
+          "version": "repo-lines-v1:sha256:ccfcdba02de32fdc4c13f460f3a9e49a82a2cf2f648699e78d143d6fae34bb6d:eyJzZWxlY3RlZExpbmVDb3VudCI6NzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVkYzEyZjEzMWU0ZTJmNWNmYTE1OGM5ODI0NGJlMDQ0MWI4Y2Y4NjE1MTNmYTkzNWUwY2Y1ZDA0YmQ2ODQ3MDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg4MDQ2MjNhNTllMzg1MmE5MjEzNjJlNGUxMjY1OGM4MjQwMGQ0NThhN2E1ODRhNGFjOTFjOWRhNmRjYzQ1YWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJkNGRkMjFmNzVmNjljOTRmZjQ0NTI0MWQ0OWY1MWYyZDM2Y2E1Y2RkZmJhNzJjZDBhNDNlYTU5MTRjOGU5M2IiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjViOTlhMjQzYmI3MDBiNjUzNDU1ZGM3ZjliOTgxNDI4YzVjOTExZDBiNmE5ZWFjMGQyNGEwNTFlNzc3ZTQ4MDEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d1ef2ebeff29498b8498391899fd7c75",
+      "statement": "USB serial VCP streaming streams selected diagnostic topics with a minimum 20 ms update interval to limit telemetry throughput to 50 Hz and protect low-level system tasks from starvation.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/usb_serial.rs#L130-L138",
+          "version": "repo-lines-v1:sha256:0733db245cc05f1acc0850a9c041089fafa09108b8eb6e8cee7658a670b58076:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMjA2YjE1OWQxMjYxYjI1Mzg2ZDEzY2EzNDJjZmJkMWNkYzQ2MWJlMzA2MWM0YWExNTkyZTgwNzMyMjdmNTU4ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODE3ZDI3M2Y5MzkwZmNlNjE0MDc5ODczZDZkYzM4M2YzMGUwM2Y2Njg4YzI5ZTM3YjExZDdlZTZjZTllZTViZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTRiMTRmZDdhZmNkN2MxZGY2OGQ1NjQ3ZGNlYWEwZDVjNGZhMTdkYTk1YWVlYmNkMjgyYmI1YmMzMTRjNjIxNSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_d2f4ca1494ed4269bf6095c90eb53c21",
+      "statement": "The flight controller synchronizes its monotonic timebase with UTC using a refined PTP follow-up protocol over ESP32 UART, maintaining internal task operations on monotonic time and applying UTC offset conversion at telemetry boundaries.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/comm/time_sync.rs#L1-L14",
+          "version": "repo-lines-v1:sha256:916f02508599da12128219690a979a9ca179b0ee6bdc55369f69d93715cf07e3:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImViYTQ0ZWNjZDY4NTBiMjMzYmMxZGNjMTM4MjA3NTNmNTBkZWU3ODgxNTA3YzljZWY4Nzk5ZTBjYTdlYzg2NjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAzY2FiMjEyMmVmOWVjOTNhZTZhNTIzN2FlMDVlNTVmYzkyODg0N2YwZjU4ZTk3Zjc1NDI5MDQ3MmJkZmEzMTEifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/comm/time_sync.rs#L98-L143",
+          "version": "repo-lines-v1:sha256:f2c9281bc31c90093736a78bc3d372b5321ef9ef66cc6521d5916d651743d5d8:eyJzZWxlY3RlZExpbmVDb3VudCI6NDYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAwZGE3NjQ3ODU0OTcxZTk2OTMyZjIxYjJkYzgxMjRkODEwY2I1YTcwMmUxNTE2YmYxNGY4YjcwYWQ0MzA5NTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM1Y2RlZjgwODVhZTc0YWI2MzZkNjQ1OWY1YzZkNWZiZmIwZGIyNjRmMWIwZDc1YmFjNTE5YzliM2Y2NzE3YWMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdkNTE1MDBhMjdiNTIwZmIwN2UwYjRkMzdhMzBmMWMxNWNlNTg3ZDg5N2Y4MDI5NWM3ZWM5YzA4M2JkOTc2NjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk3ZDNjZDExZDlmNGM2MDhlNjcwNzU5NzYzN2I4ZjgyYjEwM2I1ODA2OWEyNGNjY2E3ZjJkMzZiOGJjMjhlYWEifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-30T14:16:13.882Z"
+  }
+}

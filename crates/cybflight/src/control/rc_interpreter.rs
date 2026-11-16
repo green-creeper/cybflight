@@ -19,13 +19,16 @@ use crate::sensors::RC_INPUT;
 // ── RATE MODE ────────────────────────────────────────────────────────────────
 
 #[cfg(feature = "outer_rate")]
-use cybflight_core::rc::rc_mapping::ChannelCalibration as RateChannelCalibration;
-#[cfg(feature = "outer_rate")]
-use cybflight_core::rc::rc_mapping::StickEndpoints as RateStickEndpoints;
+use cybflight_core::rc::rc_mapping::{
+    ChannelCalibration as RateChannelCalibration, StickEndpoints as RateStickEndpoints,
+    apply_deadband_and_expo, compute_angle_mode_rates,
+};
 
 #[cfg(feature = "outer_rate")]
 #[embassy_executor::task]
 pub async fn rc_interpreter_task() {
+    use core::sync::atomic::Ordering;
+
     let mut rc_sub = RC_INPUT
         .subscriber()
         .expect("rc_interpreter: RC_INPUT subscriber");
@@ -37,65 +40,82 @@ pub async fn rc_interpreter_task() {
         .publisher()
         .expect("rc_interpreter: CONTROL_SETPOINT_TELEM publisher");
 
-    // Stick travel comes from the `rc` group (`rc_min_us` / `rc_mid_us` /
-    // `rc_max_us`), not from the constructor defaults: the endpoints are
-    // a property of the transmitter's servo travel, and a radio that
-    // does not use the standard 988/1500/2012 would otherwise mis-scale
-    // every axis no matter what the vehicle YAML pinned.
-    let endpoints = {
+    struct RateRcSnapshot {
+        pitch_cal: RateChannelCalibration,
+        roll_cal: RateChannelCalibration,
+        throttle_cal: RateChannelCalibration,
+        yaw_cal: RateChannelCalibration,
+        min_channels: u8,
+        max_rate_rp: f32,
+        max_rate_yaw: f32,
+        rate_deadband: f32,
+        expo_rp: f32,
+        expo_yaw: f32,
+        angle_channel: usize,
+        angle_threshold_us: u16,
+        max_angle_rad: f32,
+        angle_kp: f32,
+        mission_channel: usize,
+        mission_high_us: u16,
+        mission_low_us: u16,
+        hover_thrust_n: f32,
+        max_collective_thrust_n: f32,
+    }
+
+    fn load_rate_rc_snapshot() -> RateRcSnapshot {
         let p = crate::params::get();
-        RateStickEndpoints {
+        let endpoints = RateStickEndpoints {
             min_us: p.rc.min_us as i16,
             mid_us: p.rc.mid_us as i16,
             max_us: p.rc.max_us as i16,
-        }
-    };
-    let pitch_cal = RateChannelCalibration::centered_with(1, endpoints);
-    let roll_cal = RateChannelCalibration::centered_with(0, endpoints);
-    let throttle_cal = RateChannelCalibration::throttle_with(2, endpoints);
-    // Standard AETR right yaw stick (~2012 us) requests CW nose-right yaw (-omega_z in FLU),
-    // matching `RcMapper::aetr` and position mode (`centered_inverted_with(3, ...)`).
-    let yaw_cal = RateChannelCalibration::centered_inverted_with(3, endpoints);
-
-    let min_channels: u8 = {
-        let mut m = pitch_cal
+        };
+        let pitch_cal = RateChannelCalibration::centered_with(1, endpoints);
+        let roll_cal = RateChannelCalibration::centered_with(0, endpoints);
+        let throttle_cal = RateChannelCalibration::throttle_with(2, endpoints);
+        // Standard AETR right yaw stick (~2012 us) requests CW nose-right yaw (-omega_z in FLU),
+        // matching `RcMapper::aetr` and position mode (`centered_inverted_with(3, ...)`).
+        let yaw_cal = RateChannelCalibration::centered_inverted_with(3, endpoints);
+        let min_channels: u8 = pitch_cal
             .index
             .max(roll_cal.index)
             .max(throttle_cal.index)
-            .max(yaw_cal.index);
-        m += 1;
-        m as u8
-    };
+            .max(yaw_cal.index) as u8
+            + 1;
+        let hover_thrust_n = p.airframe.body.mass_kg * p.site.gravity_m_s2;
+        let max_collective_thrust_n: f32 = p.airframe.motors.iter().map(|m| m.max_thrust_n).sum();
+        RateRcSnapshot {
+            pitch_cal,
+            roll_cal,
+            throttle_cal,
+            yaw_cal,
+            min_channels,
+            max_rate_rp: p.rc.max_rate_rp_rad_s,
+            max_rate_yaw: p.rc.max_rate_yaw_rad_s,
+            rate_deadband: p.rc.rate_deadband,
+            expo_rp: p.rc.expo_rp,
+            expo_yaw: p.rc.expo_yaw,
+            angle_channel: p.rc.angle_channel as usize,
+            angle_threshold_us: p.rc.angle_threshold_us,
+            max_angle_rad: p.rc.max_angle_deg.to_radians(),
+            angle_kp: p.rc.angle_kp,
+            mission_channel: p.rc.mission_channel as usize,
+            mission_high_us: p.rc.mission_high_us,
+            mission_low_us: p.rc.mission_low_us,
+            hover_thrust_n,
+            max_collective_thrust_n,
+        }
+    }
 
-    // Stick scaling and deadbands from the `rc` group (reboot-flagged,
-    // so read once here). In rate mode the throttle is a direct thrust
-    // axis and shares the stick deadband with the rate axes; the wider
-    // `rc_throttle_deadband` applies only to position mode, where
-    // throttle is a mid-stick-centred *velocity* command and has to
-    // absorb the TX's spring slop.
-    let params_snapshot = crate::params::get();
-    let max_rate_rp = params_snapshot.rc.max_rate_rp_rad_s;
-    let max_rate_yaw = params_snapshot.rc.max_rate_yaw_rad_s;
-    let rate_deadband = params_snapshot.rc.rate_deadband;
-    let throttle_deadband = rate_deadband;
-    let mission_channel = params_snapshot.rc.mission_channel as usize;
-    let mission_high_us = params_snapshot.rc.mission_high_us;
-    let mission_low_us = params_snapshot.rc.mission_low_us;
-
-    let hover_thrust_n = params_snapshot.airframe.body.mass_kg * params_snapshot.site.gravity_m_s2;
-    let max_collective_thrust_n: f32 = params_snapshot
-        .airframe
-        .motors
-        .iter()
-        .map(|m| m.max_thrust_n)
-        .sum();
+    let mut local_param_ver = crate::params::PARAM_VERSION.load(Ordering::Acquire);
+    let mut cfg = load_rate_rc_snapshot();
 
     // `None` = not yet synced (first RC frame seeds the confirmed level,
     // so a switch-high at boot or arm does NOT spuriously engage offboard).
     let mut offboard_level_confirmed: Option<bool> = None;
     let mut offboard_active = false;
+    let mut angle_mode_active = false;
 
-    defmt::info!("RC interpreter: rate mode started");
+    defmt::info!("RC interpreter: rate mode started (Acro/Angle switchable)");
 
     loop {
         let mut rc = rc_sub.next_message_pure().await;
@@ -103,20 +123,30 @@ pub async fn rc_interpreter_task() {
             rc = newer;
         }
 
-        if rc.channel_count < min_channels {
+        let armed = crate::motors::IS_ARMED.load(Ordering::Acquire);
+        if !armed {
+            let current_ver = crate::params::PARAM_VERSION.load(Ordering::Acquire);
+            if current_ver != local_param_ver {
+                local_param_ver = current_ver;
+                cfg = load_rate_rc_snapshot();
+                offboard_level_confirmed = None;
+                defmt::info!("RC interpreter: params reloaded (ver {})", current_ver);
+            }
+        }
+
+        if rc.channel_count < cfg.min_channels {
             continue;
         }
 
-        let armed = crate::motors::IS_ARMED.load(core::sync::atomic::Ordering::Acquire);
-        let ch_present = rc.channel_count > mission_channel as u8;
+        let ch_present = rc.channel_count > cfg.mission_channel as u8;
         let raw_level: Option<bool> = if !ch_present {
             offboard_level_confirmed
         } else {
-            let v = rc.channels[mission_channel];
+            let v = rc.channels[cfg.mission_channel];
             Some(match offboard_level_confirmed {
-                Some(true) => v > mission_low_us,
-                Some(false) => v > mission_high_us,
-                None => v > mission_high_us,
+                Some(true) => v > cfg.mission_low_us,
+                Some(false) => v > cfg.mission_high_us,
+                None => v > cfg.mission_high_us,
             })
         };
 
@@ -136,22 +166,22 @@ pub async fn rc_interpreter_task() {
         if !armed {
             if offboard_active {
                 offboard_active = false;
-                super::OFFBOARD_ACTIVE.store(false, core::sync::atomic::Ordering::Release);
+                super::OFFBOARD_ACTIVE.store(false, Ordering::Release);
                 defmt::info!("RC: disarmed — offboard/RL mode cleared");
             }
         } else if rising && !offboard_active {
             offboard_active = true;
-            super::OFFBOARD_ACTIVE.store(true, core::sync::atomic::Ordering::Release);
+            super::OFFBOARD_ACTIVE.store(true, Ordering::Release);
             defmt::info!(
                 "RC: offboard/RL trigger (ch{} rising, armed) — engaging offboard/RL control",
-                mission_channel
+                cfg.mission_channel
             );
         } else if falling && offboard_active {
             offboard_active = false;
-            super::OFFBOARD_ACTIVE.store(false, core::sync::atomic::Ordering::Release);
+            super::OFFBOARD_ACTIVE.store(false, Ordering::Release);
             defmt::info!(
                 "RC: offboard/RL switch low (ch{} falling) — returning to manual RC rate control",
-                mission_channel
+                cfg.mission_channel
             );
         }
 
@@ -159,34 +189,79 @@ pub async fn rc_interpreter_task() {
             continue;
         }
 
-        // Map sticks to body rates
-        let roll_norm = roll_cal.normalize(rc.channels[roll_cal.index] as i16);
-        let pitch_norm = pitch_cal.normalize(rc.channels[pitch_cal.index] as i16);
-        let yaw_norm = yaw_cal.normalize(rc.channels[yaw_cal.index] as i16);
-        let throttle_norm = throttle_cal.normalize(rc.channels[throttle_cal.index] as i16);
+        let want_angle = cfg.angle_channel < 16
+            && (rc.channel_count as usize) > cfg.angle_channel
+            && rc.channels[cfg.angle_channel] > cfg.angle_threshold_us;
 
-        // Apply deadband
-        let roll_cmd = apply_deadband(roll_norm, rate_deadband);
-        let pitch_cmd = apply_deadband(pitch_norm, rate_deadband);
-        let yaw_cmd = apply_deadband(yaw_norm, rate_deadband);
-        let throttle_cmd = if throttle_norm < throttle_deadband {
+        // Map sticks to body rates (or tilt angles -> body rates in Angle mode)
+        let roll_norm = cfg.roll_cal.normalize(rc.channels[cfg.roll_cal.index] as i16);
+        let pitch_norm = cfg.pitch_cal.normalize(rc.channels[cfg.pitch_cal.index] as i16);
+        let yaw_norm = cfg.yaw_cal.normalize(rc.channels[cfg.yaw_cal.index] as i16);
+        let throttle_norm = cfg
+            .throttle_cal
+            .normalize(rc.channels[cfg.throttle_cal.index] as i16);
+
+        let throttle_cmd = if throttle_norm < cfg.rate_deadband {
             0.0
         } else {
             throttle_norm
         };
+        let yaw_cmd = apply_deadband_and_expo(yaw_norm, cfg.rate_deadband, cfg.expo_yaw);
 
-        let rate_ref = nalgebra::Vector3::new(
-            roll_cmd * max_rate_rp,
-            pitch_cmd * max_rate_rp,
-            yaw_cmd * max_rate_yaw,
+        let mahony_quat = if want_angle && crate::estimation::MAHONY_READY.load(Ordering::Acquire) {
+            crate::estimation::MAHONY_QUAT.lock(|c| c.get())
+        } else {
+            None
+        };
+
+        let (attitude_quaternion, rate_ref, next_angle_active) = if let Some(q) = mahony_quat {
+            let roll_stick = apply_deadband_and_expo(roll_norm, cfg.rate_deadband, 0.0);
+            let pitch_stick = apply_deadband_and_expo(pitch_norm, cfg.rate_deadband, 0.0);
+            let (q_des, rates) = compute_angle_mode_rates(
+                &q,
+                roll_stick,
+                pitch_stick,
+                yaw_cmd,
+                cfg.max_angle_rad,
+                cfg.angle_kp,
+                cfg.max_rate_rp,
+                cfg.max_rate_yaw,
+            );
+            (q_des, rates, true)
+        } else {
+            let roll_cmd = apply_deadband_and_expo(roll_norm, cfg.rate_deadband, cfg.expo_rp);
+            let pitch_cmd = apply_deadband_and_expo(pitch_norm, cfg.rate_deadband, cfg.expo_rp);
+            (
+                nalgebra::UnitQuaternion::identity(),
+                nalgebra::Vector3::new(
+                    roll_cmd * cfg.max_rate_rp,
+                    pitch_cmd * cfg.max_rate_rp,
+                    yaw_cmd * cfg.max_rate_yaw,
+                ),
+                false,
+            )
+        };
+
+        if next_angle_active != angle_mode_active {
+            angle_mode_active = next_angle_active;
+            super::ANGLE_MODE_ACTIVE.store(angle_mode_active, Ordering::Release);
+            if angle_mode_active {
+                defmt::info!("RC: flight mode -> ANGLE");
+            } else {
+                defmt::info!("RC: flight mode -> ACRO");
+            }
+        }
+
+        let collective_thrust_n = rate_stick_to_thrust_n(
+            throttle_cmd,
+            cfg.hover_thrust_n,
+            cfg.max_collective_thrust_n,
         );
-        let collective_thrust_n =
-            rate_stick_to_thrust_n(throttle_cmd, hover_thrust_n, max_collective_thrust_n);
 
         let setpoint = cybflight_msgs::AttitudeControlSetpoint {
             timestamp: Instant::now(),
             collective_thrust_n,
-            attitude_quaternion: nalgebra::UnitQuaternion::identity(),
+            attitude_quaternion,
             body_rate_rad_s: rate_ref,
             torque_n_m: nalgebra::Vector3::zeros(),
         };
@@ -222,19 +297,6 @@ pub(crate) fn rate_stick_to_thrust_n(
         (t * 2.0) * hover_thrust_n
     } else {
         hover_thrust_n + ((t - 0.5) * 2.0) * (max_collective_thrust_n - hover_thrust_n)
-    }
-}
-
-#[cfg(feature = "outer_rate")]
-#[inline]
-fn apply_deadband(s: f32, deadband: f32) -> f32 {
-    let a = s.abs();
-    if a <= deadband {
-        0.0
-    } else {
-        let scaled = (a - deadband) / (1.0 - deadband);
-        let scaled = if scaled > 1.0 { 1.0 } else { scaled };
-        if s >= 0.0 { scaled } else { -scaled }
     }
 }
 

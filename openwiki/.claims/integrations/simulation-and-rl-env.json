@@ -1,0 +1,192 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:5c00f1fd98116aff6fff83971ac5767d6ab87482ee18b63fa9fdedf16acc260c",
+  "claims": [
+    {
+      "id": "claim_4bb3811324654af786a78bd93757f588",
+      "statement": "cybflight-sim models quadrotor physics using a 17-dimensional state vector (NX_PLANT = 17) consisting of 13 rigid-body states and 4 motor rotor speeds.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_sim/src/plant.rs#L18-L22",
+          "version": "repo-lines-v1:sha256:56121f94371d3ddf2a9ea4453d2253384a48cd6d8176cb0a8f354efa52a7069d:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMWQ4M2RmY2ZkNmU5NzRlOGEwZDBlZjMxNmZiZTA3MjA4ZTIxNTc1NTJmZjZiYjkyOWNlMjRjMDk5ODEwMmMyMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiODViZmM1YTdlZDcwYjk1MzdkMDA0MzkwOTZiZjJkOWZhYzQ5OTQ5NjMzYzE3Yjg3ZTgyNGZjOWE4MjY0YjBjYyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjBmZjdjNGI1MTc4YTExNWI1ODgzMzY5ZTBlMGZhZDU3YWE0M2ZhYjA0MDA4MGZjZDJiMTdiNTQ4NzMyNGRiZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYmIwNDQ0ZWYzZTM0OTBlNjg4YWU5ZDdlMWViM2FmZTM0YWJiN2JjZTUwZWIzNzk0NzExZWQzZGU0ZWJiYTk3OSJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight_sim/src/plant.rs#L63-L67",
+          "version": "repo-lines-v1:sha256:e97e96c300651be4b0fd9ec9b5dfa663fb15770a12f5eb8e32a93dc55ea92b9b:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNGMwNTgzZDAwM2RiNjIwNzIxYjczZjdlMDM0MWY5MWZhMjBiZThkMDU2MTA5MTI0NWNmNWRmZWEzMzk5NWQyNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNTNmMmNlNzcxNzMyZjFkZDc5MTNlYTMyNDE4N2I5NTMzMGMzNzBjOWFjZWU3MDRlZWU1YzA1NGQ3MDI4NmYxMiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTVmNjNlNjc1MWIzZDc5M2Y2NmJkYWYxNGU5ZWNiYmQxZjI4YjQ0YTdkM2QyOTg0MzE2OWM3YjRiMzJmYmZjNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDEwODZmZWIzM2IzNjcyZmUzNTRmMTMwNTI0OWE2NmVmOTcwOWY1NjExMWQ0NWIzZGI5ZDhlNTI1MjIzYTUzNiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_e57e59c579204410a462c4f18cd5465a",
+      "statement": "QuadPlant implements continuous-time dynamics including first-order motor lag, non-linear throttle-to-speed mapping, per-rotor thrust scaling, aerodynamic drag, gyroscopic precession, and yaw reaction torques from rotor angular acceleration.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_sim/src/plant.rs#L34-L57",
+          "version": "repo-lines-v1:sha256:c7728031d5885d6ed1cce10af3ec9938cd32ca6e898cae75759ef95f5593c621:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhiY2VkNWZjNmY2OTZmNDEzN2QzMWNlOTU3NGYyNDA1NmFhYTQ3ZmQ4ZDNlYjMxM2M1M2U4ZTA2NWMxOTBkZmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI2NTg0YjNkYzE2YmZmOGI3YjI2OTVjYTM4YmY3NTkzZmYxNWQ3MjNmNzhmMGIwNWE5YmFmZDQyZjdlMmY3OTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA2Yjc5MTk5NWNhNjNlNTIwNjhhN2Y2MzFjYTRkNDYzODZiYTI5YmJlYTY4MmY5NmUzM2FmOTFlNDc0MGRlNjgifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_sim/src/plant.rs#L357-L430",
+          "version": "repo-lines-v1:sha256:7d53561035d6bde270070db5322081b956d247f7e0d47981faa9c394245f6d9b:eyJzZWxlY3RlZExpbmVDb3VudCI6NzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdkOTBkODQzODEyMjE4M2Y2NjFmMDNhNzBhZDAwMDE2ZWUzZDdjOGI1N2E3ODAwMjFkZDU1ZDg4Yjk4ZDc2Y2UiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRhNGQxOTYyZTNmOTJhZDkzMWY2ODExYzIyNzg4OTk0ZWJmNmZkNzE1ZDg1NWE2MDIyMzdhMDg0ZTQxMmJjNTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY4ZjljYTdmMGQ5MjFkNzA1YWE4MGRiZTJhYTY4MzUxYWVmNTBkNDlkZmYxMDZlZjhmYTYwYzAyZGNiNzA2NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e0fc517ad2db4f8bb324a4a5af1e2065",
+      "statement": "Numerical state integration in QuadPlant is executed via 4th-order Runge-Kutta (RK4) with attitude quaternion re-normalization at every intermediate stage.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_sim/src/plant.rs#L286-L306",
+          "version": "repo-lines-v1:sha256:457a76583d189cb53ec085c6804ae7d1c806c592943a9fc7b1eb4cd015f703db:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRlZmM2MWExZTYzZmY3OTdhODFhNTAzYzkxZjE2N2ExNzlkM2UzYzBhZTkxYmU3MTk2NzhlMTAxNjI3MzBiNzAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImEwMjkwOGM1YzAyYzU0YWY0MTBkMGVhZWRmMzVjZWVhMTY1NmUyYjg5ZGNiMTgwNTE0YzFjMTNhM2ZlZmVmZWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE5NmM2MDFmNWQyOTFiMzFlMWNiZDg0ZWYxNjQ0ZDc0MmQ2Y2Y1MTRhNTIwZDM0OGEyYmFjYzJmYjg4NzZhMTIifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_sim/src/plant.rs#L442-L472",
+          "version": "repo-lines-v1:sha256:cbfac1fa671bf69d278d6bfc610c06848458b80e57c1914f656ee969f11c5763:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU5NzE5NTllYjYxNTlhZGM2OTM5YzY0ZDRiOTI1NDhmOTcwYzFhYmNmNjJlMDBhNjVmNjgyODhkYjVlNWM1NTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhkNzdjNTA1ZTQ5MmM3MTZkMDFkZjE2MDAwYmY3N2UyZTE3NzkxNWI2MWU4MGJjNzM3MDkwMTFjMjFkYWRjMzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgwYzc5MGI2OTAyN2I2MWNjZDZmMDg3ZDkyNTgxMzhlNTIzMDFkN2U2ZmJlZjMzOTEwYmVkNmNhMzlmM2I3MGYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_7114e708dba14ac09127c50f9a013cc1",
+      "statement": "cybflight_sim::sensors provides composable sensor noise traits (ImuModel, GpsModel, RotorModel) including deterministic pseudo-random IMU noise/bias, GPS fix/outage models, and DShot telemetry eRPM quantization with frame dropouts.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_sim/src/sensors.rs#L115-L149",
+          "version": "repo-lines-v1:sha256:f78129cf6009b2d118b9656175494695f3355fc118ba64ac456f79cb216c9a1e:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJkNWVkZjI0MzdmYTRlMWZhYmUxODYxMTQ3OGMxZmQ4ODRkNzYyYWZmM2VkMDI5ZTcwOTgxMzQ5NGI4M2YzZWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVkNGE3OTRkZTE3ZGZhYzVhNzM0YzIyZDdjZWNiZDE4ZWYxMTE2NjQxOGUwMjQ0N2VlN2Q5Y2U3MWYwNGM5ZDYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRmZWFjNDU2ODUwN2ZiNDI3MzA1ZGU3NjQ4ZWEwMzQ1OWEwN2Q3N2JjYzlkNDMyNzI2M2E3OTc0YjI4NjY5YzkifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_sim/src/sensors.rs#L154-L218",
+          "version": "repo-lines-v1:sha256:2658d97769016272f4347b106a5cf8eb0df1ba1b9af9865a87cd0ecd6c1fe8b2:eyJzZWxlY3RlZExpbmVDb3VudCI6NjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJhMTcyY2U2ODZjODNjNzBhNWExMTAyMGIyMTZlMTZkZGExOWU3MzNjZmY1OGYwMGQ5MzViNWM5MWJkYmRkZjEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQyMmIzYzE5N2NhNjNhYjlhMDBmNmI1NDk4YTJjM2NjYjY2N2UyOTNjNDY1NzdmMTJmMDFjNjFhZGI2NzcyOTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI3MGM0NGUzMTA5YWYzNDJjYTlhMGFjNDY2ZDY0NjlmODI2YzExMTg2OTJjODk0NmFjMzYzODkxMWVkYTJhZjYifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_sim/src/sensors.rs#L238-L242",
+          "version": "repo-lines-v1:sha256:2d5fbc74fbb693ba3291145fbe7d0ff93d9879f82d313786b3a4b251d93aca35:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiN2RmN2YzN2MzYzUxYzg0ZGQ3ZGNjMzEwNDdhODUyNDllMjlmOWQ2NWM1NWRhNTlhNWMwYzkzMTQ3ZWZkOWJlYyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzdhNzZkNTMzMjVlYWQzZWY0NGYyZDZlNzgwYmFhYzNmZGJkOWRiMzA3OTIxMjM5ZGY5ODA3MDllMDI1YTdjZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZGZiMGRiZDkyMWNjMmExNWZlNTJiYWI5NzRlMzFlNzUzMDNiMzhkNDNhNTc3NDI2N2M1NWNhM2NkNTZjM2RiNSJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight_sim/src/sensors.rs#L42-L44",
+          "version": "repo-lines-v1:sha256:bc9f87746001c3b2cbe38073083507125ae4d4f2a5a3a586753ee1522bd724c7:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTE0ZWExMmM4NzdkMjRmYjdlZTlmOTQ0ODJmNGQzNmExMTljNDMyM2E3ODhhYWEwMzBlOTFjZDYxOTg4OGJlYyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiN2NlNzIzOTRhZDQzZWUyZGQzNDczMjhjMWI1NDVhN2ViOWRkMDY4MDJhNDBkZTNkOTY1MjMzNjNlOGQwOWY3NyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDVmOTFkMTE3OTYyYjkwZmQ5NTdlMjRkYjdmYjQ4YjcwNWE1ZTU2MTc1YTNhYTE1ZmY5OTBlMTU5ZTI4ZjgwYSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_bb3050b0bd4b43508d186db843a0ed20",
+      "statement": "MissionRunner steps controller logic at its native tick rate while sub-stepping QuadPlant integration at high frequency, evaluating scenario PassCriteria upon termination.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_sim/src/runner.rs#L100-L119",
+          "version": "repo-lines-v1:sha256:8cbbcc6c33c59ede6000572dd412074d0fb718f3e0c89f7ca73bb98ec8957577:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA2ODNhMmFjMGRmZTRhODQzY2ZmMGI4Yjk3NzExMGM4MmY5OTk2YjkwNDVkNmI4YzkzOThlZTYyYmUxNmE2OWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNkMGEyZTlmY2JlNjYxZmRlYjRhYWE2YjdiNDFkMDdiYTBhNjZhMzQ4NmIzZjkzNTYwZTc3OTNhY2VkMjY5ODYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJjODEzZDdlNGQwMWMyN2VlMzI5NzdlYmY4OGQ3NTMzMWVkYjRlYmRkMmYzOWI2ODVkYWMxMmU3N2ZjNGMwMzAifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_sim/src/runner.rs#L204-L216",
+          "version": "repo-lines-v1:sha256:e79084a6d1320bc38ffaf4a9f29571664394ad93a382e25d901bc53283bfeed4:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEwZTg1ZmFlNjMxZmQ4NThiOWZjMjBlMTUwMzkyYmFiOWFjMGVhMzc2MjY3NjNlOTJmYWUzYmM0NGZmODgwODEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFlNzVjNzBkOTQ2MzYyNWUxMDc5ZmQ4ZmM4ZWU2MmFkMmU5MmM0MmJlYWFiZmQ4NWI3OGQ4ZTBhNDk3OWI5NGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ3NDM4NGU4MWEzNjhmNGI3YjcwMjM5MDYxODNmMTMxYmRhZWZkNGQxZWY2NmJmNDc5OTAyNzY4Y2ViNDBkMmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFmODJlOTcwNDZjNzJkMmJmMmIwOWYxYTQyMTRhZGQ5MTM1ZTQ0MjQyYThjZThiMTZiYTY5ZDA3M2YzNTg4NTYifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_sim/src/scenario.rs#L66-L89",
+          "version": "repo-lines-v1:sha256:9878f40bb54433732ae3b1391670caf6756106764b08c4148129ebf0f5249b88:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZjNjBiOWU5Y2Y4YjI3MmNiMTVmM2EyZDVhN2IwMWM2NDU3NWI1MGEyMjBlN2Q2Nzc1NTVhMmQ5NThkYzhhNWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI2YjU2MWJkZWFiZWJjMDMyY2FkZmYyNzVkNGVmNWY0YWZmYjc4YzAxN2M3NTU4NWRhMWI2ZjQzYzlkMDc2ODkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI1MjYxYzA3YWQyOGZiOTk1OWU2NzJjZDY2NmJlNzA0NjNmODE3ZTc4MTY0YjhlNTRjMjY1MDQzNzVhMTdjNjkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_3610b8def89947eca99afee66ad75000",
+      "statement": "When a scenario attaches a GpsModel, MissionRunner instantiates an in-sim Eskf and EskfGpsGuard to supply estimated state feedback to the controller instead of plant ground truth.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_sim/src/runner.rs#L12-L17",
+          "version": "repo-lines-v1:sha256:c97c05b32deb38113b9f4f668ea2932c94981242e12509579575b2f2f327e9ba:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNTE0ODBjMTI3NjNmODEwNmVkNmQ4MGRhNjA2Mzg3MWEyZThmYmVjZThlYjc4YzhmZjEzZDdjZWI3NzkwMDJmZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjMxNjk3MzE1NTE5NGU0ZDE5OGYxZDgzOWU0NDEwM2U0ZWU2NGFiZTMxMjBmNTM4ODkzYTljN2JmNDJlY2ZkNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiM2RhN2YyMzVlMTJmY2E1YzQ1MDAxODQwNDI0YTk3ZmNiYjEyZTFkMDRiNjVmZDU2ZThjMGE5YmY3N2I2MWY4NCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjZhNGZiNWE0ZTIxNThjNGM2ZDNlNjI4ZjY4ZDQ4NzRlZDBiYTI3NzNjZWUzNWJmYzRiYzc0ZTQwNWMzZmIwMyJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight_sim/src/runner.rs#L187-L197",
+          "version": "repo-lines-v1:sha256:d2515ae6dd884cfdcb408f16dc506c893ae462eea19d0d3085b832574a08e12d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdiZGM3ZTYwMjMxNmFkY2YzNTY2ZWM4ODg4YTBmNjUzNzRiNDM1ZDVhNmUwMTFjOWQyMzJmYWIwYmFiZDc5MGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgxM2Y0MGE0NzJjNDI4MjJkNGM2NDVlNWQzYjEwYjk2MTcyZjhiOTVhYTRiMDQ3NGY3MzY1MTdiOGFjNjMyY2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY4ODY2NjRlMWYwZmViZGI0OGI0YWFiODIzMGRlYzYwNGI1NzQ4MjgwOWQ4N2RhMDEyODJiMTNlMzNkZWJiNzcifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_sim/src/runner.rs#L39-L80",
+          "version": "repo-lines-v1:sha256:513f49911eb04c6dff91f86a5fffa222647efc4a90e9522098e35994f61c5466:eyJzZWxlY3RlZExpbmVDb3VudCI6NDIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJiOTYyYzM3Mzg0ZTQ2MDNmZTYwZjAwZGZiYjVmNTZkY2I3YTk4YTBjOTc2YTRiNmY4MjQ0ZDA3Y2NmNzA0ZGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA1YmEyNWM2NzcxZjg0NTg1NDMxNDZkNjBhOTkyMTVhZjY2ODRmOTM4YWViYTUxODBlNWUwOTZlZWU2MzFiOGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM5NDBhOGI2ZWIxNjA3ZDM2YmI2YWY4NzMyZDc4MjNmODhkMzQwNDc2OTQxZDQ2ZDA1OTc4YWE1ZWFjZmIzMjkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_40607a4e398946619967c194fef62c7a",
+      "statement": "cybflight_sim::rl_env::RecoveryEnv provides a Gymnasium-style single-agent environment that modulates MPC cost parameters z in R^NZ of MpcIndiController across randomized primitive trajectories and domain-randomized vehicle physics.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_sim/src/rl_env.rs#L1-L16",
+          "version": "repo-lines-v1:sha256:78ce1f274dbf0cd318281479de8e1e76f00d926ec5c61740ae38c566c89bc599:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU4YWRlZTA4YTEwNDE4ZTJlNmM5ODUzMTAyYmM3Yzc3YzA3MjkyN2JlOTNjZmFkZGFjNTMxMGNiYzllYTEzZWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI5MjMzYmVhYWQzYWVkNjAxMDg2MWQxNWM2MjRkNGViODU5Yzk5NTkyOTI3OGY2NDEyMTkwNjg0Y2ZjNGM0NjgifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_sim/src/rl_env.rs#L120-L142",
+          "version": "repo-lines-v1:sha256:9ec39cfd2b78de0aae93ce0ab7c3918e9b11045ec488073ef192fc9ca90d0dcf:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk3OWNjMjVhMDhmMzM2MGQ5ZWMyMWIyYTRmN2JmZDcwMTlhZGEzZjc1NzkzMjI3N2M1OTY0NjNiODc5ZjkxZTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM4MDFiYjNhOTE2N2IwZWM4ZGZjNTIyYzFmZTU4NjBlOWE1NTJjY2VjYmJkMzg1NzY1ODFlNmIyYzIwNWM2YWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE5ODkzMGNmOGMwYmNhZjhlZTg5NjlmZmUxNDg4YTE2ODdkNDMzMGEyOGQ4MmZiODU2MTkwN2FkZGFlNjUzZDMifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_sim/src/rl_env.rs#L69-L118",
+          "version": "repo-lines-v1:sha256:0de9f7d557a37946aca6d1304a2a88911d9201399e052f8f8421060f7ea17b13:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNiMmU0OGRjZjk2OWMwY2VlZTNhOWMzMzVjZWZkNzg4NzJiYmVjYmM2ZmJlZjEzYjc5MmM1YTM2NmUzYjlkODYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhmOTRhM2E1MzM4YWViYzM5OTA3MDBlMTMwNWY1NmI3NDlhNGJkODZhYTMzN2JiNDk1YjM5Y2E0MTIwOTRlNWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ2MzFlZWQ2ZjE1ODEyMDAwZTM3OTljMzE3ZjNlOTg0YThkNTA4M2QwM2UzNTYxNzE2ZTNmMjkwMDFkNGQ4MjgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ed7108fc459d4a4ebe0d15347bdbb23d",
+      "statement": "cybflight_rl uses PyO3 and Rayon to expose a multi-environment vector class (VecEnv) that steps batches of RecoveryEnv instances in parallel, auto-resetting finished environments and returning terminal observations in infos[\"terminal_obs\"].",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_rl/src/lib.rs#L106-L111",
+          "version": "repo-lines-v1:sha256:daa57cbfbe1cfbe72859e36145b89882279fd4f920e1ab6e3b486f1b9ac0fbb2:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDFjMDA5NTdjMjlkNDdmYmJlMDIzYmYxMjhiYzcwOGVlYmQ5YWQ5NjhiNWMxMmMyNmNmZGEwNDVmNjYxZDk3ZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMDgzMGRjYWFiNDJmMGIxNjA0YjUxMGExMjkwNmZmMzkyMGMzMjAyMTM2NGI4MmMxMTYxN2ZjMzZmYzcxMTUyOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZDNjNzRjYzU0NmNkODViYWFjZTY5NWFmMDJiYWUzNTYyMjc2MmY4MjIxMDk0MjAyNGJjNjBjYjQ5MTAxMjM2MCJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight_rl/src/lib.rs#L116-L270",
+          "version": "repo-lines-v1:sha256:4b1d4f655cb4d790df9cad2edf6849e2ee0ac409305e43d03a5cd663ceb9fdba:eyJzZWxlY3RlZExpbmVDb3VudCI6MTU1LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJkZTBiMTU2ZmFlOGQ4ZGQ1ZjkyMWY2YmJiY2EyZTQ1OTdlZTFlNTY0OWY5MGU0YjA0ZjAyZTk1NzIzYThjYjQ1IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ODkzZjQwZTM3ODFlYjg5NmM4MmQwNDZhMDgwNjdhMTFlMzVjZGYyZjFkZmFmMjZmZWE5MGI4ZGI2Njc2NDEzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI2NGU5OTUyMzczMDliMjgzOGRiNmE1OGE2NTljMWE0ODE5ZWQ5MmU3MGJhY2FiNmE0MjMxYzU5YzNhN2JmYmYwIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI4M2FkNzFjOTM4ODEzZDgxZjAwMmY5MDUzMjMzMTg2YmZiMTdhYmRjZDI4ZTY3OTg5Yjg5NjhjZmE5NGZjNGMxIn0"
+        },
+        {
+          "resource": "repo://crates/cybflight_rl/src/lib.rs#L14-L18",
+          "version": "repo-lines-v1:sha256:dc3b1c4026870d734216eca648768e20d4cb073fa7395ab6ff3aa94156d8dfb7:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiM2Y4Yzg2ZjJiODIyNjllMGJlMmFmMWMxYmE5MThhNWE1OWE1NDM1MzBkYTllNmE2MDYxYjNiZTI5MTQ0NzIxNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTk3YjA5NDg3NTk3N2EyNWFhNmM4YzhkMWVjZDUyOTgyYjE1MzM4ODc4NGYyYjgzYTgzMzliNjQyOTJiMmI5OCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDE5ODg3NmRkMDJjNzI3YjE1YjJiMDVlMDMzZGIyY2NkZDZlNjY1OWNmODk2M2YyYTdkMmI1YjdkMjA5ZTdkNCJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight_sim/src/rl_env.rs#L120-L142",
+          "version": "repo-lines-v1:sha256:9ec39cfd2b78de0aae93ce0ab7c3918e9b11045ec488073ef192fc9ca90d0dcf:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk3OWNjMjVhMDhmMzM2MGQ5ZWMyMWIyYTRmN2JmZDcwMTlhZGEzZjc1NzkzMjI3N2M1OTY0NjNiODc5ZjkxZTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM4MDFiYjNhOTE2N2IwZWM4ZGZjNTIyYzFmZTU4NjBlOWE1NTJjY2VjYmJkMzg1NzY1ODFlNmIyYzIwNWM2YWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE5ODkzMGNmOGMwYmNhZjhlZTg5NjlmZmUxNDg4YTE2ODdkNDMzMGEyOGQ4MmZiODU2MTkwN2FkZGFlNjUzZDMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a769e65e8d2c491f9c68e2de9bb26eda",
+      "statement": "cybflight_rl exports COST_MAP_VERSION alongside observation and action space dimensions to ensure compiled firmware bakes validate reinforcement learning checkpoint version compatibility.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_rl/src/lib.rs#L278-L287",
+          "version": "repo-lines-v1:sha256:ea7f8a88dee8a63c4d4660990ce3ed66bc56620a2f707bdbf3171715b52ddfcc:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFkNjQ4ZGRmYjEwOWE5ZDRhOTEwOWNlZDc5MDIzODFmMmQ3OTA0NGEyMzliMjgzZWVjNjliMTRhZjExMjQ2YjQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ4OTc3MWZlMWI2NjI4ODc1YWEyM2U3ZGJlNGFhNzE0NjFkMDBjZGZiNjZkZGYxMWI5ZDgyMGFjNTg5N2ZkZjYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBiMzBhOTY4NWRhNzZlYjYwMDQwODM4NjY3MGI4ZTA0NjZmMWE0NGZkNWU4Y2E0ZmRkYjQ4NGFlZmYwMjg4ODUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_263cd8f6f13a468f8d478fd237be9803",
+      "statement": "The sim-run binary provides a command-line interface for scenario testing across baseline controllers (MpcIndi, TinympcIndi, GeometricIndi, MpcFullIndi, MpcDirect, Cascade), noise presets, and optional real-time Rerun visualization (RerunLogger).",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_sim/src/bin/sim_run.rs#L23-L56",
+          "version": "repo-lines-v1:sha256:14249945b1c3bacd20765da16bc74eff0f0b2b2085424dcbef6a467af6dfe9bd:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdhZTZjZjZmNDJkY2I1ZjIwY2EyZTA3NGI5ZGY2Y2MxOGI2OGY5Mzk0Nzc4YjJhNzVlMzM0YTljOTUwMjhjNmMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFiZDJlZjBjZDJlYmIwOWMyMzU1MmFjYWExOWQwYmIzZjI2YTFkZjBlYzFlMTA2YzQ2YWRlY2IwMDA2YzQ5MmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkwYjVhZWIzZjQ2ZmQwYTY3MDdjNzU2MGY3ZTNiMTAxYTE3N2M1NjIzZjE4NDIyMGZlNWE5ZDhlNzMwYWNiOTcifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_sim/src/bin/sim_run.rs#L91-L100",
+          "version": "repo-lines-v1:sha256:5e45579b4cf7a4731320eacb6e9801472591f1c147921b49c95ba01570df8c59:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFmOTAxMWMyY2JiOWQ5NDJmZTE3MjhiNDdlZmFkMTQ5MzU3YTgwM2Y1YmMzYzM4OWZiMzQ2ZjZlOTBmYjhhYzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg2ODg0OTU3MWMxMmZiYTc5MzkxNWNlMzQ3OWIyODYyNzAwNTM2ZTFmYmM5YjI3Y2ZkNGJhMGFlNDk5YjI4YjIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgzMzJiZjgyMGI5ZTAzMWI3OWUwZjBhYzUxMTUyZTYyNTQ2ZThmMWJjMWUyNGMxNGEwYmIyYmIyMzM2ODBiYTUifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_sim/src/viz.rs#L14-L29",
+          "version": "repo-lines-v1:sha256:29da725ac716438ed507489296df819631de28db5319b559176684d70a127437:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRiZjk2NGQyOTk0MmEzNWI3ZmIzMTEzOTk1MjNmMDRlYjk3ODE0ZGRkYjE0MjhiOTJlOTYwNmM4ZmYxM2U4NDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJhZjMzZWU4YWNlZGE2NzEzYzg4ODEyYzE1YjRlNWQ1MjA1YTgwNzAxMTQxY2ViYjdiYjlmNTA1NWNkOWQzYmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkzZjYxOWI3YmJkM2ExMmQ2MGJkYmQxYTgzNDRmZWRiNzY4NTE3MTRmMjFlZTNkZDRmZDE4NmY5MzVlZGMxZWQifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_sim/src/viz.rs#L43-L100",
+          "version": "repo-lines-v1:sha256:e8c04be7137207e9f5b571a710da4657ff8d76702b1a847e44ed3e693bfb4a85:eyJzZWxlY3RlZExpbmVDb3VudCI6NTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZjYzA1Y2JhN2FhZjE4N2ZhODJjMzAzNmQ4OWQzMTA4MjU2MmFhNzQ0MWM5ZTU2NWM5NTg0MjM0OTdhZTc4YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg4NWE5YzU3ZWZiNzE0ZjE0ZmE4MDlmZjY3MGVhYjQzNGYyZmM2ZjI1Y2UzMmQ0ZjMxMmFiOGJkYTBhMmRiMWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY0NTQ3NzAzMzg5NmRiODg2NDI1N2M3MWQ1ZDM4MWRhMmQ2ZmNiMzc5ZWMyMWM2NmU4M2E4OWUzODFkNTVlZDAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNmMjFmMDQxYjM2OGFkODFkMDQwYWUzOGJmMTU0YWY2NDZkNjZmN2E1N2YxNTQ1MWY2MDI1ZWU0OGNlYzVjODYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_8415fcbc6dde4c12a419560edc427ffa",
+      "statement": "The param-doc binary generates markdown parameter reference tables directly from the firmware parameter registry (FirmwareConfig).",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_sim/src/bin/param_doc.rs#L1-L50",
+          "version": "repo-lines-v1:sha256:1a6b073b8040861238a2dc11cbebc171d9ddc9f8d669d1bc836eeb203a2abd8d:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI0Njc4YmM5ZTYzODY0ZjQ1MTAzOGEyM2ZlYzJhZmJlNWE4MjVkYjgwYTlmMGNjZGVmM2M3ZTI0Y2IzOWJjY2UiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFlNzVjNzBkOTQ2MzYyNWUxMDc5ZmQ4ZmM4ZWU2MmFkMmU5MmM0MmJlYWFiZmQ4NWI3OGQ4ZTBhNDk3OWI5NGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3OTRkMDJhODEyMTk0NGQxNzZkMjY1ZTliYjljYzU5ZjZhYjg5MGJjYWRmOGFlZmRlYmRiYmI0ZjJlYTg0NDQifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-30T14:16:13.882Z"
+  }
+}

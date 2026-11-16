@@ -1,0 +1,182 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:b3dc097f1e4a85fc1167a386e057f10f09239eddfcc58ebea85d091e14c731c4",
+  "claims": [
+    {
+      "id": "claim_dd59046e53364e4ab7f82b245850ef8a",
+      "statement": "indi_task runs the inner rate control loop at the IMU rate divided by indi_ctrl_div, consuming raw IMU data and rate setpoints; if rate commands or voltage readings become stale or WLS returns sustained NaNs while armed, indi_task stops publishing motor commands, causing the DShot watchdog to disarm the vehicle.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/control/indi_task.rs#L1-L16",
+          "version": "repo-lines-v1:sha256:e0a2f1ad2f620da1c1a4207e1a638a6e5e5730ec0e2aedf879fbc981164ec572:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFjNDdmMTFhZTY1ZGUzZDIyZGZlMDM0ZDZmNWJlZDUxOGM2YTUwNDU2MWI3Zjg0Mzc3ZmNiZDA4YzdmNzk5OGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMwN2FkZDQ2YTJhZDIyYTM3MDMzYjM4ODMxMDJlYTU1ODE2MDBmZDVmZDI5MWExODhlMDlmMzk3NjdhNTUxNjMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk0YzEwNzlhYmVlNjczMjljZmE2M2IxM2YxMjMyMjE2ZmYwNmFjNTk2OTBjYWVkOTIzNjQ4NzQyODU2ZTRiOTkifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/control/indi_task.rs#L1420-L1437",
+          "version": "repo-lines-v1:sha256:7248da276759857722a435c819ab87e55eb712f7523e234a75106f70830b15f9:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA1ZTQzZTU3MWI2NGE4YjVkNGRmNjg3YzI2MjE0ZTdjNjZlMzQwNWQ1NDc1YTM5ZmU1MWZhN2U5ZDg3ODlmZDQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjUwZGQ3ODc5MWMwZWE4N2E3Y2UzMTc1MDkzYzU2MDdmYjYwNDNiNzA5NjBlOTBjNTM0MWNmYTJiZDQ2ZTY2ZGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjMxMjM3NjEzMzgxODBjNjI1MzkzMWQ4NDVmNjU0ZmVkNjUwNDMyZjVlMzY3ZTI3MzdjOTg0N2E2ZDEwZWYzN2IifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/control/indi_task.rs#L1545-L1563",
+          "version": "repo-lines-v1:sha256:93d7c60e87572da376415c5010f11a96af4d5263bcec2dcd2c4346b8907a3ca4:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlmYmQ3M2M1MjQ1M2E0MTE5ZGEwNTExZWNmMjM0ZDFmY2ZjNTNmMGE4OTlmYmMzZTllYzRiN2I3MmY3ZjBhNTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ4MzViNTk2YzNhZTgxMmIzNWFhOTAxZGFlNzk0ZjgzMzhmYjRiYWE0YWNhZjVkNTdmZDAxYjkwYjRkYzMxMzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE1ZGVhOGMwMWI1NjZkNDBhZDMyYzBiNmM5MmZhYWUxMDAwYmVlODJiMzZiZGU1NDJmZGM1YTJmZDVmYWZlN2EifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/control/indi_task.rs#L1659-L1671",
+          "version": "repo-lines-v1:sha256:0055b9e99111cd5ae4ba06e4f1a6d525335744bf84a9395932d984fa4727aeb0:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYxOWI5NDMyMGNkNjFhMDVkNjFlMGE2MWQxNGM3MDQ3YjJhMmE1ODIwZWJiNmRiOGNlMTg3MmMzZTI5MjZmNTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEyNTlmNTZhOWRjNzA3ODFhY2RiNTY5MDZiYjZlMzhkYTcyOThiZGYzMDE0M2NlMDNiMWNiOTJhN2ZlMzYwMWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZmOWRjNTMwNjhkMWMyMDU1ZTk5MmU2NGFkY2JmNjc1MDQwODhhYjhlMzUyZjZhNDI1NDI3ZmZmN2MwZDk0Y2IifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/motors/dshot.rs#L14-L26",
+          "version": "repo-lines-v1:sha256:42d7e49802729f343e05525b879a635d6b86bb3046c31bbe33772acf598f5edc:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk0OGUyNmNmNWIzZjgxZDkyOThmMmFjZjNmNmVlYmNjMWIxYzE5ZDU4MGMyMzEzMTFmZjcxNjFjMTE5MGUzZTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhkNmU0ZDFhMDIwMTQyMzVlZWExNTQwZDYwOWMzZWU1ZDJkNDNjMDQyYjQ4MTQ4M2VlMDQ4ZGI1NjY2MDI0NGYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjIwNGQyMTRmOGNkNzIxNGI2ZjA2MTJhYTdmOTIzNWRjZTExMWE4N2Y1M2M2YjAwZDdlMTEyZTY3ODllM2YyNmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc0MDE2OTk4OTExOTYwMWI5ZWE4MzdkYmQ4MTkzNWY5Yjc2ZTdmNTM0YzI3YjM2ZTQyMGNhZTZiZGE5OThlY2UifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_1c089b5973f94720a3c0d241417cb754",
+      "statement": "GeometricTrackingController implements differential-flatness position tracking to derive normalized collective thrust and body-rate setpoints, supporting GeometricSO3, QuaternionBased, and TiltPrioritizing attitude error laws alongside optional exact feedback linearization of gyroscopic coupling and transport cross-terms.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/attitude_control/geometric_controller.rs#L212-L228",
+          "version": "repo-lines-v1:sha256:e21069d9e5291eeef10b0c7e37d2548de9651d763e266fafe06a1152e04bd07b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdjYzQ2MGJkNjExY2Y1ZTBjNmNjYTdjMzFhN2U1ZGRiZmIwYzdhNGU2Y2VmMzEwMjZjNmM5Y2Y5ZWI1Y2VlN2IiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc5OWY0MmE3YTdkOTQ3NGE0YTM4MDY2N2RiZTc3MWNjYWFjYzNjNTdiMjJlMmM2ODE0YmYzNjQ5ZjNkNmY0NWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU5YmRjMTJhZjk0M2Y1ZWY0M2I3NTFjYjk3YzBjMDlhMDljZjNlMGVkZGYyODZjNzhkYzdiMDJhOTVhZmJkZmMifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/attitude_control/geometric_controller.rs#L348-L355",
+          "version": "repo-lines-v1:sha256:74008dde01ef7b035ef7b10eda87ea528a6fe60ebd4123d5d59cde0488352ed7:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzUxNzMwYzBmZTEyYjE5OTc3YTE4YjcyNjE2ZWNkNDEzMmMwNWJjZjUwYTkwMzRiMmYxOGVmNTJiYWRjYjI2NyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTJlYmJhM2E1OGYzNDZjNWFiNGNlZDU4MzBiOTU0NzIyOGUwOWE5OTUxZjI5NGQwOTQ3ZjAxMTk2OTY0MTQ5NSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMmM4YjQzZTM5ZDBmMDBkMDZkZWQ5NDJiMjYzMjI5Zjk0YTBhZGY3NzIyNzBiZTlmMGZlNTNlNmJkZjFjYWM3YiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiN2M3N2IwNWM0MDI1NGU2ZWY1NDEzYWFiOGU1MTBkYmE5NzcwOTI1MTlhN2I4MTc3ZWRjZWM2NGE3MGRiZjFjNSJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/attitude_control/geometric_controller.rs#L382-L412",
+          "version": "repo-lines-v1:sha256:b287491df7542696adf3bdaadc6116fbb6ebab542ba91ffdaf0833e334ce7887:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE5MmFkYTBiNTE5OTk3ZjEyMDQwOGYwMWQ1NWY0YTE3ZjU3ZDM4MWVlNWRlZmFiYzRlMGRkOGE2NWJkNzEyZmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY3MzA2MTQ2MDBiOTdmMzRhZGM5N2YzM2M2MzNkZGFkNjYyYjNjMThmNTdkNDBmZmJjMWU0YTVhOTYwMWM5MmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFlM2IzMWE5M2I0NzMzMDU5ZGQ1ZDgyZTQxZmYyMGZlMjBjMWU5MzViZDc3ZmI3NjQxNmRhZTdmNmM4OWU0ZmYifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/attitude_control/geometric_controller.rs#L9-L92",
+          "version": "repo-lines-v1:sha256:9761d21d106d9e041e74581920baed75e0557a640927215e3fc41fd8825f8bd1:eyJzZWxlY3RlZExpbmVDb3VudCI6ODQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMyNTc2MTQwOWU3ZDYxNjc0MGQ5YzhmODI1YzRiNGVhZDlhOTM1NDNmMGVjNDgzMjc3NDQ4MWE0MDVkMWIyODciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY5YWVmODA3MTc0MjYzMmUyMzFmM2M4ZTgwYmEwOWNmZWYxNGNhN2VjMmExNWQzYWQyNzBiYmY0OGQ4ZjY3YzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg4NGJiZjk3NzY0YTI2YzY2MjhjYzZhYWQ2MTk1ZjQyZjQ5M2QxMjIwZTViODg2NWRlMGM1YjdlNDllN2YwMzUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f123dc2fd4794c6ea889120c373ac649",
+      "statement": "IndiController calculates incremental virtual control demands from rate error or body torque using Savitzky-Golay rate-dot feedback, compensates for motor rotational dynamics via matrix G2, allocates throttle increments using active-set Weighted Least Squares (WLS), and disables incremental feedback when ground contact is detected.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/indi/controller.rs#L103-L112",
+          "version": "repo-lines-v1:sha256:f55f2fe50d3997cc22695d10f474414f45040a654dd079389ddda23e6c21c314:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk5ODc4MzgwNzUzYWEwMDY5ODYzZTVlZmFjMTZkNmNkMjM5ZmRiMDU1ZGUyMDFjOWYwMTkwOTFiNWUyNDA0ZDQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYzZmMyNmRhZjE5ZTc0YjI4MWIyZGI4NjlkZWExYmZjOTY2NDU5NWMwMmE2ZjM3Yjk2N2IzYmVlZTJmMDNjZTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFmMGUyMDM2MmU4NGYxOGYzMjBlZDM0YjcwMzIyZmUyMzNmYjZiYzQzMDgzNGZhNzA3YjUyMjAyNWQ4YmQyMTcifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/indi/controller.rs#L1606-L1636",
+          "version": "repo-lines-v1:sha256:ce24150ffe884c908bb87bbe0963734b3fecbb444773634c5f59f466ed1cd52f:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUxMDM0ODFjNTdkMGYwZGMwZjc2Y2QyY2M4YjM2MDRjNGU4Mjk2ZGE0MTIyYWRkMTllODE3NDVkYzdlMzMxYTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNiN2JiMjA4MGYyYTAzOTZmOGRmYzgzYmFjMWFjMTM0M2MwODhhZjdiZmU4NGU4ZjJlMTI2NjA0NDg1OTEyOTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUxYjkzZTM5NGM0MmI4ZjMyZDRlYWIyMWZkMDQyZTc3NmRmZmRlNjJjMWUyOGQwNzY3MDVkMzcwZDdkMzRiNjMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIxNzkzYjY4MzQ4ZWFhOWY5YmM2NTJlNzJhOTI1NzE3NmEwMWIxZDI2ZjgyNDNiZjRkYzcyNTVjYTRjYmY3ZmEifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/indi/controller.rs#L35-L51",
+          "version": "repo-lines-v1:sha256:0c57dae2f9a0b39255a7838ba23b993bbed2fcc42d3686d566b3cb5103f5bb98:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFjYmU3ZjM5YTkyODE0ZDg4YmRjNzg5MDQwOGUyYjg4MzMwN2FmZDk2ZGJjYWZhMjFjZjI3Yzk4M2VlNzI1MmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlZTU2ZjdhMzkxNjcxNWY3ODlhZWQwYjhjYTJhZTIwZTZlZTZlZWE3ZjhmMWE4NWNjOGIxODE0NjdkOTFkOGYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIzY2EyMTViNGJhMWE5NjE3MWUzYmI2NWMxMjZkYWUxODE3NGVkOWQ3OGM5ZjhlNjg5NzNhZTVhYjA3Y2U1ZTAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUxNzkyN2M2OTgzY2ExZDRjYTUyNmRhMTk5YWU2ZTY1YjAwZDNmNDE2Y2Y4ODExNGU0NDA0NDk3YjIwMzkxNTIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_bef73e66ca3140be9a5a58bbaacfd001",
+      "statement": "RateDotEstimator computes body angular acceleration by applying a streaming Savitzky-Golay polynomial derivative filter and a post-biquad low-pass filter at loop rate, while INDI sync filters derive their cutoffs from sync_filter_hz to match group delays across rate-dot derivatives, actuator states, and specific force feedback.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/control/indi_task.rs#L786-L805",
+          "version": "repo-lines-v1:sha256:346569ddccff777212d21887b2ecc22f5eaf9e539126239fbc46a0d8bfc93658:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM3YWMwNGFjZjhhOGIwY2IyMmUwNTI2NTBlZjE4MGM5YjM4M2NiZTRkZmJhNzU2NWUwM2M0YzhhM2ViZjY3NTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYxYzNmZDlkNTUwZDUxOTIxYTY1YmNkMzdjNGY3MWM0ZTRhNTUyYjlkZjljYTE2YjZkZDVkYWZjYTkwNTUxZDEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNhYzYzYTcyMzNhMTFjNTQzMGFlODY0ODAzOGI5YmJkYTU2YTM0NmI0NmQyYmQyMWNmNDAxMTRhZTIwMGY0ZjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU1NGI3YjA5MWQ5MWM1Zjc4M2Y0ZTUyNzQwMjc1YzAyMTJhNGU3MjI0ODQ0MDI4N2JjNTZiZWY2ZWQxYTgyMTcifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/indi/rate_dot_estimator.rs#L1-L20",
+          "version": "repo-lines-v1:sha256:04386afe6b2120b04f8d0290dd0b69f689e7432d7611fc34cad8116e7f71d394:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdkYmY2YWMyNjgzNWNmNzdiYWVjYjdjOWM5MjNlMjNmNmI3ODJkNzAwMzEyMjlmOWVhZGQ0NjY4Y2NmNGE1NmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRmZWU1ZGQ2NDljOTdlMjZhZGVhMDQ2NDQ2MTViM2EzODFiZjU2N2ZmMWQ5OTBjMmM3NGZhMTJkNjQwMGUyYWYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEyNzEzMzA1MDk4ZmU4OTE4MmRkZDYzMWEwYjc3Yjk4YTE2ODY0MjIwMDZlYWQ2NWU0NjRhZjdkNDJlYjJlNjkifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/indi/rate_dot_estimator.rs#L47-L100",
+          "version": "repo-lines-v1:sha256:730e254fb7f7234666f071f4a642161b90ab0f054e80f167e4676d21356f1873:eyJzZWxlY3RlZExpbmVDb3VudCI6NTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNmNjFkNzIwZGIwZTE0YzFiMzIxMTQxZDJmZjBjMWQ3ZGZiZGI0NWYxZTNkOTMwYTFjYTE4YjcwOGMwYTAwNmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY0NWUyMGI4YWEyYmY0ZjRjZmEzZGVkMzAzNWVjMTZiYjkzZGIzZGU3Y2I2ZjM3NThmZDJkZTJkYjA4ODA1NmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNjMDRlYjQ2N2QwMWRiZDE1ZWI2MWVkYWM4ZTVhYTEwMGNkMDFkMDk1NDAxNTE1N2ViNzE3YTU0MzVhMjU0MWQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5181460c23024074945f45408f57a1f5",
+      "statement": "RpmNotchBank suppresses motor-induced IMU vibrations using dynamic DirectForm1 biquad notch filters cascaded across motor harmonics, updating notch center frequencies from motor speeds tracked by a dedicated 150 Hz PT1 filter and recomputing coefficients via round-robin batching to crossfade smoothly to passthrough near frequency boundaries.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/control/indi_task.rs#L1340-L1373",
+          "version": "repo-lines-v1:sha256:94835ffe87fc9bac9cf80f6632f71a79bfc5cbf55766eb84732d92eaa33ca8e8:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFkYzQzNzA4OTNhNTFjYWQ5ZDA0YjVhNDU5NDAwYjA2ZDRmM2M4YjRiNWFhYWEzZTlkODE1ZDE4MzllYmVhZDQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM1Y2RlZjgwODVhZTc0YWI2MzZkNjQ1OWY1YzZkNWZiZmIwZGIyNjRmMWIwZDc1YmFjNTE5YzliM2Y2NzE3YWMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdlMjI1YjlmMGIwNTUzZmExMzQ5MzMwNWZjNzQ3NTg0ODNiMzk0YWFkNWU1NDdlMjU5Mzk1Y2QzODc4N2U2NmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc4NDMwYjAyMzE3ODg2YTJiYTJhMDJmODhhZmJjODBkYmQwN2QxYTUzY2NjYzBlMWNhOWJlZjI3NGNlMWIwZjAifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/control/indi_task.rs#L928-L957",
+          "version": "repo-lines-v1:sha256:40a7acb38fa1079a0fe58b9b732edc21b0b8dd7674b82df0c731263a5c7cd801:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjliYjU2ODhhZGZlZmJkODVlM2FkMTg2N2Y0MTRjZWFmMmRlOWU1N2IzNzBjYzdhYTQzMTY1NWMwYjczZjYyZjQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImViMDc4MmFmYzUzNjE2N2I2NDUxMjNiNGJlYzYzZDdiMjYwZGI0NTY1MWU0YTQyYzM5ZDQyOTY1M2ZhNjkwMjUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5OWJkZWZlZWFjYTYzNDBlMDI5MGRjODZlODg5Yzg5ZDVlMTg5YWE1YmE0NGI1ODViM2I3MDczNGY0YTYyZDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJmNGRkNWY4ZjkxZWI5NTJlYmM4YzNlODM0OWNkMDA2ZDZjZmQyYmQ1MDU2MzJkZjUyZDgwODhlNDVjMTM2MDUifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/indi/rpm_notch.rs#L1-L53",
+          "version": "repo-lines-v1:sha256:c8ab6c3dba9571c4f02742c342e3de3c1d57c9a5aff8e960e4a8916bc4d1cf1f:eyJzZWxlY3RlZExpbmVDb3VudCI6NTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYzZjg3NjQwNDM3YmFmZjYxNjA4MzBmNTA2NzA5MGUzN2I2MTZkOTcxY2Q0YWU1ZTYwYTZiZTdjYjFkYWIyMzkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY3ZDgyNjhkNmNkOWFjYTZjYjM1NTRmYmU1YTA5YWMyN2Y5ODM5YzNmNzk1NWQ4Njg0NWI1MGI3NGViZjdmM2QifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/indi/rpm_notch.rs#L74-L91",
+          "version": "repo-lines-v1:sha256:896b9d8cf2a8f7e62b1bda690cddea9da46beb140dc7a784fab6efde03a3e30d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ5OTdiYmEyOWRkYWYxZGQ3ODMyYjI0MjhjOWE0YjE1NDQwNmE5M2MxMzBmYjc1MjNiODhhODRkMmFlNjY3ZTkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVmYmNhYjIyZmMwYTQ1OGY0YzIwOTgxZmE5ZTI2MzQ4ZWM0N2Y5MDI4YTIzYjJlYmQyY2E5YmI5YTJiYzdkYzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM1ZDhhYTc5ZTYyYmViYTE3ZTcyNmIyODUwNTVlYTYwODU5OTcyMTc2MGYxNmE4OWJiMWU0YzdiZWEzYjcwNGUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_3e8fe77b9aca424485421f44e3ddb131",
+      "statement": "MotorEffectiveness constructs a 4xN matrix G1 mapping per-motor throttles in FLU frame to collective thrust and body torques, while ThrustLinearization converts normalized thrust demands to throttle commands using Quadratic, SqrtSquared, or 2D voltage-compensated Table lookup models.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/control/indi_task.rs#L48-L69",
+          "version": "repo-lines-v1:sha256:8c6536b924141f70291b3880b8441716c735c872d4ea986c8183b64230c21c69:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNjMDhhZjY3ZjM4OGM0OTdhNmFkNzhhOTdiYjE3M2M5YjFkZWY0ZDNiMDllMzczMzk4NjE3MzliOGVmMDI0NGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYxZWMyN2E0ZDc3MDE0NzM5N2RlMTU1NzY3M2MzODZlNDFhZmU2M2VjNzkwNDBkMTQ1Y2M2MmYzNmRiZGVhNDYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdkMzUwYmFkMTAxM2UyMDQwOGJkZDYwYWM4MDMxNjZiODk4ZWUyZTA1NzcyNTE4YzE4ODAzOTk2NTEwNjg5ZDQifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/indi/linearization.rs#L15-L28",
+          "version": "repo-lines-v1:sha256:1a3d6cfc4dedf668dc12a30399ee02693d3b055c7dd42bd94f7983dfe432ff59:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY5MTA1ZDRhOGYwMzgxNTY5ODYxZjg3Njg2OGNlYjdlYTVlMjA4MzhkMmFlZTVkNTcwODg0MDgzMGRlZGYxOGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEwMWVhZDkzNmEyMjgxZDUzZGNjMDY0YjdlMmEyYWIwZDUzYjkyZWYzZWY3YjM0YjY2ODY3MzAwNzg5NWM4NjAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzZDI5ZWNiODYzOGM2YmFkMTYwNDBlZjQxYWQxYWQ1YjQ0NGJjNzRhNjMxMzczNzU3NmQyYjdlZGNmYmQ1YWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFhNTEyNzYxZjg3MzVjMWM2YjM0YTRhY2MzOTQzMDc0YWZkMDY3NTQ0MWVjNTMzZGM4YjQ5NjY0NWU1ZWM4OWUifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/mixer.rs#L21-L36",
+          "version": "repo-lines-v1:sha256:2e989cb9fcb5daa0d7514db2576424ddc627ebfac9ff814d45cfbaf897bf9a22:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlmYTZkYjBkNDg1YzdjNDI3OTFmZWFlMzc3ZmE0MWQyNWM5YWZiZjU4NWE1OGRjZTA4NWY1Y2I0OTAxZDNhNWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNjY2JiODc2NjYzNjNhMjBlNDU0OTlkNzlkYjg2ODNkMjQwM2E0YmU4MjU1MzgzZjliYjAzY2Q0M2M0MTNkMjMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQxNTE5Mjk2ZDhmNzE4NmFhMGE3NGVhYzI5ZGYwYzhlNWI2ZWJjYzc3NGI4NDVlZjVhNDczMDA1ZTQwNTMzNGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNkMGVkY2Q1ZDhkN2FiNzZiZjNhMzNhYTg0NTJmM2RhNDQ2NTNjYjY1MzdiMzY1MjM2YjI5NWQ1ZmRmZTNiYWMifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/mixer.rs#L255-L285",
+          "version": "repo-lines-v1:sha256:220eff342f9e6ca770caab67af2c7d64a2bc946251e4d390e6dbe366a89af02f:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNjNTg2Nzg3NDRjZTMwMDc2MmJiNDU2Y2NmYjA5ZjFhM2E2ZTg5ZGM2ZGM1YTQ3MmYxYzFhNjgzYjc3MGQ4NTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQwMDM0YTQwMzNjMWE2YTg4ZjIxM2IyOTczYzNmMGRlM2JhNTlkMGVhZTE1ZjJmNTJjMDJkYWY3MmZhNWZkMzQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJiYWM1ZjUzNTEwMjBhNzYyYjhlNjBlNGY2OTFjNDM4MDE5YjRiZjYwZGZlYTIxODk4YmY0MzUzZmRmZjBlMWUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_9e0dc3a783eb44009c2ef7b10df80c42",
+      "statement": "When OFFBOARD_ACTIVE is enabled, DIRECT_MOTOR_COMMAND messages override INDI rate loop calculations to drive motor throttles directly, whereas during armed pre-launch indi_task outputs a uniform idle throttle to all motors while resetting filter and EKF states on the launch transition edge.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/control/indi_task.rs#L1083-L1136",
+          "version": "repo-lines-v1:sha256:05769981215145e4c88aeb4f9e9fa72be2ca0e921bf806bf61cbd9bb536fd2ac:eyJzZWxlY3RlZExpbmVDb3VudCI6NTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE3NmI5NzM5ZTRkZDRjYzU4ZjIxM2U2YjRjOTcwYjA4Yjk0MWE1ZWFmYTFiMGQ5MGVkM2M0ZjI5OTk5ZDIyNmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg5ZjVjMzA0YzY3NTViMzYzZWRmMTRjYzExZjAxNDgzYmQ3Mjc3NTQyMmFhNzBjYzQzMTc1YTc3OGE3MGY2ODMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQwYjEzYzEzMGEyNGU0NmMzNWYyN2U3ZDE2MzUwYmE4NWVmNDE1ZWY0MGVkNWM1YjZiZmRlYjM2ODQ4N2ViZWMifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/control/indi_task.rs#L1410-L1417",
+          "version": "repo-lines-v1:sha256:6e4e2764cb46adac869af32b27eae6299b07883a356ae03ac30acad6708e7236:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjRhZjg2OTRkMGZjYjdmYmUyMWRhOTU3MTQ1MTU0MTU3OTU3MTFiZGUyZjYyZjA1YjI0YTUxNWU3N2ZjZTBkMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTZiMDQ0OTE0Njk3MjJlODM2M2E5NGU0MDQ0NTM4ZTAxM2EyYTIxN2UzNmIxZTU2OGJhNjBhY2I3YjRjOGYyZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjViOGFhOThkZTY1YjE4ODIyNDMxMzZmMTYzNDZmMDA2NDkwNDg3NjU1YjUzYjc0ZjdkYWE2NzZkZDkwMTk4YyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTlmOTUzNWZkYzU5ZDI4ZjlkM2JlZGNmODBkY2IzZTA0MTU1ZGJmODU0NzQyNWRlNjcwYjgyYmMwM2I0YjliMCJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/control/indi_task.rs#L1676-L1684",
+          "version": "repo-lines-v1:sha256:b95607824ce5d7d7e406c0d48f194a9d9092a5e91e61cbd92e6052be32569583:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzAyOTk0MDgwNDU1MmQ1ODc5YjVkYjAxOWJkODBkOWM4Y2UyYTMwNmQyMmM3NjNkNmVjMjgxMWYzZTBmMGQ5YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYzVjZGVmODA4NWFlNzRhYjYzNmQ2NDU5ZjVjNmQ1ZmJmYjBkYjI2NGYxYjBkNzViYWM1MTljOWIzZjY3MTdhYyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTE2ZGExNjkyNzg1ZTQ0NTJiNjc3MmQ5YzYyNGZkNDkzNzFhMTE1NjViYWY5ZGE0ZjJjNjRkMDZiY2RhZGY1YSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMGJkM2ZhMzI3NGI2NTI1ODI0YTFjNjQ0NTcxYTA2N2I4Y2Q0NjdlMzA2YzY3MDRhYjE3ZWQxNjdhYTQ0YzIxYyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_9efaf29a46954ea5abb7a22b3d1a76ae",
+      "statement": "dshot_task drives motor ESCs using DMA timer PWM, captures 21-bit GCR telemetry replies during line turnaround, dynamically detects ticks-per-bit to handle ESC clock variations, decodes 4-bit XOR-checked GCR nibbles to extract eRPM or Extended DShot Telemetry (EDT), and feeds decoded eRPMs into per-motor FOPDT EKFs protected by slew outlier filters.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/control/indi_task.rs#L1138-L1194",
+          "version": "repo-lines-v1:sha256:eb61fb5239ec1cfa60eafc83623b04bac8ff07d10a4293bb5fce94a601808a0d:eyJzZWxlY3RlZExpbmVDb3VudCI6NTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcyZTlkZmRiZmIyMWVkYTFiOTdmZmU2ZjY2NzIxZWIxZTcyYzM2NjJiNzRhOGVmNjEwZTkxZWY1NzcxMjJhYzciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFkMGJhNWFlZWMyYjk5N2UxZDc5N2M2NjAxNTMyMWQ2YzIzMGU2YzYxYTY3MWU4ODllMDkxZGI5YTdjMzllMTAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg4NjE2MjUxM2UxMDcxNDViMWU3MGMxMjBjMTgwOTg1MTU3N2Q1MTEyNzVhYWZlMDc5ZTZkMDA4N2M4YTI4MzAifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/control/indi_task.rs#L1196-L1257",
+          "version": "repo-lines-v1:sha256:fc1d43d7bc7a124417dc41950293ead30c2b0b9277d0b0e4c6f11d34ebfe3dde:eyJzZWxlY3RlZExpbmVDb3VudCI6NjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZjYzk5NWUyNjA0Yjc2MTllODhkYjk3ZTU0NDEzZTcxNzBmZDQ4MWE3MGJiZmUzOTk1NjBjMTg2YjBiYjg1YjQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkwOTA1MjJmNGUxM2ViYTBkMmE5MzcwODRmODQ0ZWY5YWQzOGZkMDY2YjkxNzAxM2U0ZWJlYWNiNTdkOTBhODIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRhOWY4NmQyOGU3ODRmOWZkMzFmYjcyZDE1ZjYwY2JjZWFhZmRkNjY5Y2JkNWI2ZGE3ODg4YTAyMzMyMWViYjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ0ZmUyYmQ0MDVkMDY5YWJhNWI3MzBmZGE3ZDI0NTk0ZDVjMDdkMDRiYzA1YzJjZTdlYWQwZDZlYzkxY2Y0NjcifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/motors/dshot.rs#L75-L100",
+          "version": "repo-lines-v1:sha256:e6d869b45bb1896737b0c0747b2f0c2a407b9371717e14b7d70794dfd026448b:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyZjA5MTRjM2NjZTMyZTE1ZjQzMTRhYWNkMzhjMzE1NDlmMzdmODcxM2UyMTZmYzc1OTYyMTlkN2RjYjdjNGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhlZmQ3NjdjNjk2Y2E4YjBlNjUwOWZmNDg5Yzc0M2IzMjk3OTAyY2QwODEzOTkyNTBhYzY0ZWQxM2QwMzVkODYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjMwMDUxNWNkYWNjMmRlMWI3OGI2MTQ5NGJlMjQxZGNlZmJhMmY2OTA5MWMwNGZhZTU5YmZlYzZlZDk3NGI2YzEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc1MmM3NzQ3ZGFmYzM3ODEyMjI0ZTA1MGY1ODhjMzU2YzU5ZmQzNjI3MGM2ZjI3NjRlNzQwNTVkYmIyN2JmY2EifQ"
+        },
+        {
+          "resource": "repo://crates/drivers/src/dshot/gcr.rs#L21-L100",
+          "version": "repo-lines-v1:sha256:e7009ee52bbc824cbfc7c1103f3aaf34d751fb4a2100dfe6e1bbef9bd3c755ec:eyJzZWxlY3RlZExpbmVDb3VudCI6ODAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRiOGVjZjE1NGRjZTQ2YTM3NGQxZmU3NDk4ZWZiZjI4NDRiYzZiMDcwYTFmMjcxMzY4YTZiODBjNmZlOGUyNDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVmYmM3M2NkMTI5MzkxNWZjY2I0MDlkNWMzYmI1NzA5N2I3NTcyMDEzY2YxY2M4ZWExYWQ2NmY0NTliNDY2MmEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJjZjM4ODdiMzIyYjFkYzhhNWRmODg2MDY2MjRiYTFiYjYyMGVkZjJjODYxMjA0NmYwMmMzZmNlMzhmN2JmOTkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFhNzM0ZWQ5OWY5OGVjNzhhNzFiOTYxNjU5ZTA1ZjQ2MDM3YzdiMjIzNGUzYjA5NGNjYTlmYzRiZWEyOTJhOTkifQ"
+        },
+        {
+          "resource": "repo://crates/drivers/src/dshot/telemetry.rs#L24-L74",
+          "version": "repo-lines-v1:sha256:fa515c7b7bfb1a53302f35ff706518db62426070bd73bd1ae683b3bb1e2ec496:eyJzZWxlY3RlZExpbmVDb3VudCI6NTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdmMWQ2ZGYzOWRiNWY1YjZlMWQyYmU5N2YwZGJmNWMwZWMwZGIyMTg0NjUzMjhmODcxMjg0MWUyMmY4MDIyMmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE1MmFkZDU4MjQ3NmY3ZGU0YTg2ZmEzY2ExYWMxNjkzOGE3MjhmOTA0MDlmMjc2MmY4NGEyYWI2OGRlN2MzYmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdiYzk4ZDZiMGRjNDkyYzUwMTZkZjEwODA1YTNhNTRlYjljMTg0YTVhNjEzN2U3ZjRiZWNmYTBjMjIwNTUwZDAifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-30T14:16:13.882Z"
+  }
+}

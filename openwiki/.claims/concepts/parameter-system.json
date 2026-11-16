@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:4743f7740b90e9569badb685a6f7b113cab6b8e682dbb2d7a4a1daeb78530825",
+  "claims": [
+    {
+      "id": "claim_cb64e4130d2a4d09adbe2dafc6909e18",
+      "statement": "The #[derive(Params)] macro implements ParamGroup to generate a flat, index-addressed parameter registry from annotated Rust struct fields, supporting scalar primitives, arrays, nested ParamGroup structs, and saturating type-safe value setters.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/param_registry.rs#L163-L201",
+          "version": "repo-lines-v1:sha256:657f712ee36f098a07dac0edcdd6a6778ca1b1da44b2b4db54a79c6414cdfec8:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE3NjBlMTdhMjM3YTE3NjhmOTUwN2NjODk3MWE4NzBmNzc1Mzk4MTkwZTI0NDg2OTRjZDgzNDE5OGM3Zjk3ZTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFlMTBkOGI4ZGRlNDY3MGQyMTRhOGMxNzI3YmU3NTIxMWRjOGEzODE4NzEwNGNiZDY3M2U3MzA1ZGVmZDM2YzYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAwOThlMDUxNGE5OTg4OTc3ZmRmODVlODg2ZDJlNTdkZWFkYWFlZGZiMGM3OThiOGVmODdmMmMxYWMxOTRkYTQifQ"
+        },
+        {
+          "resource": "repo://crates/params_derive/src/lib.rs#L277-L308",
+          "version": "repo-lines-v1:sha256:91ec07e51d26fb066d4cb706d901bdc47add9d43c9efe55ed0548d1b668df961:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQwNDhlOTA4MWYxNmNmOWU4YzUzODBkODYwNzFmZjBlODM2MmU4MTgwNTlhNjgyMTY3YzlkYmY0ZGQ1MGIxNWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY4OTJkNDhiOTI2ZDI3ZWRmOTNlZGUyNDYwMjQ5ZWJlODdlMmFhNWE0MDhiNjJkMDllNzU3MWIzZDYxMWExZTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE4ZTQ4NjkzYTUwYjkwYTJlYmI3NmJjN2E2YmI4ZDNjNjllYzk3MzY2NzBjMjMxOTYzNmIxZDY1Y2JiZDg3ZDQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_75e682d0bdb944798e7a9834ca010cf5",
+      "statement": "CybFlight enforces physical airframe configuration safety by requiring a non-empty airframe definition in vehicle YAML files and setting zero mass in FirmwareConfig::scaffold(), preventing unconfigured drones from flying with arbitrary mass defaults.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/params.rs#L2175-L2207",
+          "version": "repo-lines-v1:sha256:c25aa934a245c703fe9125d94de18574a159d34f330c6c2f09c806612a1c5520:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxNDMyODMwNWFmOGE2ZGFjNDI5NjI5YjE5MWExNzZiYzIzNmNhNGI1MjIwZWRjMTJjMDJhMDJlOThhNWEyZmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQwOTNkY2UwMmZhM2U1YzBiOGMxYzg2YWM2N2U4NzYzZTNhMjQ5YWFhZDAxZjlhOGVkZTJkNjcyNzE1MGJkNzgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA5MjFiMGMzMjFjNzRkZTM3NjQ4MGMyNzllZWEyZTk3NWNhZjYzMTI3OTNkNzIxZjUzYzgxMDJjZGQ5NzFiMDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgyYzQwNWU0NTdhYWVjY2FiY2QwZmZmZmU2M2UzNzJjZmYxNmU0MjZkOGRlZjI5YTc0OWNlNDM3MTkxYzliNjQifQ"
+        },
+        {
+          "resource": "repo://crates/vehicle_yaml/src/lib.rs#L317-L349",
+          "version": "repo-lines-v1:sha256:c3e1bcbf4579aee63e92998b97d1c1c580d45264a06c7eca5a8e32b051b8cd19:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlkNDljNTJjNzlhNDQ4ODM4MmJmOGRhMmQyMzE3NGU0ZWY4YTA1NzRiOTdlZjllMWE1YzgzZTAyZTJmNTAyZjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE0MGE4ZWM0NzZlOGM3N2EwMTI4Y2Q4ZWQ5ZGVlNTNiYWY2ODUyYTY5OGZhMTExOWFjMTg0MGI0OTYyMGRlZjcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_37e648fd8f024e8db6b016eaf9134443",
+      "statement": "crates/cybflight/build.rs validates vehicle YAML declarations against active Cargo feature flags at compile time, baking thrust table CSVs, mission profiles, and vehicle parameters into $OUT_DIR/baked_params.rs and related static output files.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/build.rs#L23-L25",
+          "version": "repo-lines-v1:sha256:787faa86da6fe5c6e6eb1c807fcc1dc970c94bd053a98a55ccec04badb655660:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDBjZWMyZDZmNTQ1NzlmOWIxOTAxZWM2YmU3ZTJjYWM3ODMyMzQyODc2MTlkYWNhYzMyNmMzMGJlNDc4ZTY4ZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzVjZWM0YjkyMjc3ZmNiMjk5N2VkZjdkZjBmZGYxYjAyZTZmZWJiNDU1MWE1ZTRkMGNhYzllMTAzMzU0NDJlZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWMyOTM4ODZhMzMxYzk2Y2U1OTMzMmM1YThkZTkyMGMyNzllMjVmY2E0ZTkwZGVlYzI5YTIyZjY4MTlhZWU5NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOWEyYjgyZWI5NmI1YjVkYjFmNzgzZWYwMmY1ODczZWUyMDM0OGFmOGE0YTcyNThlM2UxMjQ4ZGE0YjI5Yzc5NCJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight/build.rs#L423-L457",
+          "version": "repo-lines-v1:sha256:752b74f85cde659edea200260acf8c480d90c4638880d7eee7735363958eee50:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI2NzlkZTEwNjlmMTkzMDAyZTZmOTZjYTU3NjA2YmI4YTgwNTQzZWRjMDkzMWE1MjA3YzNmNjllZGYwN2ZkNzEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhMzY1YWMyNzJkODNjMzlmNGZjMTBhMDA1NmQzOGY3OGI2MmIzODM3M2U2YmFkMmYyZTZhZDI0YjU0NTMzMmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU5NmZhYTU1MjY4ZTRkYTFhYzAwZjJkMzVmMWE2MWY0ZGU0MjFjMjZjMmY3OTE3ZTU5MmQyN2E4ZmI4YWI1MjIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjlhMGYxNzEyNGZjNGMyMjVkMzUyMmY4M2Y2ZTk5OTVhMDA4ZDYzMWJiODA2NWE1YjI0NWE1NWU5NjMwYWMwM2QifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/build.rs#L960-L1045",
+          "version": "repo-lines-v1:sha256:98cbf8452429ca4b10e5c05b8bf902a9f390a1cff740914a74e30357e4e812a1:eyJzZWxlY3RlZExpbmVDb3VudCI6ODYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQyZmY3OTExYTFiMjRjZGRmMGZjMjRiNzYyMThmNDc2MDFjYWQxMTM5MGI0Mjc1OGEyNjYzNzE0NTFjM2U3MWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM1Y2RlZjgwODVhZTc0YWI2MzZkNjQ1OWY1YzZkNWZiZmIwZGIyNjRmMWIwZDc1YmFjNTE5YzliM2Y2NzE3YWMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImEwNmYzZTE5NjkyNjIzZmUwZWVlZDQwNzc5ZjdjZDFmNzAyYzA2NjczNzMxMTZkZGI1ODRkYjRhYmNiNTAxNTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFhYjAyMDEzNDhhOTI1YTBlYzJjYjY1YmYxODE2MzcwYzlhZjllZWY0NzI4MGZjMzI4YzM1OGE0YzQ4YjQwY2QifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_cb0ae5e3f9e14af0873ab27f71c23ed0",
+      "statement": "Persistent parameters are stored in a two-sector append-only flash KV store using 32-byte word records identified by FNV-1a name hashes, where later records override earlier ones on boot load and records are validated against ParamMeta numeric range constraints.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/param_store.rs#L255-L282",
+          "version": "repo-lines-v1:sha256:978a13bce6dc4a24336cf2d6b22017b8ee4daea876ddb98e26213e78c9c0127a:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2Yzc2MjI4MjhjZjM1MDFmMGZjZjZkNWQxYTExYjYyNTk3ODYyMDIzZjQ1NjdiZWQ2M2U3ZTM0MThhYjM5YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFlMWNkNGJhZDVjMWU0OWU0YTZjMGI5ZDFhZTdmOGVjYjIyMWExOGU0NDMyNTA5MjQ3M2JmYWZmYzAzODllYjMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU3ZTM2ZDgxYWQ1OTA2ZjAyZmVhYTdiNmFlNmI0MGNjYjFkZDgyNzQwMzA1MjZlMDlhMzU0OGI4YTNjODYyNmYifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/param_store.rs#L9-L31",
+          "version": "repo-lines-v1:sha256:d9f621e5a17d784886755bdca405e9346dc905095c7d1f9f7838f95a27dd3159:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZjYjZkMTFhY2Y4MDdjM2IzYWYyYWEzMWQ2N2I5ZDcwOWZhYmY1ZDE2OGViNjM5NTk5NzJhZmY1MTUyNWNkZmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc2ODFhNTlhNjc5MjgyMTg5MThjNDkxM2Q0ZDA4Y2FiY2VjMjg1NmM4OWQ0ODExMjc4NzkyMWUyZWUzMzEzODUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIwNzg3NDhkNmViMDdjOTYzMzQyMDc5ZDhhYWYxOGJiOWVmNjhlODU0YWU1MGEzYWU5Y2IzYzc3MzAzYTBjMTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdiMmIzMzVkZjMxMzY2Y2I1ZGY2MWVjYmFlZDQ3ZjA2OWI2Mjc0M2IyMzEzNDlhNzUyMGE3OWI1ZTYyOGVhNWEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_58caec2873be4a89a3de9a3f3baa043b",
+      "statement": "During flash sector erase in cybflight::params, the flash driver checks that the vehicle is disarmed and extends the independent watchdog (IWDG) timeout around the 1-2 second blocking erase to prevent system reset stalls across STM32H743 and STM32F745 targets.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/params.rs#L92-L113",
+          "version": "repo-lines-v1:sha256:e53604378638a3f3885cde536e3b38a076a94db08f4b059fb11084799f734fe0:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVlMjExYTExNDA2YjUyNTg0MDQ3YTJiMTM2ZDY0NTQ4YzAyZGJiMGIzYWMwMTliNTBiNGNmNDhiODY2ZWIxYjkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjUwZDhmMGRhODc2YjYwODA2MWIxYzU1ODY3YWIyYmY5NTg4M2E0OTUxOGQyNzdmOTAxN2VjZjBlMjM2MGE5MGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI0ODUzNzRhNWQzNTg4NzEyYzNiZTJhZDk4ZDI4NjE3MDMzNzhlNzI4ZGRlN2FiNDk1MzI3OWRmM2QyMWY0NDQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5e4c66c0e43f4e85bef6d64716132d40",
+      "statement": "On boot, init_from_flash uses a Backup SRAM load guard breadcrumb (PARAM_LOAD_GUARD) to detect whether a previous boot faulted during flash override replay, automatically erasing the KV sectors and falling back to baked vehicle defaults to prevent infinite boot loops.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/params.rs#L123-L158",
+          "version": "repo-lines-v1:sha256:81a9700a10257c3c6eae5267d1bc59c77556f5bca6874c64c29d2dac0f44b99f:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNkNDg1ZjAwNDQ5YTVmNzQ4MDUxZTgzZjIwNjk4MzBjODI1OGMxOTcyY2RmZWY5MTIxZjVjYzI4ZWRiNTNjZjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVlOWFhMjk4NTY1ZWQ5YjQyZDUxMDllODE4MTliMzI3ZWU3NzZkMzRkYTc3NTY0NjZhMTRjNmQyNDEwOWUyZWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNhMjFhN2I2MzExMWI4OTM1OGVmZjFmYjA0YjBhZmIyZDU4YmNkNmRkMzhkNzljYWFhMzUyMzU0ZmUzNzQzNjAifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/params.rs#L164-L208",
+          "version": "repo-lines-v1:sha256:a6d8785b970c474853d67f8d4329d6ea06446de7ad9859ed6d7e034c3a04a5fe:eyJzZWxlY3RlZExpbmVDb3VudCI6NDUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJhMzI0NTNmOGY1YjhiYjA4ZmVjZjQ1MWQzNGIxNDczOGRiZWI2ZjdhNGNkZjY3MzljZjkxZmFkMzhmYjhlYjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQyZWY3MWU0NDhhMzQwYWIxOTA4ZWE2NGE3NzRlNzk4NWZjOGE4NjhlZDA5NWNjYzZhMTZiN2QyMDViN2RmNTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgyNjU3ZWQxMTg2NWRlMjIxYjJkYjJjY2IwOTlmZTNmMzQzOWJlNDI5MDAyMTVhYzEzYWFkN2M2ZTFlY2RiZGQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2f953fbdba0e4d52a3f2f732b523c8ae",
+      "statement": "prune_to_flash rewrites the flash KV store to persist only parameters that differ from compile-time baked defaults, un-shadowing default updates from vehicle YAML edits that would otherwise be overridden by tombstone-less append log records.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/params.rs#L317-L362",
+          "version": "repo-lines-v1:sha256:d599a4e4191237bec71a506c336a6167953c16b2c1ec3b62b1fbd39a09b1862c:eyJzZWxlY3RlZExpbmVDb3VudCI6NDYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFmNzM1NDE5NTk1MWM1ZWJlOWE2OWNiMjQ1Y2QwMDE5YjAwNTgwZTNiNjNlY2QzYjdjYjc0ODNlNWJmYjU1NWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE3MWE2NmI4NDJjMjQ3NjJmMTIxNzlkNzNhN2FjOWE1Yjg5ZmI1MDc2ODU3N2M4MTMyN2ZlYTZjNzAwMTVkMWEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImViOWJjYWJiNGU4NGRiN2IwNDFiMzk3ZmRjNzc4NWU0OTZlMTc2ZTgyZGVkNjE0YjhlMDllMjI2YTA0ZTBkZjAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3OTRkMDJhODEyMTk0NGQxNzZkMjY1ZTliYjljYzU5ZjZhYjg5MGJjYWRmOGFlZmRlYmRiYmI0ZjJlYTg0NDQifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/param_store.rs#L364-L408",
+          "version": "repo-lines-v1:sha256:5e674ba9ad2db2c9d6670b55a04a900f1bf08f6ade40928b225f7784e014c19a:eyJzZWxlY3RlZExpbmVDb3VudCI6NDUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhOTc4YzdiNDEwZjM4MzFkMjNiNGFjNGUyMjI3NTAwYTc3NmU5MjQ4NmVjYzkyNGVhOGY0ODIyODE1YzgwZTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU3NGQ2ZTVlZmZhZmJiNDMzYjExZmMzYjE1MjViMTc2NjBlMTkzNTEzYjdkM2I0MjExMzcyZjFlMTQzODVkZGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI3MjY3MzBhYTMyMjEyMTVhYjZmMGY4NGIzODIzYWRiYzc0YzQ0OTgzYjc4ZjllMGUwMjJjNzk4M2ZlYmUzYmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE5MjkxMjQxNGRiOTg2Mzc4Y2Y2OWY2ZmRhMzk4ZmMwOTk2MWNmMjczMDBiNGVhNGRjZWE4MzVjMjZiMzRiZjEifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-30T14:16:13.882Z"
+  }
+}

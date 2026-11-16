@@ -1,0 +1,202 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:f6bdcce60b3e0e8e3b42b2c79f3766a04688c147b70762236929d2db17935fad",
+  "claims": [
+    {
+      "id": "claim_4d2816c1cddd446daa7cb289fb55d9ee",
+      "statement": "The Cybflight arming state machine in sensors/rc.rs evaluates a series of safety gate checks—including failsafe inactivity, minimum throttle stick position, valid RC link quality, completed primary IMU gyro calibration, and state estimator readiness—before signaling ARM_STATE to arm the motors.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/sensors/rc.rs#L242-L358",
+          "version": "repo-lines-v1:sha256:b404ad63e432b1e0abf8d6efe72f0543fd50915e4856db81f5355038b1b88e0c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTE3LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIyMjRiYzU3OTlhMzcxMzA1MjIyNjUwYmI1NzMwMjBkNWM1NGRkODI5ZGM2MjdlYzdlZDlkYTlmNjU5NGM1ZjE2IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ODkzZjQwZTM3ODFlYjg5NmM4MmQwNDZhMDgwNjdhMTFlMzVjZGYyZjFkZmFmMjZmZWE5MGI4ZGI2Njc2NDEzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI0NzI5NTZjNWQ2ZDM0ZjJmYzA1Yjk2NGRiMzZhZGE2MzdkMDc5ZjdjNjk4MTU4NGVkYmYzMGU3ZjRiYjk1NzMyIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJiYTJiZjQ4MDI1NTNmZmJlNmUzY2Q5YTk4MWE3ZGNmNDIzNjgxNTc2ZTUzZTc2NTAwYzE4MTdlODJmZWQzMzBlIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_41fced9fdd964312a23b2ee0ca4034ca",
+      "statement": "When an arming attempt is rejected by a safety gate, the rejection reason and timestamp are latched in LATEST_BLOCK_REASON for diagnostic queries via the health shell command.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/health.rs#L75-L75",
+          "version": "repo-lines-v1:sha256:412ca345ccf75bf9c0806bce695be8de808b79984251a7a54d202cf6101dd451:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTUzZjdkNDBhOWUwNmEyNGFmM2IwMjMyNjE4MTMzZTU2NTFmM2VkYzc3NDBkNGZkY2M0YjRlMzg3Mjc0YTQ2NyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDAyNzZkOTE2YzU1ODNmYzZhNDc0MDQ1ODQ5YTNkYzk5OTY5NWJiZmI1ZDQ3ZWJhYzJkNmRlZGE5ZGEwYWZiNyJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/sensors/rc.rs#L17-L24",
+          "version": "repo-lines-v1:sha256:faef309029729df3c00b4bd997d52e6563892c0d1ecd9a8274087ef336172565:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMWE2ODVlYjQ2YmNiZjQzNWQ5MzYwZjExNDcxOTc0OGFhNTExOGU1MjY0ZWFkNTFmNjYxNDE0NzU3YzE2ZjUyZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiODkzODI0N2NiZjMyYjIzNGZjZmZhMmFkODIzMmQwYzZlN2NhMzYzNGI1NjQxNzI4NTY1NzRkOGIwYTRkZmU0OCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOGUyOGJlYzI5ZGMwMjIxZDE5OWQzYWI1NDQ0MzkwMDUwYTQ2YWIyYmViYmExOTc1N2FjMGM4OWFkNzcxMzZiYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYjk2NTkzY2RhMjNhYmI4Y2ZkODQ1OGM0ZmVlYTAwNzNjN2NmNzU2NDQwYjc4OGY5ZWIyMzc0M2MzY2U2ZTY4ZiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_efa9721c1ac843c29ad1b92fb1eb5dd1",
+      "statement": "The two-stage RC failsafe monitors radio loss, initiating a configurable Stage 1 guard period on initial frame timeout and executing a Stage 2 emergency disarm via ARM_STATE with FAILSAFE_ACTIVE = true if RC data is not recovered before guard period expiry.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/control/failsafe.rs#L276-L300",
+          "version": "repo-lines-v1:sha256:024a6e5f293913dee45f25b571c3fcfe8db2f9bb04767bf31dee2c59c2ba1053:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI4MjdjZDEwNmRlNzFkMTk2ZTA1NTVjZTYxOTdiN2EzNWFkMDVhZjFkNmU5Y2ZkOTJhZjY4NjY4NDUxZjc5MTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhkYjMzOWMxN2Q0Y2M1NGU3MGM0ZmNmZWNiNjExYmI5ZTdkMzYzZjI1YjE4ZTA5MjNhMWQzMDZjYzk1OTI0ZTUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc0MGI5YWU3ODllNGI5ZThkYTUyNDBkYjdlODUyNmEwZjg3ZjYyZGNlZmMyYTFmMmZkNTQzN2Y0MTg2NTAwMzEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkxMDBmZmNjMjdmOGEzYTM5OWY5NTdlMjMxOTI5NDk1OWVkODIyZWZiNzE5ZTg2YmYwZWY2MzUzZWY4NGRkNjEifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/control/failsafe.rs#L5-L10",
+          "version": "repo-lines-v1:sha256:8879bc52f1fcc2748487e0602bfcbc361d64b09c732e7f32e811d885568f6d3a:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZjUxNTUwYzdjY2Y0ODc5MTFlOWE1Y2Q3NDE3M2IwMjE4M2E2ZTc4MjZmZDIxMTVlMzI2MzYxMjVkYzgyOTEwNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZDhiYjhmNWQwYzdjNDBhYTY4YzVjMzgzZWJkY2MxYTI1YTY1ODEwZTA3MzJjNDE2ZGM5ZmJjYmUzOWI2NWRlOCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOGIxZmQ5YjEzMTNjNjUxMDc3MGRiMTM3YjliMDVkZjYwNWE0MmRlNWMxNWVhYzQwYzI2ZDE1YmQ0OWI1ZWM4MyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWJkMTM4NjVmMWY2ODdjM2ZlYTk0NWI4YWUzNTBjNDg2YjAyZDk4ODVmOWQ2NTg1ZGRlZTBjNWU3MWIwMWNiNCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_920c3ce7cd60457383b6deb9540415ac",
+      "statement": "Clearing an active RC failsafe requires receiving continuous valid radio control frames for a configured recovery duration (default 500 ms) while in the landed phase.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/control/failsafe.rs#L329-L368",
+          "version": "repo-lines-v1:sha256:636bb78be0f0a01bb4e317f0df96121bf3aadfa4e37540ab13fa50699e226247:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk5NDVhZTRkNjg5NDNmYTJlOTFiYzcwOTY2MGExMmQ1MDIyZDdhYzVmYmVhZTY5MzZjM2Y2ZGM5OWU5OGQxMGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1MjJjNDJjZDE5YzZkMDNkODA4YzQ1MjcyMDU1MjgyNWI3ZWExYzViNDkxYjIxODUxMWNhYzc0MTVjZjlkOWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFhYzc2YzI4OWFkMDg5OGFkMjM3NThlNzlkOTQ1OGNhZWI0MDUxYWJhZjczMTJlZGIxMWNmNzFlZGZjMGY0ZjEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI0YTM2NWE5MGVjMTFlOTA0MzI3NTJjZjkzNzZlYzVlZDM2YjgwYmE1ZThlNjg1NGZjZjk4OTcwZDMwNDQ0NjkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_97f9c368cd8743d79fce77998ce96a4d",
+      "statement": "The failsafe controller watchdog checks inner-loop motor command publication timestamps against fs_ctrl_timeout_s and triggers an immediate disarm with FailsafeReason::ControllerTimeout if the controller stalls.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/control/failsafe.rs#L12-L16",
+          "version": "repo-lines-v1:sha256:fbd68634f9e0b666b4be9e5909eb18ff9274832571ab82077a9dd847af7c9f93:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiN2YwZjE3MDI4OGExMjc3NTJmNjkwOTdkZDVkZjI4ZWMwNmQwZGI3N2I0MDBhYjdhYWEwYTcyMTFiNzc2ZDc0ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZmI1ZDQyMzQyZWVlYjlkMjdkODJhZWQ3OTRlZTNjM2E2ODdhOGRmMzA5Njc2NDlkYmRkMWE3YWVmNTJkODMxMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiM2RkN2JiYWQ5ZTUyYzFhMTllYjI1Njc2ZjA3NzU4YWNkYTUxNjk3NWEwNTJiMzIxYjFmOTMyMmM3M2ZkOTBkNiJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/control/failsafe.rs#L213-L218",
+          "version": "repo-lines-v1:sha256:a5741f6afbfce31f4ab9985be5c66e318e83536018b9a0b31b0d1339e667972c:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzY3ZTkyZDU5OWIxNmQyNjVlN2I5NTMxZDVjOGUxZmVkN2FkODAxMWM4ZDU1OTQ2NDNhYjNhOWY2NzUxOGE5MSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODI4NGZhOGQxMDcwYTUyMzM1ZmYyYTA0ZGYxMzQ0MDBlOWNkMGQ0OGY1MzYxZGFkYjkwZGRjOGQxNjJkNTUyMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZDUwZjZmOWY5YWRmODZjZDg2NTRmNDgyZmVhNmNiNGI4NTkyNDlkNWZjN2JmYTc3MmEwYmQ5MTU1MjQzMDM4MiJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/control/failsafe.rs#L250-L257",
+          "version": "repo-lines-v1:sha256:2f8ede134102ad73dc18eea2253610150edd70174761574b5303231d34710dcb:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTA1NGZkMzJlZmU5MDk3MzQyZjU2NzAyNTJhZjdkZmEzMWI2YzQyN2RjYmEyODkxYmVlYzdkNDAzMmU4ZjBlMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTZiMDQ0OTE0Njk3MjJlODM2M2E5NGU0MDQ0NTM4ZTAxM2EyYTIxN2UzNmIxZTU2OGJhNjBhY2I3YjRjOGYyZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNmY4ZjQ3OWZiNjk0MTRkYjFkZDFhMDAyMmQ1NjBmZjkxODA0MGYyNTZhMDk5MjkwNTM5NWI4ZDhlZjAyMTYyMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZWNiZGY0ODY1ZTk3NGRjM2I3NTE4YmMxMGMyMGJiNDhlYmQxZTIzMDNiMjJkMWY5ZjgyM2NlYTc5NjFiYTVmMyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_c37317fc2314408e96a8f006fbf34848",
+      "statement": "When entering failsafe, enter_failsafe writes FAILSAFE_REASON prior to storing true in FAILSAFE_ACTIVE using Release ordering so Acquire readers reliably observe the reason code.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/control/failsafe.rs#L158-L167",
+          "version": "repo-lines-v1:sha256:cd126b867cfcdd03de2972febacd8f6ed8a3cd3f0ba2224b6ab096051034f0da:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNmYTgwZTdjOWUzNjJkZmFjMmIwMmQwYzM5NDMwN2MxMTA1NjAxNDdhMTczOTU3MTNlMTQ0YjQ3M2ZhYTMxOTkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjljMmM1MjZkZDBlMDg2MTZhNjc1NTNiNjRjNjQyYWYyNjkwMGZhYjQzNDk2MTVjOTgzYzIwYTFiOWI0ZDQ0YTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQzYTFmMGQxN2RiMDJjNTQwOTcyNzkyOGE5MTg2MjhmOTFmMTc3MGFmMmFiNjZjNmJhMjM3YWM4ZjUzYTJiYzgifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/control/failsafe.rs#L188-L192",
+          "version": "repo-lines-v1:sha256:3ba4f8fa00db42596b1565a95870b7d2202662a164063e50161d194995d09395:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNTdmNTRhMDkyMGExNDY4NzIxZDg1YzdhZGY4NDA0ZDc2YzRlNDE2MjAwMzgxZGYxYmZmZmI1NTI1YTU0ZjBkYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNmM2OTVkYWUxYmI2MzBiM2JkOWE1ODJkMTExNmQzMzgzMjlmNDhlM2Y4NGVhNWQ4NjQ0NTJjN2Y4YTg0ZGRlYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMmYzMGNkOWFlMWMxYTQ3NjI4MTI3ZTRjMzk3MjMzYzNiM2JjZGMwMzliMzlmODhiM2ExOGZlMjYyM2YyZGRlZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiODUxM2FlMDQyZDBkNzdlMWYyMGY5MDIwMWVlMzY4NjNiZTZlY2I1NDJjMTVhNTUwZWYzOThiNTMyNDcyNGI1OSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_77874510b79c413b917bf04d9fd80909",
+      "statement": "The hardware Independent Watchdog (IWDG) is initialized with a ~500 ms timeout and is periodically fed every 200 ms by iwdg_feed_task on the thread executor, triggering a hardware MCU reset if the executor stalls.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/watchdog.rs#L104-L109",
+          "version": "repo-lines-v1:sha256:82738116c40436061afbdf8cfc1677a1a684d9861c2481a15597ccf4bb0465ca:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzA3MmU3YTU1NWNiZjFmMTQwMWI1Yzc3NzU5YTA5ZmVlMzI4ODMzYTk5YjJiOWQ4NmJmMmRhYTRmYTM2MDkyOCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjc2Y2ZkMGYwMjA5ZTNjMTBjOTE0Mjk4NzQyYWFjZjQ2ZGZhZDQ3ZDNjMTU1ODQwNDY2OTlkNjIxZjAxNTgxNCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/watchdog.rs#L18-L50",
+          "version": "repo-lines-v1:sha256:dc9c242140174358e540c58afe1027695e021d236761e268a96a9d8ce9f00604:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFiM2ZlYjMzZDI3ZTc5YTg5OTI1ZWQwYzA4NzY1MjdlYjAyNWYwMzBhYWRmMmUwZWI0MDVlM2RlY2ExYjNjMDIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMyMzBjNzdhNjM4NTliMGQ0MGY5OTZkYTAxMjk2YTA1ZjRmMGU4NjAwZDk1YjI2ODViODAxZWJiYzA3NTNkMjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc3NzQ1N2VlN2QyZDg2NDJhM2FlZWYxNGVhY2I3MmRjOGE0MjQxOTcxZWNkMjQ3ZjBhODYwMGE0OGUzMDg0MjYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_29db1c3ced264b109ac65369cea1afc8",
+      "statement": "The extend_timeout and restore_timeout functions temporarily adjust the IWDG prescaler to allow blocking operations like flash sector erases up to ~4 seconds without triggering a reset.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/watchdog.rs#L67-L97",
+          "version": "repo-lines-v1:sha256:1d8d16b40d8c2ba25b043274a1a05a69156c318ba946270cea919d5aea30a791:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM5M2RlNDBjZTZiM2NmYTU2OWI1N2MwNjc1MmM5ODNjMTMyZjkxMDEzMTljYmU3NzNjODYzMzZjMDdkYTE0OTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZmOGQ3ODJkOTEyMmRjZGNiZDQ4MmMyMDk2YTI4MjJmMGIzMWMyODllM2I4YjkxNGQ3N2NmOTQ1YjlhNmRkMGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjllMDc4ZjIyMmU4OTcxZjI3OTBjMTNjMWZkMTEwMzdkN2ExMzhkMmY1NjNjNmViM2YxNTAwOTNjNmVmMmQ4YmEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_0da6150a153245a9a202c8d55f5ad990",
+      "statement": "Reset cause detection executes during pre_init before clock configuration or .bss zeroing, sampling RCC.RSR and PWR.CSR1 into .uninit static RAW_RESET_CAUSE and clearing hardware latch flags.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/reset_cause.rs#L4-L33",
+          "version": "repo-lines-v1:sha256:13c78abbf329fc0a8eeffc65bd9ae0325fadd4f1b9a19b8f17a53c2f2a74fde1:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcxN2UyMzA4MTA0ZTUyM2JlZWU2NjFlZGQ0MTZiZGJhYTVmNjU1NjhhNGRkMzE5Y2Q0NDIxZTJhYzQ5ODdmMzkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQzNWZlZWExMjhjOGY2OWJiYWIxY2MyMTljNzhjMjcwODk0ZWUyZmI2ZjJiMTY2NGEwMjc1ZWQxMGQ1Y2M5OWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM2NjhlM2I5ZjQ5NWQ5MGI4MTFlYTk4Y2IyNjU4MjVjODhmZGQwZmY5ZjdjZGQ1YWViMmE0NDcwMDliZjEwYTAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVlMmI1YjU5Yzc0NTVhODRiNGIyYTZmNmMwZDU5NTE0YjQyZjExNDc0MDY3YWNiMmY5ODg4MDdmZGFhYzY3MGQifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/reset_cause.rs#L93-L147",
+          "version": "repo-lines-v1:sha256:38efcfe1bf629318eb5dde3035a7a62c6b4caf27602a0d73bd3a145e7d48629f:eyJzZWxlY3RlZExpbmVDb3VudCI6NTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFkMDQ0YzQxZDIyZGVkZTlmMDg4OThlMGZmYjY0YjRjNzhhZGZkNmFhYmJiMWIyYTczMGZjMjNlNmYwMjJmMWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdlOTJiYmZiZWVhYTEyZmYzZTU4MDc3N2RmMWU1OGRkZGNhZWQwNDVhYzVjMTBlMjBlMWVlMDI0MDc4MmNhMDEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjlhMjBlNDFmNWQ0ZDEyNmQxMDZkYTY0NTk3ZGExZWZhNzk5ZTBhYzA0MGU0ZTFmYzFjZjk0NzE3ZDBiNjhhZTgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_51b6dc3e8ac6460f962144f37f72dad6",
+      "statement": "The postmortem crash diagnostic subsystem persists a 2 KiB PostmortemRecord struct in non-volatile Backup SRAM (.bkpsram), retaining data across power loss via backup regulator enable (PWR.CR2.BREN).",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/postmortem/bkpsram.rs#L57-L100",
+          "version": "repo-lines-v1:sha256:8cee7800ef7df4edfcfaec42cbad6669bf06e4edbce4cdb71feec10e58bd584b:eyJzZWxlY3RlZExpbmVDb3VudCI6NDQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkxMWU4YjYyZTMzYmM0ODQxYzg2YTUyYmJmZDQyNGFlNDFlMGJiZWE4MjQyMmQxMGUwZDIwYjlmMzA1ZmI0MGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkxMWU4YjYyZTMzYmM0ODQxYzg2YTUyYmJmZDQyNGFlNDFlMGJiZWE4MjQyMmQxMGUwZDIwYjlmMzA1ZmI0MGMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ4MGRmYmZjNTJlMzFhYzYzZjFhN2I4NjUwMzRhMjM3MDdjOWQ3YjlhYzc5MmRmNjE1OGVkODI1YTFjMDk1MmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI1NDc1YjgzYTQ2YzQ1NjgyZDBhY2U1ZjEwY2I0NzI0OGZmZmFlM2E5MjM3YzJhZjY0NjM0M2JlYzlhNDc2NzMifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/postmortem/record.rs#L38-L46",
+          "version": "repo-lines-v1:sha256:96b9c8e23af7fcda951d444aefbf9207b31df1ff2d0efeb22b1e014387472318:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzk0Yjg1MzlmMWMxMjYwNjBhZmE5ZGFhZDQ4NGE0MDljOGE1YmM3Nzk4NTIxZTY3YzBhZmJjODlmZmU5Nzg4ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNmUyNTUxYTczZGJiNjI2NWI0ODM0ZWFiNjUwNzI3NWQzZGY0ODFkYzg3ZGQzOWE3OGE0ZjZmNjA5MTBlZjUxMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjY4Mzc2MjIzNThlZGYwYWNlNWJmMTgzNmE0NjkwYjJkOWNlNjJjNzUzNDRhNDU5OGU5OTRiMGRhMWQ3NzVmYSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTMyMWQ1NTM2YmNmNjRiNzhmZDAzMGRhN2MzNjUyYTVkMGZmMzRiYWRlOThmMjA4ZGUwNjNhN2YwYjIyYjVlYSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_74ba4d8095834f27a192c3f8a6bb87ed",
+      "statement": "Postmortem record updates enforce atomicity and Cortex-M unaligned memory safety by performing 32-bit volatile word accesses, writing body and CRC32 payload first, and publishing MAGIC last.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/postmortem/bkpsram.rs#L159-L179",
+          "version": "repo-lines-v1:sha256:693ce497b709fce43ca115247cecbc73a5353ff00cdc48c4897f87c45a552701:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI2ZDM4ZDJkMGYzNzBkNzZkZTg1MjNmZTg2MjI1OWZlOWM0YmEyYTM1NDMwMzZjZjRkNDIxMTdiYTFlZTZkMDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI3ZmJhYzYxMjE1NzhlM2Q3ZTQ1NjEyMTcxOGNiZmRiMWZlZjJkMTQ2ZDIwODQwZTBhOTg0ZGFhMTUyY2NlNTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJkMzZkYzFlMGNmZGFkMjIxZDJkNDhlMGNmNmNlNWZjMThjOTFlZWUxNDI1NzA0OTMwMDY3N2E1ODA2M2NkYWMifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/postmortem/bkpsram.rs#L65-L74",
+          "version": "repo-lines-v1:sha256:2ed829a0086c3bb0383b5657eac0890a20c3a87d42108597a1c0224b8dde5377:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA5YmYxNWQ4MzM2MjJmMjlhZTQ4ZjAwYzM2NjFiN2JhOGE3MzMwODQ5MmVhYTJlN2M2NzMxODc3ZThhNmFhOWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY5NzZjZWRhNmRmNGJkZTYxM2Q4NDg0ODM3YmU3MzFmOTJlYzdkNTE4YTJlMTdlMWQxMDU1Zjk4ZTA0NTdkMTUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE2M2IxYTgxODE3YTRlODYzOTM1NzFhNWEwNTg0NDc4NWRiYTJlNWI0ZDYzZDMzYmE1MjVlNGRhNWQxMzgyN2YiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA5NGE3ZjM4ODYwNTBjZjY4YmY1YzNkZDBjM2Y5ODY5ZGQ0MDMxODE0NmI1NjU3N2I4ZjRmMDQ5ZjE4ZDI5OGMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_8386e44768a9470582d954623257392c",
+      "statement": "Custom #[panic_handler] and HardFault exception handlers disable interrupts, guard against recursive re-entrancy via FAULT_DEPTH, format fault details and CPU registers into BKPSRAM, and trigger system reset.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/postmortem/fault.rs#L161-L196",
+          "version": "repo-lines-v1:sha256:b10b1896a4b0f8c2637b96ecde8c7912185a4e3d3e57e997ba3e1befa16a2dbd:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI4MDFjZGUwY2M2ODFmYTFjZmMyYThjNTA1YmZkOTJhMDJkNTUyYjIzZWY2YzI3NDBkZjUyODNiZGUwZGEwZDAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ0ZWIwODZhZmU5ZWExNjNiZmZhOGE0MGJlMDU2NDNhNDdiY2Q1ZWQ5YjYyNmIxYjFmZDY5MTMxNmI3MWJiN2UiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhhODk5YWNjOWYyMzJhYjQzM2U0ZmUxODhhM2I4MzAzNjgxNzNlNjQ1ZmJkNDJiN2UxZWZmOWQ2NjNiMTM3YWEifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/postmortem/fault.rs#L19-L36",
+          "version": "repo-lines-v1:sha256:0693ede4ed12841fec0b88e2823448cb7c42ae30251892a70b749e05c378ea7f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg4NTNiNGZkODJjNzgzNzQzNjVjNTg4YjQzOTRkZThjOTIxOGRlYzYxNDgyZTNjNGYxNTkyMGMxMTA1Njk2NTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgyYTUzZTAxMzZmZGQ1MGNmZDFmZWExNjFkOTM4OTA0ZGM5NTNiODM0MjVlYzdkMjM2NmY2NzU0MWFhNTAyMGYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJhMmIyNTE3MTY2MWZkZDQ2ODE2NmVhZWVhYjg5ZmQyYWZjNWFiNzMwMjEzMTI1Zjg3NDExOTg4NTU2NDZmOGUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjljZjc5NThjODZiMzhkZWE4ZGM5ZDE3YWYxZTAxZDI1ODZkMTY1MGUwZGU3YWViYzkyN2VhMzY5OTY5ZTliOGEifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/postmortem/fault.rs#L76-L144",
+          "version": "repo-lines-v1:sha256:623a48d846b57ee4527a11ba56f09bfd231def216b4d95b55b85bc5ab642586a:eyJzZWxlY3RlZExpbmVDb3VudCI6NjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg5NmQwMTdkYmJlMGE2ODVlZDA5N2IxMzQyMzMzYWQyMmU1NmI2NmYxNDU2MzAwZGE0NzllNzI2MzEzMjE2MDgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg5OGE1ZmQ3OWQ2ZGE1NzI2MGYxMGMyZDEzOGMwMDY2Y2I3MWU4N2E2MWRmOWY1NmQ3ZTk5MGM0Y2NkYTQ3YWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM5YTQzMjdkNjIxMDdjMDNiNDk5MWM4M2QzMjY4NDMyYzE1MmUzMWFhZWUwNGYxYjZjNWY5MTI5ODUyNDczNjAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5b35cdeda5c54385952e6fccfda0af4c",
+      "statement": "The steady-state postmortem_task runs every 100 ms to edge-detect health atomic transitions, log events to the BKPSRAM event ring, and refresh attitude and position snapshots.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/postmortem/task.rs#L116-L200",
+          "version": "repo-lines-v1:sha256:3247c7f58ac14eaf2542e5312058c5a46e0ac1e3e3faee260c41a5a14e9c343a:eyJzZWxlY3RlZExpbmVDb3VudCI6ODUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk4YjRjYmIxMmYxMjA1ZDI4YWI0NTM3ZDhjMmU3MTE1Zjk4YmNmNjZmY2EwNDY4ZGYyODNjZWY0NTZiNGU2ZGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMxZmYyMTY5YzlhMTgzMjhhN2IzZGQzYjNmMDAyYTNiZjBkMDVmMTM3MzNlYjZjYjllM2Y5N2NhNzg2ZWRiZjciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjljNjMwNGU5ZmVkMjkwNTE0MjljZmIxY2M1OThjYmQzMTg5YWZjMzI1ODRmMWQ4YjZhNzU3M2ZmYTEwNmRlMTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImYyMzg2ZTMxMjZkMTMyZWE1NDlkNjcyZTQ5ZmM2OWRkNTgyMjI3YmMyOWMwM2RiNTcyZmExYjM0YjgzMjcyMGMifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/postmortem/task.rs#L22-L36",
+          "version": "repo-lines-v1:sha256:f35cf2fc684454aa873e2614ee1493f86ba14a0467497617e392c82ab3fd1c49:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU4MTI4ZDU3ZDBhMzZmMTY2ZmNkMTVjMGIzZDYxMGY3N2NiMDk1OTgyMmJlZGY2YzdiNzViZWQxYmU0OTU3ZTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhYWY1MDM3YTIwOGY4NGVkYTNhYmY3MDlmM2IyNzk0Nzc4YzY0OTNhYzExNDQwMThhMDY3NTEwYjdiYzdlOTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFlOWI2YWY3YTdmM2RkOTcxNWE3MWU4ZGRlZDA1Y2I4ZjdmZGNhNDI4YTUxMTRhNWNmNzI5YjA3NGFjNGNiMTkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM4YmNhYjdlODM0NmM0ZjY2ZTA3MDQ0MGM2MzNkN2NhMDE0MzU5ZWNkZWQxYTJmMjRjMTc4YTQxZTBmY2E3ZTYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_0688a3b430914d66927684fc63d550a7",
+      "statement": "Boot recovery checks the prior boot record and forces entry into minimal USB Safe Mode if the previous session suffered a fatal crash within 10 seconds of booting.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/postmortem/recovery.rs#L36-L40",
+          "version": "repo-lines-v1:sha256:a6b2546dd9e682a78d5eea29e0bf8cdebfa75708a998c5d843ec4f84c97027cd:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzNiYWZmYTUyMWVjNmI2Zjg5NmE1NDA5ZGM1ZmUwOTNiNDRmMDJlYzBiNDc3YzcxZjU2MWRmZTYyYmZkNWNkMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzE0NzQ0Nzk2M2VhNGZkNGNkNTY5ODc5ZDYxZTc5YzEyNTA5ZDE1NTA5OTc0ZDI5OTEwZjJiMDU0OGNkMDIxOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNTU5MzEwMzY1ZjNkYWQ3ZDM2ODNiN2M0MmIxZTBkNTlhMjk5ZGNiZDlkOTI5NDIwZDAxNmU4MDI3MTAzYjJkNyJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/postmortem/recovery.rs#L81-L164",
+          "version": "repo-lines-v1:sha256:b5d4f2b3a9d6d01ee7701c706aa7701097f864f7821cd23190b572ec208f666e:eyJzZWxlY3RlZExpbmVDb3VudCI6ODQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVlMGE5Nzg2ZmE0ZmM2MzcxNzIyYjMyZDZkMmNkMDc1ZjY1Nzg5YTRmYTNlZjZiOGI5NjhiNWM2YmFjNzJlOGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE2MjdhMDgxOGJlZjQ5MGE5ZGZlYjRhODJiOTc3NDZlMjhiODQ1NDY5ODE3YzIwNjViZDZhMDE1YjdiYzI2NWEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM5MGI1Yjk1OGFjZmRmMTJkMWE3YzdmMTQxNzliNTNmNTYzMzIyOGNmOTQ4NThhY2ExYzYxNDJiOTEyNjBjOTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM4ODdhOWI1ZmI2NWZmMWJjMTY3YmQ4NmEzYjEzYjFjODE4ODExNTRhZmQ0MDJjZjU1ODk4ZTc3OWY3ZTc0MDAifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-30T14:16:13.882Z"
+  }
+}

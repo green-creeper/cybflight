@@ -95,6 +95,12 @@ pub async fn dshot_task(
     for m in 0..4 {
         let regs = config.motors[m].timer_regs;
         let ch = config.motors[m].channel_index as usize;
+        let gpio = config.motors[m].gpio_port;
+        let pin = config.motors[m].gpio_pin as usize;
+
+        // Keep the line pulled HIGH while released to the ESC during GCR IC.
+        gpio.pupdr()
+            .modify(|w| w.set_pupdr(pin, gpio_vals::Pupdr::PULL_UP));
 
         regs.ccmr_output(ch / 2).modify(|w| {
             w.set_ocm(ch % 2, vals::Ocm::PWM_MODE1);
@@ -255,33 +261,19 @@ pub async fn dshot_task(
             config.timers[i].cr1().modify(|w| w.set_cen(true));
         }
 
+        let mut edge_buf0 = [0u32; MAX_GCR_EDGES];
+        let mut edge_buf1 = [0u32; MAX_GCR_EDGES];
+        let mut edge_buf2 = [0u32; MAX_GCR_EDGES];
+        let mut edge_buf3 = [0u32; MAX_GCR_EDGES];
+
         join4(xfer_m1, xfer_m2, xfer_m3, xfer_m4).await;
 
-        // Zero CCRs (output goes to idle HIGH with inverted polarity), disable CC DMA, stop timers
-        for m in 0..4 {
-            let regs = config.motors[m].timer_regs;
-            let ch = config.motors[m].channel_index as usize;
-            regs.ccr(ch).write(|w| w.set_ccr(0));
-        }
-        for m in 0..4 {
-            config.motors[m]
-                .timer_regs
-                .dier()
-                .modify(|w| w.set_ccde(config.motors[m].channel_index as usize, false));
-        }
-        for i in 0..config.timer_count as usize {
-            config.timers[i].cr1().modify(|w| w.set_cen(false));
-        }
-
         // ======================== B: Switch to Input Capture ========================
-        // Tight GPIO→OUTPUT → IC config → GPIO→AF sequence matching BF
-        // (pwm_output_dshot_hal.c:112-131). Minimise time FC drives the line
-        // while ESC may be starting its GCR response.
-
-        // Step 1..Step 3: Atomic turnaround (~30 CPU cycles) so higher-priority
-        // ISRs cannot stretch GPIO OUTPUT contention into the ESC's GCR window.
-        critical_section::with(|_| {
-            // Step 1: GPIO → OUTPUT (drive HIGH, LOW speed) while reconfiguring timer
+        // Drive HIGH -> configure IC -> release GPIO -> clear SR -> arm all 4 RX
+        // DMAs inside a single ~3 us critical section so P4/P5/P6/P7 ISRs cannot
+        // preempt between channels before the ESC begins its ~25-30 us GCR reply.
+        let (ic_xfer_m1, ic_xfer_m2, ic_xfer_m3, ic_xfer_m4) = critical_section::with(|_| {
+            // 1. Hold line HIGH during OC -> IC switch
             for m in 0..4 {
                 let gpio = config.motors[m].gpio_port;
                 let pin = config.motors[m].gpio_pin as usize;
@@ -290,98 +282,101 @@ pub async fn dshot_task(
                     .modify(|w| w.set_moder(pin, gpio_vals::Moder::OUTPUT));
             }
 
-            // Step 2: Reconfigure timer channels for IC mode
+            // 2. Zero CCRs, disable TX CC DMA, stop timers
+            for m in 0..4 {
+                let regs = config.motors[m].timer_regs;
+                let ch = config.motors[m].channel_index as usize;
+                regs.ccr(ch).write(|w| w.set_ccr(0));
+                regs.dier().modify(|w| w.set_ccde(ch, false));
+            }
             for i in 0..config.timer_count as usize {
-                config.timers[i].ccer().write_value(CcerGp16(0));
-                config.timers[i]
-                    .ccmr_input(0)
-                    .write_value(CcmrInput2ch(CCMR_IC));
-                config.timers[i]
-                    .ccmr_input(1)
-                    .write_value(CcmrInput2ch(CCMR_IC));
-                config.timers[i].ccer().write_value(CcerGp16(CCER_IC));
+                config.timers[i].cr1().modify(|w| w.set_cen(false));
             }
 
-            // Step 3: GPIO → AF immediately — release line to ESC BEFORE DMA setup.
-            // This matches BF's tight ISR sequence where GPIO→AF happens right after
-            // IC_Init, before DMA is configured. Any IC captures before DMA is ready
-            // are lost, but this prevents bus contention with the ESC.
+            // 3. Program timer channels for free-running IC mode
+            for i in 0..config.timer_count as usize {
+                let tim = config.timers[i];
+                tim.ccer().write_value(CcerGp16(0));
+                tim.ccmr_input(0).write_value(CcmrInput2ch(CCMR_IC));
+                tim.ccmr_input(1).write_value(CcmrInput2ch(CCMR_IC));
+                tim.arr().write(|w| w.set_arr(IC_ARR));
+                tim.egr().write(|w| w.set_ug(true));
+                tim.cnt().write(|w| w.set_cnt(0));
+            }
+
+            // 4. Release lines to ESC (internal PULL_UP keeps idle HIGH)
             for m in 0..4 {
                 let gpio = config.motors[m].gpio_port;
                 let pin = config.motors[m].gpio_pin as usize;
                 gpio.moder()
                     .modify(|w| w.set_moder(pin, gpio_vals::Moder::ALTERNATE));
             }
+
+            // 5. Clear stale SR flags (from OC + EGR.UG), enable IC capture + start timers
+            for i in 0..config.timer_count as usize {
+                let tim = config.timers[i];
+                tim.sr().write(|_| {});
+                tim.ccer().write_value(CcerGp16(CCER_IC));
+                tim.cr1().modify(|w| w.set_cen(true));
+            }
+
+            // 6. Arm all 4 IC DMA streams and enable CC DMA requests before leaving CS
+            let x0 = unsafe {
+                Transfer::new_read(
+                    m1_dma.reborrow(),
+                    config.motors[0].dma_request,
+                    config.motors[0]
+                        .timer_regs
+                        .ccr(config.motors[0].channel_index as usize)
+                        .as_ptr() as *mut u32,
+                    &mut edge_buf0,
+                    dma_opts,
+                )
+            };
+            let x1 = unsafe {
+                Transfer::new_read(
+                    m2_dma.reborrow(),
+                    config.motors[1].dma_request,
+                    config.motors[1]
+                        .timer_regs
+                        .ccr(config.motors[1].channel_index as usize)
+                        .as_ptr() as *mut u32,
+                    &mut edge_buf1,
+                    dma_opts,
+                )
+            };
+            let x2 = unsafe {
+                Transfer::new_read(
+                    m3_dma.reborrow(),
+                    config.motors[2].dma_request,
+                    config.motors[2]
+                        .timer_regs
+                        .ccr(config.motors[2].channel_index as usize)
+                        .as_ptr() as *mut u32,
+                    &mut edge_buf2,
+                    dma_opts,
+                )
+            };
+            let x3 = unsafe {
+                Transfer::new_read(
+                    m4_dma.reborrow(),
+                    config.motors[3].dma_request,
+                    config.motors[3]
+                        .timer_regs
+                        .ccr(config.motors[3].channel_index as usize)
+                        .as_ptr() as *mut u32,
+                    &mut edge_buf3,
+                    dma_opts,
+                )
+            };
+            for m in 0..4 {
+                config.motors[m]
+                    .timer_regs
+                    .dier()
+                    .modify(|w| w.set_ccde(config.motors[m].channel_index as usize, true));
+            }
+            (x0, x1, x2, x3)
         });
-
-        // Step 4: Now configure timer free-running + DMA (line is already released)
-        for i in 0..config.timer_count as usize {
-            config.timers[i].arr().write(|w| w.set_arr(IC_ARR));
-            config.timers[i].egr().write(|w| w.set_ug(true));
-            config.timers[i].cnt().write(|w| w.set_cnt(0));
-            config.timers[i].cr1().modify(|w| w.set_cen(true));
-        }
-
-        for m in 0..4 {
-            config.motors[m]
-                .timer_regs
-                .dier()
-                .modify(|w| w.set_ccde(config.motors[m].channel_index as usize, true));
-        }
-
-        let mut edge_buf0 = [0u32; MAX_GCR_EDGES];
-        let mut edge_buf1 = [0u32; MAX_GCR_EDGES];
-        let mut edge_buf2 = [0u32; MAX_GCR_EDGES];
-        let mut edge_buf3 = [0u32; MAX_GCR_EDGES];
-
-        let ic_xfer_m1 = unsafe {
-            Transfer::new_read(
-                m1_dma.reborrow(),
-                config.motors[0].dma_request,
-                config.motors[0]
-                    .timer_regs
-                    .ccr(config.motors[0].channel_index as usize)
-                    .as_ptr() as *mut u32,
-                &mut edge_buf0,
-                dma_opts,
-            )
-        };
-        let ic_xfer_m2 = unsafe {
-            Transfer::new_read(
-                m2_dma.reborrow(),
-                config.motors[1].dma_request,
-                config.motors[1]
-                    .timer_regs
-                    .ccr(config.motors[1].channel_index as usize)
-                    .as_ptr() as *mut u32,
-                &mut edge_buf1,
-                dma_opts,
-            )
-        };
-        let ic_xfer_m3 = unsafe {
-            Transfer::new_read(
-                m3_dma.reborrow(),
-                config.motors[2].dma_request,
-                config.motors[2]
-                    .timer_regs
-                    .ccr(config.motors[2].channel_index as usize)
-                    .as_ptr() as *mut u32,
-                &mut edge_buf2,
-                dma_opts,
-            )
-        };
-        let ic_xfer_m4 = unsafe {
-            Transfer::new_read(
-                m4_dma.reborrow(),
-                config.motors[3].dma_request,
-                config.motors[3]
-                    .timer_regs
-                    .ccr(config.motors[3].channel_index as usize)
-                    .as_ptr() as *mut u32,
-                &mut edge_buf3,
-                dma_opts,
-            )
-        };
 
         // ======================== C: Wait for ESC response ========================
         embassy_time::Timer::after_micros(80).await;

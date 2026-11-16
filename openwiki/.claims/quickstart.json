@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:e159e905667721c20256e89f39920180bad159b6a0b3327cb685e93bdf74c28b",
+  "claims": [
+    {
+      "id": "claim_47f66d2024704ed58382e0e058a46c29",
+      "statement": "Static channels serve as the abstraction boundary between board-specific hardware initialization and control logic in Cybflight.",
+      "evidence": [
+        {
+          "resource": "repo://CLAUDE.md#L14-L16",
+          "version": "repo-lines-v1:sha256:20d561761478b08ac5aaf6a10ff78ab3cfb5875b761e919ba5bef9b083c6de8e:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiY2U2MzczY2RjNzQzZDk4OTI2MDAyNzM3NjI3NzA1NTgzZDBhNjE0Zjc3OWIyMzc0OTFhNWZkYjNkMjhmNDNhYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZjljYzQ0YjM3M2I4ZjY4NDRjMjI1MDAwNWZlNmFiMTNiODZmNGNhOWYxYTJmNmUzNWY2NzEwZDc0YTMxMjJiYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNWM3ZWVmZTAxNzBhZDU1YzVhOGQ1NzU0Zjg3YjgyODgxNjFjNTZiOTczNmU4NzgwNjM4Mjg0NGZkNGVlNmIyMSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZWI0OTM5ZjFiYjRiNDEzMTllNWMyMDhiYWE3YTYyMTlmMjViNTAwNDk1ZWRiZjc4NWUyZDcwODA4NWU5MDM0MSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_182d7c9f593747c2a6dbb30a4ba6180a",
+      "statement": "Vehicle build configurations and cargo features are derived from vehicle YAML build sections under vehicles/*.yaml via tools/vehicle_features.sh and verified at compile time by build.rs.",
+      "evidence": [
+        {
+          "resource": "repo://CLAUDE.md#L48-L51",
+          "version": "repo-lines-v1:sha256:93961025320d2ef2081d0b66419ff01a652adc0ed5ff5ba467eaff2ff080391d:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDk0MGI3OWI3YmYxYmFmOTQxZTY1NTljZWVmMjVhZjQ5YmEyMDA0MTc2MDQ2ZWYwNTU4YWQ4ZjllMjllMjM3OSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMmQ4ZGVjZTIyMjFhY2NiODM2MjM1ODcxMjQ2Y2IyMDI4MDEwYzM2OTNkZmYxNTg3ZjJmOTI0ZGVkZjIxMDE1ZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYmNmOTFjYmY4NmZhZDkxOGQ0OTUwNjZiMzNhMDA0NzNlMDZhNzc5NTJmYzAxNTcxY2NlOWEyNzc2NWYxZGQyMSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMmRhYTBkMGNjMDQ0YTRjM2QzMWE5ZTIyZTI4NWZiZmFlMTg4MmYyM2JmMmNmODYxNmQzMmMyYjU3MzRiZjRhYSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_1cbe98693b524dbdb35b3b99b221ebf0",
+      "statement": "The cybflight-gs desktop configurator application is built with egui and supports both live USB VCP serial connection and an offline mock drone simulation mode.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_gs/src/main.rs#L9-L23",
+          "version": "repo-lines-v1:sha256:94361e0a6ab63ced351dacde48cbbbffad502cfe475a34142435e7eb13229a6d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFmOTAxMWMyY2JiOWQ5NDJmZTE3MjhiNDdlZmFkMTQ5MzU3YTgwM2Y1YmMzYzM4OWZiMzQ2ZjZlOTBmYjhhYzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRlNTUzMTkzZjBhZTQ3OGFjNTJjMTZkNmY3OTUyOTRmZTlmNTI3OWM0NTk0NjQ1YTVmN2MyM2VkZTdiMDQzZTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAyZTk0ODYyMzc2NTE0M2NkZTc1ZDRkMGVmZjZmNWY2NzRlZjQ2NTY3YjMxNGMyMmIxZmE2YTkyZDk1ZDhjYzkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e9c6f2a1905f4e7693be2d71060fb9e4",
+      "statement": "Cargo release profiles optimize the cybflight shell binary for size using opt-level = 's' while running cybflight-core and nalgebra at opt-level = 3 for maximum execution speed.",
+      "evidence": [
+        {
+          "resource": "repo://Cargo.toml#L41-L46",
+          "version": "repo-lines-v1:sha256:d3dffa5a33672a9c96132a829eb4ac11606501e4c5366bc35ef3f001e83a1268:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDE1ZjIzNzgzYTM2ZDEwN2M3MmIxZDdlZWUwMTU5ZWY1NzI1ZGJiZmQ2ZjI3NTU0YWQwMzZiZmRmMTY2N2YzMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMWM1MjhjYTc5MzUzYTIwYjJkMmE3NDZhNGU4OWY3ZTZmMmYxY2ExNDg1YWMyMmZmMzJlOGFhNTAzMjY5NTQxZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMWY2YmFkNTgxYmJlN2JmMWRhN2M2OGFhYTU2NGVlYTk2ODk2NjY1NjA5Mjc2ZjhiMmMyNDBlY2YwOTFlNjcxMyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiM2FjY2Q3NzMwM2I3MDRjYzU5Yzk1OTE5MTg2ZTUzZGU2NDg0MGVmY2QzOGM4ZGU3ZDYyMjZhMDRmOTQ1MmJhMSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_e8385db2a8c84962b2ae838be1527b05",
+      "statement": "The workspace test suite includes unit tests for cybflight-core, driver tests, build tool checks, and closed-loop simulation regression testing against regression_snapshot.json.",
+      "evidence": [
+        {
+          "resource": "repo://Justfile#L156-L159",
+          "version": "repo-lines-v1:sha256:e4d4c67df377bcac4b2f67a26a66bbf7ad4c825b254eb0e245f3f22b519ddd41:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzFjMTVhM2Q2ZjM2OWIwMWMwODcxNzNlNzAxMTk1MjFjZWI1OTg3YTFkODdiMWExN2RjZWY0M2QwMjU5ODhkYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjJkYmEzZmY4NTQ2MTc1OTgyYzQwM2ZjOWZlYmQ4ZTk4MjU4ZDNhMTVkMjY0ODBmM2Y5OTY0ZjNhOTgxM2ZiMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYzVjZDdiYTFjMTU0YWQxNGE2YmY1NjgyZjk5Y2JkMDJjMjhjY2EzNjFhMGUwNWFkZGJiZDg0ZDQ3YTZhMWYyNSJ9"
+        },
+        {
+          "resource": "repo://Justfile#L75-L81",
+          "version": "repo-lines-v1:sha256:797058a11664c50dfb5f9695f2223d73510b081c3fc48783ee9df6417ea0765d:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDAwN2I1MTE4ODQ1MWRiMzc5M2FlMjRlYTE3OTQ4NTgzNjcyZWM1NTE0MmFmYWI5NWYzMTQxM2RmMTFkNWI5ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzc0Y2Y3ODRiNmU1OWIxMjQ1ODlmYmJjNzA2Nzg1ZTNjZTZiY2Q5NzlmMzA2ZTAwNmM3MzY5ODFjNWU0ZTNjYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTNiYTNjM2U5MzQxM2FlNDRkNDNhMzNlYmI1NjA4ZDE2YzNjZjJiZjBlNjhkYTI3OTM4Y2UzNjJlYWJiZDFlMSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOThiMzAxZWE2NjdkMWMwOGQ3ZDJjYTBlOWQ5MDdkMWI0NzVlYTNiODAwYTRmZGE3NzUwZjFjYWM3MTU5NWIxMyJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-30T14:16:13.882Z"
+  }
+}

@@ -22,15 +22,15 @@ default_mission: outdoor_splits_slow
 
 airframe:
   name: goku_f745_01
-  thrust_model: { type: quadratic, k: 0.518 }
-  mass_kg: 0.090
-  inertia_kg_m2: [0.000045, 0.0, 0.0, 0.0, 0.000048, 0.0, 0.0, 0.0, 0.000072]
+  thrust_model: { type: quadratic, k: 0.80 }
+  mass_kg: 0.080
+  inertia_kg_m2: [0.000028, 0.0, 0.0, 0.0, 0.000030, 0.0, 0.0, 0.0, 0.000048]
   max_rate_rad_s: [10.0, 10.0, 6.0]
   motors:
-    - { pos_m: [-0.031466, -0.031466], spin: cw,  max_thrust_n: 0.6063, torque_coeff_m: 0.0047 }
-    - { pos_m: [ 0.031466, -0.031466], spin: ccw, max_thrust_n: 0.6063, torque_coeff_m: 0.0047 }
-    - { pos_m: [-0.031466,  0.031466], spin: ccw, max_thrust_n: 0.6063, torque_coeff_m: 0.0047 }
-    - { pos_m: [ 0.031466,  0.031466], spin: cw,  max_thrust_n: 0.6063, torque_coeff_m: 0.0047 }
+    - { pos_m: [-0.031466, -0.031466], spin: cw,  max_thrust_n: 1.45, torque_coeff_m: 0.0055 }
+    - { pos_m: [ 0.031466, -0.031466], spin: ccw, max_thrust_n: 1.45, torque_coeff_m: 0.0055 }
+    - { pos_m: [-0.031466,  0.031466], spin: ccw, max_thrust_n: 1.45, torque_coeff_m: 0.0055 }
+    - { pos_m: [ 0.031466,  0.031466], spin: cw,  max_thrust_n: 1.45, torque_coeff_m: 0.0055 }
 
 tuning:
   # ── airframe.install — diamond AIO mounting (AHRS_ORIENTATION=5 / YAW_225 -> +135° FLU yaw) + GPS mast ──
@@ -56,25 +56,25 @@ tuning:
   att_k_y: 1.0
 
   # ── airframe.motors + battery + sensors (FLYWOO RB1003 14800KV + Gemfan 2015-2 + 2S 450mAh HV) ──
-  m0_tau: 0.012
-  m1_tau: 0.012
-  m2_tau: 0.012
-  m3_tau: 0.012
+  m0_tau: 0.022
+  m1_tau: 0.022
+  m2_tau: 0.022
+  m3_tau: 0.022
   motor_poles: 12
   m0_omega_max: 5800.0
   m1_omega_max: 5800.0
   m2_omega_max: 5800.0
   m3_omega_max: 5800.0
-  m0_g2_ry: 0.00004
-  m1_g2_ry: -0.00004
-  m2_g2_ry: -0.00004
-  m3_g2_ry: 0.00004
+  m0_g2_ry: 0.0
+  m1_g2_ry: 0.0
+  m2_g2_ry: 0.0
+  m3_g2_ry: 0.0
   # Battery (2S HV LiPo 450mAh, nominal 7.6V, plausible window 6.0V..10.0V):
   batt_nominal_v: 7.6
   batt_min_v: 6.0
   batt_max_v: 10.0
   imu_accel_lpf_hz: 20.0
-  imu_gyro_lpf_hz: 175.0
+  imu_gyro_lpf_hz: 110.0
 
   # ── eskf.filter — process/measurement noise + jump gates ──
   eskf_acc_noise: 0.01
@@ -155,11 +155,17 @@ tuning:
   rc_xy_deadband: 0.05
   rc_throttle_deadband: 0.12
   rc_rate_deadband: 0.05
+  rc_expo_rp: 0.60
+  rc_expo_yaw: 0.50
   rc_xy_rate_m_s: 1
   rc_z_rate_m_s: 0.5
   rc_land_rate_m_s: 0.4
-  rc_max_rate_rp: 8
-  rc_max_rate_yaw: 4
+  rc_max_rate_rp: 3.5          # ~201 deg/s max rate (~8.6 deg/s at 15% stick with 0.60 expo)
+  rc_max_rate_yaw: 2.5         # ~143 deg/s max yaw rate
+  rc_angle_channel: 5          # RC6 / AUX2 (sits at 1000 us LOW -> Acro by default; >1500 us -> Angle)
+  rc_angle_threshold_us: 1500
+  rc_max_angle_deg: 30.0
+  rc_angle_kp: 4.5
 
   # ── site — gravity and stick-integrator envelope ──
   gravity_m_s2: 9.81
@@ -196,10 +202,10 @@ tuning:
   m3_g2_rp: 0
 
   # ── indi.controller — rate gains, sync filter, WLS weights ──
-  indi_rate_r: 80
-  indi_rate_p: 80
-  indi_rate_y: 80
-  indi_sync_hz: 12
+  indi_rate_r: 28
+  indi_rate_p: 28
+  indi_rate_y: 15
+  indi_sync_hz: 18
   indi_ctrl_div: 4
   wls_wv_fx: 1
   wls_wv_fy: 1

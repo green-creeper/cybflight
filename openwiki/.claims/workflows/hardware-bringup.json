@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:10dfd7e872ccd8bfff38039d480cd6f302e9eb64174e6a2217f51bb5958bb146",
+  "claims": [
+    {
+      "id": "claim_c6ba014f72ae452f9cebcbcbbf665212",
+      "statement": "Power monitoring in cybflight measures pack voltage and current via ADC3 using board-specific pin and channel configurations, applying PT1 low-pass filtering to raw ADC counts and auto-detecting battery cell count after an initial settling period.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/sensors/power.rs#L103-L314",
+          "version": "repo-lines-v1:sha256:7ad3c017a15bdb4ff324a7fb131f9f91af237aa54295791ace621a7993fee343:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEyLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJjMmRmMTNmMzIxZGUwODA0NmFiMzUzZWZkNjA5YjkwMDVlYmJjODUyYzlhMGY0MzgwZjcxMDk3Nzg3NTJiZDdjIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ODkzZjQwZTM3ODFlYjg5NmM4MmQwNDZhMDgwNjdhMTFlMzVjZGYyZjFkZmFmMjZmZWE5MGI4ZGI2Njc2NDEzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiIxNTU5ZWE0ZWVhYjE4ZWUyYTUyZDU3NWQzZDljMGZiNWVlNWZhNjkyMDk4MTA3MzdhMzRlZGJiODA4MzJhNTkxIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJhYjdhNmM0YzY0OTFhMzY1NzYxY2FjMDhlMGEzZDU4NGIxYzI4NjZlMjgwYTg2M2FiN2Y4YjBjMWNmOTkwNDY1In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_cb276bf4c7e140b5871c78a99597ea42",
+      "statement": "SPI IMU board initialization auto-probes sensor chips (MPU6000, ICM426xx, or BMI270) at 1 MHz before switching SPI clocks to high speed (6.75–13.5 MHz) and spawning an 8 kHz reader task on a dedicated P8 interrupt executor.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/board_init/flywoof745.rs#L118-L248",
+          "version": "repo-lines-v1:sha256:d93cd41ea5a9f40ee65a4950869234d2e378366926f56b7d38e970ee9d4df80a:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMxLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJhNDJjZTQxMTNkNDMyZTk1ZjM2MWZkYzlmNmVlMWYxYjdiNDk1NDJlNDI4NTkxMGNlZmFjZjUyOTY3NTVhM2UzIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJlNmIwNDQ5MTQ2OTcyMmU4MzYzYTk0ZTQwNDQ1MzhlMDEzYTJhMjE3ZTM2YjFlNTY4YmE2MGFjYjdiNGM4ZjJlIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJiZDE4Mzg4ZjQ5MDJmYTYwYzk4NTcyZjc3ZmNhY2Q2YWFhNGIyNDIwNzdiNjJhY2E5MjBkYzE2Yzg2NmViMjVlIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiIyNTBmMDdjNzM4MmZhYzJkMThhODY5MGNmYjEyZGQ4MGQ3ZmQ3N2U5YTRjMmI3NzBhNmZhMDdiN2YzOTViMzFiIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_37fbb2beb827415fa825bd7cf062b8f6",
+      "statement": "Shared I2C sensor initialization performs open-drain SCL pulse recovery to clear wedged slave lines and requires all devices on the bus (such as barometers and compasses) to be probed before spawning any sensor reader tasks.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/board_init/flywoof745.rs#L423-L570",
+          "version": "repo-lines-v1:sha256:9066aefbe5ba54ee39b659d717f708559632be8eb05116d3fa4ae507dd078b4f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQ4LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI4N2Y3N2UwZjVkMjVjNjE1ODQ1MjA3YmRlM2ZiOGI0MWNjNzQ3Y2JkYmNmN2Y5Y2YzOWExZjkxYzQ0OGJjZTg0IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ODkzZjQwZTM3ODFlYjg5NmM4MmQwNDZhMDgwNjdhMTFlMzVjZGYyZjFkZmFmMjZmZWE5MGI4ZGI2Njc2NDEzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI4OWVjMjE0OWZmYTlmYjRiNzRjNDY4MjVhZGQzN2U1NGQxZjAxZjkzOWQ5YzBlYjExM2FjYzY5OTNhNjUyMWJiIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJjZDQyOWRiN2RiMTMyMThkNTQ0YTIzNmFlY2QxOWY5MjJmZjBjN2QwZDhmYTQ5NWRiYmFlODM2ODhkOTBkNzBhIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_f31b6cff4ed2436f8b0532942e397668",
+      "statement": "The motor shell command directly signals normalized throttle to ACTUATOR_MOTORS for props-off bench testing, while bidirectional DShot captures timer GCR pulses to decode live motor eRPM.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/motors/dshot.rs#L75-L105",
+          "version": "repo-lines-v1:sha256:0608aa60fe7db98697d287a2f7141fbbb35dac46287c48b98d56d156d083bc0b:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyZjA5MTRjM2NjZTMyZTE1ZjQzMTRhYWNkMzhjMzE1NDlmMzdmODcxM2UyMTZmYzc1OTYyMTlkN2RjYjdjNGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZmNjUzYTkyOGQwNjBjN2JmNmEzZmUzNTdlNTJiZjMyMGE2NmIyZGFlOTY3MzY1ZWE2YzU0OWQwNjA1MjA0Y2EiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjMwMDUxNWNkYWNjMmRlMWI3OGI2MTQ5NGJlMjQxZGNlZmJhMmY2OTA5MWMwNGZhZTU5YmZlYzZlZDk3NGI2YzEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE3OTViMTY4Njc5NDQxNTZlYTEwNGYzM2JkNTNlNTIzZDZiMWFjY2RlNzk1Y2NlYzZiMmI5MDczNjQwZTljOTAifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/usb_serial.rs#L2166-L2201",
+          "version": "repo-lines-v1:sha256:d9a6028c0344e8bae23e46b4ff377788dacf44b75141b85d2782ee2d8dedfbe6:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxZDU3OTkwNTRjZWVjYjZhNTEyYjlmYmIzMGNkNmE2MjM1ODk4NWQxODY5ZTBlMTk5NWM3ZjFiMGQyNmJlOWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdlNzE5NWUzMTBmZGIxMzE3OTFjZWQ2ZGZmMTcxMDc4ZjdlZGY1ZTRhZDZmYmY0MjZlYjY3MGUwZmFjN2YwM2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzNzg4ZDIwMWFhZjdhYzgxMDNhZTc3YTlmY2MwYjQwYzgxMzljMDcwNTI2YTFlZWZhNjEzN2VkNTM2NzFmZWMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_122a75128ffd44d986b6051eaf099487",
+      "statement": "Physical bring-up safety mandates props-off bench testing and relies on a cascading sequence of staleness gates where DShot motor commands stale out at 10 ms to drop output to idle before the 500 ms failsafe watchdog disarms.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/motors/dshot.rs#L26-L56",
+          "version": "repo-lines-v1:sha256:7690d3fe4e46d78fc7d109c7623bb890edb452ab7f8e9e89640c8c24adb1f586:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhkNmU0ZDFhMDIwMTQyMzVlZWExNTQwZDYwOWMzZWU1ZDJkNDNjMDQyYjQ4MTQ4M2VlMDQ4ZGI1NjY2MDI0NGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhmZWE2YmVlOTQyZTA2NDdiOGJkYmYzZTI3YzY0OTc3M2ZhOTU4MGM1ZmE5NWMzMTFiYTg5ZTkyNTE2MzFkZDYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVlMzEyN2Y2ZTJkMTMxOWZlMzgwZjE0YWY3M2ZhOWNhZGUxOWVkNDczNTExYTBhMWRjMjdhMjU4OGJkNWNjMzMifQ"
+        },
+        {
+          "resource": "repo://docs/safety_protocol.md#L7-L125",
+          "version": "repo-lines-v1:sha256:96fa6bf697f675c177cc09d4af8488d1086f548a01f5a7145154a2124978a83e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTE5LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI5ZWZmMmQ2ZWE3ZTk1MzJjYjc2YTZhNGNiMzkzMzMxODg1NGZhZWNjZDgzYjcxODE0ZTBhMjJkNmYyMjU5M2U2IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0N2MwNmM1NjFkNWMzMjczNDM2ODUyNjhhNDZiMzM5MWYzOTk4ZWVlODkwZDJiZTUxZjBkMjFjYzRhNTNhZTZkIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI0YTAxYzdkMWFjZjNkMmVlYTcxMWM4NzNkZmYwMzgyY2ZkNGRiMDVmZmNjMzA3YjY0NDVmN2M4YmQ1YmU3ZjBhIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI2OTg5OGNjOWI3ZWYxYmM0YmMwM2UzOWIxOTE4YjQyZDFhMDhhNzE1NTZhM2UyZjg1MjU4ZTRjODQzMWE0NzFiIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_562dc54f8b8944149b7b406362ccb0f8",
+      "statement": "The ESKF GPS/INS estimator task waits for an RTK-fixed position fix to anchor the ENU navigation frame before initializing state prediction at 1 kHz and publishing odometry.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/estimation/eskf_imu_gps.rs#L6-L38",
+          "version": "repo-lines-v1:sha256:8a8aba68d32bbaeea552b89f88493d0c9691578efbcac9448ab05f6ff02a3403:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFmNDA1NzIwMzVhNWJmMzU4MTA2YzU4YTVhZjVkMTgzMGVhM2E4MzhjNWQyM2QxMTRiOWQyNTQyYTU5MTRmMDgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU3NDlkNjhiMTViNDIzZjcyYTM4OTZlMThmNjRkZDcxNzk5ZmM0NDg2ZTkyZmZjZGM1NTlkMWUwZGViMzdlZjgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNiOTJmNGM0NWEwMGU4MThjYjRmYzQzNDI5ODIxODBiY2NjZTE3NDkzNzhkOTgwNzliN2QzYzcxNTkyMGFjODIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU2NDhiMDczYjExN2Q5NTdkZDM1YTQzNGM4NDI5YmUzZDllYzU5NmM3NGFkYWUyOGIyYTQxYzZlYmU5YmY0MzYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d872d7ec855c4751af35fba3e04ebde8",
+      "statement": "The cybflight-gs Configurator Setup Tab provides a 3D FLU body frame visualization, live motor output bars displaying throttle percentage, thrust, and eRPM, attitude and IMU telemetry metrics, and USB stream controls for bring-up verification.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_gs/src/ui/setup_tab.rs#L20-L177",
+          "version": "repo-lines-v1:sha256:abc1bb0c3dcf5b4c1a39b1109b60648777be8b9e9c5dc493cfd8b40bfef9b46f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTU4LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJiOGNjNGNhNWE4M2YyOTM3OTQxMDMxYzg5ZDJiZTgzZmRmNmU2OTIxNTcyMDI2NmE2MmQ0ZTZkYWU3MmRmNjIwIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ZTQ2MmJkODVlYTM1MjI4MjJhOWFkM2ViMjQwOTliMDMyYTFiNjI3YmVjZmQ3YzU4MzFlOTkyN2Q0YmFjNDBlIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI2OWQ5ZWFiNDk5NWFjZGQzNDc5NWMxOTgyMmRmNjcxNGZmYWNiODFiZWZiZDk2MmQ4NDVlOTZhOGU4M2M4ZDMxIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiIzZTA2ZWNjMzI2MTAzOWRjYjljMGU4Y2ZkZDI1ZDQ5MWM0MDYzODA5NTg1OGRhMDcyYTU1MjhmNzFlODUyNjNiIn0"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-30T14:16:13.882Z"
+  }
+}

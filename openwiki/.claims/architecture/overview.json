@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:c6630de4cd9567ff195c5def92e52b7fa941511bc7f6e21ac51607962476a7b9",
+  "claims": [
+    {
+      "id": "claim_487b3b2b4cd041df9aa739ab41d45d1a",
+      "statement": "cybflight structures task execution across a three-tier priority hierarchy using Embassy executors: high-priority DShot motor output runs at NVIC priority P6 (EXECUTOR_HIGH), inner control tasks (IMU readers, 8 kHz INDI controller, failsafe, RC parsers) run at NVIC priority P10 (EXECUTOR_CTRL), and compute-heavy algorithms (MPC SQP outer loop, ESKF estimation, trajectory planning) run on the thread executor so heavy solvers cannot delay the inner control loop or motor output.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/main.rs#L147-L167",
+          "version": "repo-lines-v1:sha256:f0be4995d7314e73aa5c229a185e247dd25204d647420ca4a3180bacc261c975:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBlYjhiYzZkYTQ0MjUyYzE3NGY5ODMwOTRhMWJkM2E0YTY1YTdhOGRiZGNkNDY4NGIxZThkNDg2OWFjZjgzNmMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkOWUxMjU0NjQyNTU3NmQzZGVhZThjOWI5ZGJmMTI4ZDVkNmRkYWY1ZDdmZTg1NzkzNDkyN2RlZmZhM2I5ZGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZlYTViOWZhZTE0OTYwNGFmMmViYTc3NzgxOTJiMDYwNGVmN2M1MDdjNDk5ZmExNjUzNjQ1N2Y2NTljOWRmZjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjcwYzExZWExNDkwNTFiZjUzZTUyNWVmZjNmMGE3M2Y0ZDFkOTM0ZDYzNmZkNDJjZDE4MTY5NjFmMzlkN2Y1MTQifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/main.rs#L23-L54",
+          "version": "repo-lines-v1:sha256:ec689e85262d1c7eb39442fd6d1788bac8135bbc4babe87a553d99e50444219d:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEwMWVhZDkzNmEyMjgxZDUzZGNjMDY0YjdlMmEyYWIwZDUzYjkyZWYzZWY3YjM0YjY2ODY3MzAwNzg5NWM4NjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJlNGU5MjI5OWJjZmE3M2Q3Mzk2YzJmY2Q1OWRhOTA4MmYyMzc0ZWU5NjAzYTUzYmQwNDNmMDRjYTQ0ZDBlMzgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVjM2FlYmRiNzkzY2VlYzZhNjVlNTBkODcwNmQ3NmZlYTQzNDNiYTliN2UwMTU1OGM3N2NjODNjMWIwY2M4ODgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_7d7b2317fefd456fb6b8c6c3cfb55ff7",
+      "statement": "Static Embassy pub/sub channels and signals defined in cybflight::sensors serve as the decoupling boundary between board-specific hardware/BSP drivers and board-agnostic flight control algorithms.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/sensors/mod.rs#L25-L189",
+          "version": "repo-lines-v1:sha256:ebcb72a60408aa9906655ca7dd86a036d60b040fb86d500f92f006913d455c35:eyJzZWxlY3RlZExpbmVDb3VudCI6MTY1LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJiNTQwMmI1YmZkNDExN2NjMmEwOTc2NGVhZjg5ZTM5ODQ4NGY4ZTAwY2EzYWIyYmY0MTY5MDg1ZWQxMDBkYmIxIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ZGEyOWY2Y2Y4ZjJlYzA4ZTQxMTY5NzVjZGI5NjViNGQ3MjRhZjFkMTFhYzg4NTA1ODZkNDIwMGEyZjVhYjJmIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJkMGQxYzQ1MDhiYTE3MjljYmVhOGE3OWIxZDEzYTlhMTE0YmZjMmM1ZGMzYjU5ZTExNzRlNzQ4MTdjNTI4ZWExIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI4YWE5MmI2MzFhYmVmNzFlYWNjZWRhZWYzMmMzNWNjN2E3YzUxMWQ1MTgwYjRkMWNjZTgxOTEyNzQxZDI2MWQ2In0"
+        },
+        {
+          "resource": "repo://docs/architecture.md#L38-L50",
+          "version": "repo-lines-v1:sha256:f307247c7af0777aef1c16e664feade9b47ae9946684cc4080a227f20f15b27e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM3OWE3OGViYTk0NzA5YjU1YjAxN2E4MWM5ZmMyMmU1NDM5NzlhNDgzNTYxNjQ2NGZiNTJlODA0NDdhM2FiNDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjAyM2QxMDE4N2ZjMWI1YzRkZjBhYzM2MzRhMDIwYTBlNWY3ZDI0NDk3ODBkNWM2NjZmYmVlNmU0ZTc4ZjJlMjIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhiMWE5NTg0NmEyYTE3ZjY1NDVkY2U3OTJhMjFiZjUyMjc5YmJhZjlmZWQzNDdjODYwNDgzOWRjZDQyNWZiNDMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c127be83ab4647b28e8ed64f13508082",
+      "statement": "cybflight_core provides #![no_std] board-agnostic control algorithms, state estimators, trajectory planners, and parameter registry schema while owning no static memory storage, receiving workspace buffers by reference from callers to allow pure host-side unit testing.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/lib.rs#L1-L25",
+          "version": "repo-lines-v1:sha256:0fd51f0548fbc3e5177f694c755359a8b5378e326375194d3ff0f7c6b5d69c33:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBmMWViNzUzMGYzMzg5NjExNWMyN2JhMzcyM2ZlZTNiMzU2NDFlODIyNjNjYjJlNmQxOTZkMjNiYjNmOTE4YmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgyYTYyODgyMTVkZGU0MzMyNjJiOWRjZWQ1MGY0MTZkNTJjN2IwMGM2ZTE0YmJjMzdiOWRlYzBiNWY4ZWQ5NWUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://docs/architecture.md#L286-L308",
+          "version": "repo-lines-v1:sha256:de636b97cba508965c04cb14d8402e6488cf417736db18b4b573c233bc901f49:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE4ZTAwN2FiY2E2MWFkMDAwOTY1NDhhMjQ3OGU1OGI0NjViNjk3NWRmODY0ZTQ4MTEwYThmOGIxZGQ1NzdlZGMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFkZjkyMTdhOWQ0ZTNhMWU1MGE2MmQ2OTljYzEyNTk4YmI3YjU1YjVhZjE3NzNkNzM0NGVmMWFlNWRjZjQzY2IiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNlNmM1NDljOTdiMGMwOTcwN2MxMmNkODM2ODUxN2ZkYTk3MjI0NGYzNzQ5ZDVlYTFjMDdkYTlkYjMwZDZkYWEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_7b6e36bf89ee4fe6bb54139f4e13281a",
+      "statement": "Board support package (BSP) crates export a target Board struct, peripheral initializers, HAL re-exports, and compile-time capability flags (IMU_COUNT, HAS_BARO, HAS_MAG, etc.) that enable zero-cost compile-time branch elimination in control logic without depending on Embassy executors or task code.",
+      "evidence": [
+        {
+          "resource": "repo://crates/bsp/sakurah743/src/lib.rs#L22-L43",
+          "version": "repo-lines-v1:sha256:de222abd85b3ac7557f99011f063a2c83defcffe7c564558e846b0f83c26675f:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRhZTExMDU2NjA3ZDE3YmFiMjRlNWFlNDU3NTdiYTJiNDU0YjhhMzA0NjFlMDRlNjk0ZDAxZmMxM2JmZDdmZGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBiMzBhZmE0N2FhMjQzNzhlY2QzNmVhNzIyMzI3NzVkOWNiMmM2ODY0NzIzMmI5YTIxZmEyNmVlOWMzOTg2YjQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE2ZjU2NTA1MTllMmIyYjdlOGVhYmI5NzkzYzFjMmVmMTY1MTUzMzU0MmI1NTZlNzRkNWRiZjI4NTBiZDNiNDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzNWM0MjU1Mzg3NDU4MjIxODRlMzRjMzkwOWY0NTY5NDdhOGVmYmM4MGYzYzU4NmI3YWU5ODhmYjU0NDhlMWIifQ"
+        },
+        {
+          "resource": "repo://docs/architecture.md#L100-L125",
+          "version": "repo-lines-v1:sha256:d834b394330b437a117279cc51123e565d33b6b3d784468ee4182d0a75ceae00:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVkZmNiNGVjNjk5OGZlOGI4MWUwZDA2ZmEwZDY2ZWM3NmVlZTEzYmRkNTAzNmYzZGM3NGJjMTJjYzE2ZTI3OTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjcyMDQzZDY1NGYwYTU4Y2UyNTM0NmJiNGZiNmFjYmNjNmJhNzgxZDQ2ZWYyMmU4YzhhNThiOTQyM2Y0MGZhYTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRiNGM0ZWNjYzZmOTMxNjhhZjNkODg4NDFmNGQyOGYxMzU4ODMyN2M1MzFjY2I1Zjg1YmEwM2I3OWYwYTgxNzkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f8a55ede38644b5dbd5a7218e146f2e3",
+      "statement": "The subscribe_or_park! macro handles exhausted channel subscriber slots by logging an error over defmt/shell and parking the affected task indefinitely on core::future::pending(), preventing fatal executor aborts and boot loops.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/lib.rs#L99-L116",
+          "version": "repo-lines-v1:sha256:43e3f099dd7ae02392fee007f89aa6e6a3ef1ff094ae2083bc56d6d8d78dbd91:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg2OTkyNDZlZDQzYzhlNjIzZjk3MWVhYTliYWFmYjgwMDJlZjExYzA5M2JlYTdhMWQwZTBhYTVhZjBmZGNkNjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk1YzUxZTVjOGZmYTljNTllNTEyNGQ4NzM1MzAyNzQ4NTEzNDFhOTUwOGQ1ZDZmNWEzYjMyOTgzOGZhODYyMzQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdjMTRmYjI5YjYwZjE4YjliYjhkYWI3NTY0ZTE4ZDI2NjNlZWFhYmZiNmJjMDY1YWYyYTkyN2E1MjdjYjdkZWIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b6886bf5f9e94a64a8d2b38a2416b8ec",
+      "statement": "Board selection is dispatched at compile time via Cargo feature flags (board_<name>) in cybflight::board_init, allowing only the selected board initialization module to compile and re-exporting the selected BSP crate as crate::bsp.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/board_init/mod.rs#L1-L19",
+          "version": "repo-lines-v1:sha256:687fbbc1c975a83bd9a303aa0db9e2717497383c90c8ee50481e4e37bee89d04:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBkY2JmMjE0NjdlZjcxNmQwYTUwZTZmZGY5YWFmNDczZTA5NTZhYjBmZjliYzNlYzA2NDdmNjdjODAxMzVmNDMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY3YTllZWU1YTliYmE1NDNmZWYyY2YyZDAwZjM5MzhkYzkxMmRkZDhmMGE0ZjVhMzI2OWU3MDJhN2YzYjRhYjUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/lib.rs#L3-L12",
+          "version": "repo-lines-v1:sha256:2e4bbf57fd2e0b84de9ee20ff8525563e8b8998428dcc447e79d06e3c0974356:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNmNmMwMzgxOWM1ZThmMjJjZWJlNmEwZDFkYjJiOGNhZWY2MmFmMjE4YzhlNmYxNzhkNDhjOGRhYzE0MDBmMjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRiYjc2NjllMGU3MGFlMjc3YzkwOThkMGYyYzdjZmZhMzNmYWFiNTc1MTA3ZjY0YjUyMjEyYTU5NmZjZWE2OTUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjoyLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM5NDRmYzM3YmM1MDBlNmQ4ZDU1ZjE0MDJkOTcxZGIwMzg1NTg5NjViMzlkMWUwY2Y4ZGRjZDZmMjgzMDM5YjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYzZlZDIwZjdlOTY0MjExZmUwMzUzNzFhMjg4NzRmMGZiNmMxZTRhYzI5NmY3ZjQ0MjNkNjEyY2I2ODBhNGMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_319db488f7c64d85bd0e26a20044fc3c",
+      "statement": "cybflight_sim provides a host-side simulation harness that reuses cybflight-core controllers and planners with rigid-body plant physics and sensor noise models without requiring the Embassy runtime or hardware.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_sim/src/lib.rs#L1-L38",
+          "version": "repo-lines-v1:sha256:d2ca566bae6bf36e9a45e1c150b403c208fd4563f0d54c4e7d09c721184ff40d:eyJzZWxlY3RlZExpbmVDb3VudCI6MzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZhNDVmNzA5MTUwMTg1MTc4YmFkOGQ0ODBhZWZlNGRlNDRhOGVkMGJjNWMzNjBkNzdkMWY3M2E3MmY3ZDc4NGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU1NGU5Y2Q3ODFlOGUwNjhlYTdiNzJlNTc3MTZmMTM2MjkwMDI0YTZjOThiYWNlN2UwOWUzYzVhYzg3YTFkYjEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBlMGJmNDc2MWNmZmYxZTQzMDQ4Mzc5Y2M5YWE1MTYyNmY3ODU0ZDhlY2E3MTljODJhYzIxZjg2YTliOTAxMTkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_468246371f654edf981b6ad217f8c850",
+      "statement": "The parameter subsystem evaluates configuration across three precedence layers—Rust schema defaults, compile-time baked vehicle parameters (BAKED_PARAMS), and runtime key-value flash overrides stored in STM32 Bank 2 sectors.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/Cargo.toml#L177-L182",
+          "version": "repo-lines-v1:sha256:75febe336446c05a4d38ed101fb83648da89f60e47393d7403299101e9d9d093:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTlkYTdjOTIwMTE0MGFmY2JlM2UzOWVjYjdmZjI0MjA5MjYxOGI2N2UzYjg4NjhiMzFjYTBmNTkyM2I0M2FhMSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOGUxZjcyNTg1Y2RmNjQ0Nzk5MTUxYzI3YzBhMTliYTA1YjJhYjgxYmQyYWFiNjRiMWMxODVhZTgwMGVmNGI2OSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMDAyYzAxODQxYmZmODA4OGVlNDM4MjRhM2Q2MDkzYjk3M2U1NGIyZDcxMjUyMWY4NWJmMjM4ZTg3NTRhYTI4NCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        },
+        {
+          "resource": "repo://docs/architecture.md#L485-L516",
+          "version": "repo-lines-v1:sha256:345e447cdbeb8f34c8c185c02f9c14030cfbe299b44e191a36b840371a34d608:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYxYzc5MGQ5MDYzOWU4MzYwNzQzOTc4NDBhYTcxOWU0MjYwMzkzM2M5N2ZhOTFmZTk2YjExMmQ5NGYzMWZiOTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUwYmEwYTNkOTNjNjg5Njc5M2M4ZjAzNjUyMWVlNTNhOGNiNDVlN2E1MDQyOWM4Zjg4YmMyNjE5NWU3YmI2NTkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc5ZDc2OGYwM2UyNGU1NDM5NTgxOTAyODYwNGQxZGRlZjA3MWQ5YWQ3YjE1Y2I5NTc5OGQ1YzBlZTVkNGFhNzUifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-30T14:16:13.882Z"
+  }
+}

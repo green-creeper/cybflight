@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:7a052f04c5d84701db2b5564ea359bc0d120975850e0815bc8d9d9e808aeec0c",
+  "claims": [
+    {
+      "id": "claim_a90d800ff2bd4b1499e68e30d1d6b94b",
+      "statement": "cybflight-gs is an eframe/egui desktop Configurator application for Cybflight providing real-time 3D attitude visualization, parameter editing, DFU firmware flashing, interactive CLI shell, and offline simulation.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_gs/src/app.rs#L27-L47",
+          "version": "repo-lines-v1:sha256:86bdd9945918b7b304411da66ab4be4e54834cf8596e56293ad41ed817841878:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM1YjkzNTUzZDUxNDMxZjc4NzI2ZTRiNTM1Y2YwN2EyNTcyMjQyNTI3Nzk4MTk4MWNmMmZlZjBkZTllZjQ2NjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI4M2I4YWE3ODA2Y2JiYjFkNzdlYmQwMzcxMTQ5ZWU3ZTQ5NTUyNGVmODg2OTdkYWVhNjAwMzBhMGMyNGRmNmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU5ZjE4MWNiZTI5YmEyOGE1OWYwMjZmZTJmNGMxYWFmZjQyNzUyMWI2MjE2ZGE0YWQ0MGJiMTFlNmUxMGY5NTUifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_gs/src/main.rs#L9-L39",
+          "version": "repo-lines-v1:sha256:b011831ebfc657539cfcd98d6ab96dc84d11b933ea521ff4f86e74ee7b0eef91:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFmOTAxMWMyY2JiOWQ5NDJmZTE3MjhiNDdlZmFkMTQ5MzU3YTgwM2Y1YmMzYzM4OWZiMzQ2ZjZlOTBmYjhhYzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwYzFmMTg4ZjE0MmVkN2E4MjQ2ODBiMjA3MTcyYzU1MTliYzYxNGE0OGZkYTdjZjE2N2VkYjhkZGY3OTk1NmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRlNTUzMTkzZjBhZTQ3OGFjNTJjMTZkNmY3OTUyOTRmZTlmNTI3OWM0NTk0NjQ1YTVmN2MyM2VkZTdiMDQzZTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_638ba662e93b445291e5492109dc62fb",
+      "statement": "The application frame update loop polls backend telemetry events, renders top header navigation, tab panels, and status bar, requesting repaints at 60 FPS when connected or flashing.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_gs/src/app.rs#L210-L436",
+          "version": "repo-lines-v1:sha256:b95f005c4c5b1d611cb871fdfb7ebd26370a6d443819ef665b87d86d6c65478f:eyJzZWxlY3RlZExpbmVDb3VudCI6MjI3LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJlODQ1YTIwZTk4Y2QxYmY1MGI4ZDY2YmFjMjlhNTNkODlmYmQxYmVkODZmYjYzZDI3OTVlMTJiZjg0NWY1NWZmIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ODkzZjQwZTM3ODFlYjg5NmM4MmQwNDZhMDgwNjdhMTFlMzVjZGYyZjFkZmFmMjZmZWE5MGI4ZGI2Njc2NDEzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiIxZjc4ZDM1OTEwZGM0MzI3MjcyYTgzYzNiNDJlNTdiMDA0YTBjNDYxYTIyY2JiZTcwZDI4YTU1YzY1NjVkYjE3IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MSwiZm9sbG93aW5nQ29udGV4dEhhc2giOiI0MTJjYTM0NWNjZjc1YmY5YzA4MDZiY2U2OTViZThkZTgwOGI3OTk4NDI1MWE3YTU0ZDIwMmNmNjEwMWRkNDUxIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_07f5050b39ac4ab8950cf51aedd44fb3",
+      "statement": "UsbSerialConnection manages live USB CDC serial communication with STM32 flight controllers using a background worker thread, controlling DTR/RTS signals and initializing telemetry streams.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_gs/src/backend/usb_serial.rs#L30-L134",
+          "version": "repo-lines-v1:sha256:cfd4d236bdc6d0b1e7f087abfb9a998f47a6e3162d08d58ef473d4353b53c7e6:eyJzZWxlY3RlZExpbmVDb3VudCI6MTA1LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJhYjkwODJhNGYyZDgyOGE2Y2M5ZDdjYThkYTY0ZjAwNTlmNTI5YzUyMmM2Y2RmNWQ4M2Q0ODJhNTc2MzI1Y2E2IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ODkzZjQwZTM3ODFlYjg5NmM4MmQwNDZhMDgwNjdhMTFlMzVjZGYyZjFkZmFmMjZmZWE5MGI4ZGI2Njc2NDEzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiIyYTc0OTY4M2E5OWMwNDAyNmUwMGVlYWJkOWI2Y2FlOGQxYTUyZWJkYTdiYmEwNzA3ZTg3ZWFhNDQ4ZDEyNzBiIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI2MmJhOTY3MTA0NDEwZDQ2NzRkYzgyN2Q2ZjY5MjI5YmZhM2IwZTEyZmMyZGRlYjU3ZWIzM2JmMzlkNmI4NTNjIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_7ec2766968aa4fb28acf73ce1a97ab95",
+      "statement": "discover_serial_ports enumerates USB serial devices, preferring macOS call-out devices and identifying Cybflight flight controllers by USB VID/PID 0483:5740 or product string.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_gs/src/backend/usb_serial.rs#L163-L215",
+          "version": "repo-lines-v1:sha256:2db15fc7d035227b3f56b54be25b97b37fb29d31d112b1b8cbd3a1448afb86d1:eyJzZWxlY3RlZExpbmVDb3VudCI6NTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdiM2U4NTQ4ZjFkM2EwYWEzMTM4ZjVmN2ZlMGZhMmFkM2FiOTZlZDE1MWVmMjg4NjAzMzlkMzMxZmM2ZGExM2MiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNmYjhjZWIyZjgwOTQ1YWZmMzljMTQxZGRjOTgwZjViMmZiYTNlYzZmZjMxZjBjMjRiMDY1NTlkNzAyZGVlZGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZjZjZhNjI1Y2M0MmY1NmQ4Y2Y0ZDQyZjQxN2ZiNWJkZjkyNWYyMDRiYmRlOWU0MWQ4ZGFlODA0MTZjNDE2NDMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a517257026bf4298a8494198a4521f1d",
+      "statement": "MockFcBackend provides an in-process offline simulation backend executing cybflight-core Mahony SO(3) attitude estimator and LinearAllocator matrix mixer sub-stepped at 500 Hz.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_gs/src/backend/mock_fc.rs#L16-L49",
+          "version": "repo-lines-v1:sha256:8102e73c1b1070baec77d3eb0fac46ac5795b4076d247200e553f2a8004361f8:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBhODU2NWI1MzcwODZjYzg4ZTI1NmM3OGFlMzczY2E5ZGM0ZDk2NDMzYzRhMDFkYmUwYzBjMjYyZGVkMGUyMGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIyNDExZjc3NTc2Y2QwZDAwMjRjZGJiYjllNGUxYjk0MDM1OWY0NjM2NTU3NWU2ZjVmYzhkY2FkZDJlM2JkZTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgzYTU0MGMyYTBjNmUxYTJlNGM4ZWZkZGRhZTkwNzU1ZTE3MjUxY2Q1NDM3MWFhZDczNDY2Zjc3ZDdkNTRjNTMifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_gs/src/backend/mock_fc.rs#L92-L107",
+          "version": "repo-lines-v1:sha256:4855f35c775622ef9a35ed0ca34aa983897c09c9a38f969203635c9fbfbd98d1:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYwYzMzYWNhM2NhMTFjM2UxNDEwMzNlOWIzZmUwNTZkNTY1ZjljMDQ2MTc3ZTcyYzE5NTZkYjYzNzgyZDRjMDMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZkYTM0NDU4Nzc4MjNjNTRlNDU3NTNiMzdkODk1YjQ1NWJmNTExYzhmZmI5MWI5ODJhYjUzODE1ZGU1ZjM3Y2EiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYwNDk0YTMxM2VkNGZlNDYwNDJiMjA3NDExNDE1NDExOGE1MmVmYzk2ODVhMTM3MmUzMTk4Zjc0M2NmZjdmYjkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_329bd18392f74d1688f57f91da6853fd",
+      "statement": "MockFcBackend simulates a critically-damped hand-tilt tracker and computes closed-loop stabilizing motor thrust commands from cascade attitude and INDI rate controller gains.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_gs/src/backend/mock_fc.rs#L123-L205",
+          "version": "repo-lines-v1:sha256:3fe01380b72303c6ee9f0acf4c5999cbfc3648808ca55694a75746cdca05e57e:eyJzZWxlY3RlZExpbmVDb3VudCI6ODMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgwNGVlM2MwMjg2MzI5MDkxOWYwZGI2OTk2Nzc0ZTkwOWE1MTExNWZjYzZiZWQzYTdkYWFlZmY4MzIxMjE2MzYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1MjJjNDJjZDE5YzZkMDNkODA4YzQ1MjcyMDU1MjgyNWI3ZWExYzViNDkxYjIxODUxMWNhYzc0MTVjZjlkOWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg3ZDZhYjhhNjU1OTUxNDc5MjVjMzczNWYxZDRhNmQzNjM2YTE4ZGRlNTQzOTc3NGVkMGVkMGRjMTg5YTMzYjAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdiNzY0NDgzZjJlM2QwNzg4MWRhMTJmMGE4MzcxNjAyMTAzYTY5ODdiZjJlMzI1NTI4ZjI2YTQ0MjhlNWFiNDgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_352de0a9802c4ab18b7cc18b0560c3a7",
+      "statement": "FlasherWorker probes STM32 ROM DFU bootloader status (0483:df11), streams output from just and dfu-util process execution, and parses download percentage progress.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_gs/src/backend/flasher.rs#L219-L316",
+          "version": "repo-lines-v1:sha256:e71cc4e7db666279bee04647d046a687e45adb1c1d8ef9c91f8152f3c839a243:eyJzZWxlY3RlZExpbmVDb3VudCI6OTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNlMDBhZjc0MjNlYjVlOWQwOTIyY2NiOTI5ZTI3OTQ3ZWQwOTI0OWE2MGViZjAzYWRjYjA5OTk0YTY2NzNlOTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMTlmYTQ3NDAxMGNjNGQzMmY1MjU2NmQ4MWI5MTA4NTE5MmEwODdlYTBiMTJhMjgzYWU0ZmNhZmZhMzdlOTgifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_gs/src/backend/flasher.rs#L39-L66",
+          "version": "repo-lines-v1:sha256:ec22dec6c838fe221182f2d1f47f20644757550cf130a6d91eed8969d8bb1231:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg1ZmE3Y2NhZDVlY2Y0OWRmODgxNWFhNmFjOGMxNDZmOGZhNTViODU4YWJmY2VlZGQ2ZmJiNTIwOGI0MDFjMTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM3MmZhN2IzOGY3MGZlZGU3ZTk1OTU0NzdiNDY0ODIwNmRiODU3NjE5NGJkZGUyMTI0YTc5ZjliNzVkOTE1YzYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImMwYjY0OTliYzVjMGU0OTQyZjAzZGMzZTMzNGY2YzZjNWYyODM1Mjk3ZmMzYTVmODg0NjE5MDFiYzdlNWQwZmEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_07b043d1590b4700914ff90b1145508c",
+      "statement": "Connected flight controllers can be rebooted directly into ROM DFU bootloader mode over USB CDC by sending reboot --dfu, which writes 0xDEADBEEF to RTC_BKP0R.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_gs/src/ui/flasher_tab.rs#L93-L113",
+          "version": "repo-lines-v1:sha256:8196a0813395b2906240906e8fae37de38b1ffd51391b6c7a2982a909344cb32:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE0MDc2ZjI4NzVjZDhiMmZmMGJkZGUwOTJmOTQ5YjUyYzQ3YzY4OTNkYWQ1MzU4MDkwNzBiOTFkN2M0ZDM4MWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU5YzEzNTkwNjY1NjMyM2QxYzVlYTQxNjU0ZWU2NmFmYjU4NWFjZGNmYWVhY2ExMjFkNWUzMGJmMTkzZWVkZDciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRjYzIzNWNhNTkyZmMwNTgxMzY2MDNjYTQ2ZDJiMGJlNDZjOTcyMTUwMDE5MGU5M2EwNjBhZGY0ZjgwMGQwOGIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjIwMGI2OGI3ODg0MWI0NGU0MWUxMTRmOTM0ODJiNTEwOTgyNjU1ZGZkNzQ5ZjYzNWY3YmUxZTAzZjE4MmFmYWMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_6c63f10149ae44b0bd59836ec69d335d",
+      "statement": "The 3D Drone viewport renders depth-sorted multipart CAD STL or procedural QuadX meshes with FLU body axes, ground reference grid, and 3D motor thrust pillars.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_gs/src/ui/drone_3d.rs#L140-L200",
+          "version": "repo-lines-v1:sha256:5a570d8dc46751d91b5f3fd888717d3d2674ee465b8d4c022bc741130b4113bd:eyJzZWxlY3RlZExpbmVDb3VudCI6NjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQzZjVlNjRmN2Y5YTMwYzdmZGM1ZTMzMWRhMDc3Njk1NmQzY2Q1YzIzODgxM2IxNjRhOWQzZWIxMWY2M2RlNTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBkM2ZiNmY2NzgzNWIwOTVhMWFmYWM0MWE5OWU1ZTkzMzRiNGRmODVlMzQxYjFkY2ViNjZlODNmMjlmNWM5Y2IiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ2MTc0N2NhMTFmNzBlOWNkNjYzYzdlM2YxMTExZGZhM2ExNTU0ODZlNDk5ZTJmOGFjMTQ1MTQwY2Y2ZTUwNDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE2NzMwMDVlMGJmYzM2ZWQyNjkxMGRjNWEzNzE5MThkNWZmZjEwZjRmMDU0NzQ1ODEyNTE0YTZmOTU3MzZlOTAifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_gs/src/ui/drone_3d.rs#L37-L55",
+          "version": "repo-lines-v1:sha256:243355f19cb05e116ca8a8ab742936ade3a6fb75921153a9d4c845a7c4eb7cc3:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAwMzdkODYyODc1OWMzODdhNjI5Y2VkOWQ3MTU4M2VhOWM2NjlkNzE4OWE0MDA3MTNlODExMTQ3Mzc4ZGEyZGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdlYzEwYTEyYTczOTYzYjM5YmEyZWExY2RmMmUyOTRlZjc4ZWU5NDVlNWQzZWQ3M2EyYmRlNTQyNWJlNjBhNzAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjIxNGY1Y2I2NWU1Yjg5YzcwZTc5NDI1M2U0ODcwYTVlNTY4OWQ4ZGQzYzliZGQ3MzU2MmEyZDJiY2Q0YTlkOWEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_9844f14cfee2426fb31307877df95bf8",
+      "statement": "ParamTable manages FirmwareConfig parameters, tracking RAM edit dirty state, persisting overrides to Flash, and syncing non-structural tuning overrides back to vehicles/<name>.yaml.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_gs/src/backend/mod.rs#L177-L182",
+          "version": "repo-lines-v1:sha256:dce0ce61f53b8c6a5aa661386796251ac570f7fec0cc1a390d82027a059e1461:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOWVmZGZlNzkyYTIyMDY1ZjkwZTJjMGRjOWUzOGNlNjY5NmM5Y2ViZjljNWFjZGI3MmIzODA3MDE1YWEyYWZiNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZWVmNzVkZmQ5NzUyMmY0YTJhM2ZlNmMzZDg0YWUyNmUzNDRlOGI2M2ExYzFmMDcxYTdmYzBkMDI1ZDQ0OTIyMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYTgyODM2MTdlMmVlYjM2NDZhNDM0YzUzMjZjMTljMjM3NmNiZGVmODQzODczM2I0MmQ0ZWI1ZTdlOGY1ZmNiZCJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight_gs/src/backend/mod.rs#L358-L419",
+          "version": "repo-lines-v1:sha256:eb533c2df5cc6e4748bd4f646f94322634edc169d252ac0f7e906640dfcf62b6:eyJzZWxlY3RlZExpbmVDb3VudCI6NjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZjYmM5ZDE5ZTI4ODExYzg3MzEyMTk2M2JlOGYxNTQyMTA2YTkwZGQ2ZThlZWIwZjkyYWFhZDRhYjhmYzNmYWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJmMDVhNDI2YWE2MDk1ZjE2ODYyNTRkYTViNGVmMjgwMWQ2MGYyMmVjZTQyYTQyZmVmYWRmNTlmMGIwM2VmYjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY3Yzc2Njg1YmVjYjM5YWM0YWRmMTE4ZWViODk4M2IzYjU5ZWZkOWM4OTA4YTM5YmYyMzQxOGI2NjhhMTc3YjkifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_gs/src/ui/params_tab.rs#L45-L184",
+          "version": "repo-lines-v1:sha256:9b953f46b0c6c3d3f3d82e0448521429549b6791b7ec7de7416a383d6a35169c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQwLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI5ODU4OWYwZmZiYjIzOGQ1Mjc5NTYxYjY1ZDk5YzAyMDhjYTBhNDcyMmE0YjE4MDhkMWIyZTg4N2VhYmZiYzk3IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIyMmQxMWNhZjQzZTk3ZWYzNjllNmJlZWQxYTI2OGJkMDU4MzhmMjliOWRkMjU0YmY2OWJhNjQ4ODQxNDcyMzRhIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI4YTQ4NzRkMGQ0YzcxODdmY2JmOTZlMDVkN2RhNDBjMGJkOWUzMjI0MjY4ZDRkYWZlMzdlYTk1NDViYTg2MTM0IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiIyMjRhY2YwZWE5NWQ2ODE0MjI1N2RmZjE3NWQ1MTdmZGQ4YWNhN2JjNTliODU1ODNlMmE3ZDkzZGU5MGUxNDJjIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_8232fc9815ec4cf8adac1a8ac3dd57cb",
+      "statement": "parse_shell_line extracts telemetry data structures including VehicleAttitude, Imu, DshotTelem, Power, GpsFix, and ESKF summary lines from ASCII USB CDC output.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_gs/src/backend/mod.rs#L471-L624",
+          "version": "repo-lines-v1:sha256:83048d472d4041637c2a03826168d504645e3cc140a8acf0656f32cab96a7522:eyJzZWxlY3RlZExpbmVDb3VudCI6MTU0LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJhY2QzMzQ3MjNiZGY4NDUwMDUyMzU2ODdkMWEzN2E3OTg0MTkwZTkwODNiNTEzZmQxODVhZmJjZDg3NjEwN2YyIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0MTJjYTM0NWNjZjc1YmY5YzA4MDZiY2U2OTViZThkZTgwOGI3OTk4NDI1MWE3YTU0ZDIwMmNmNjEwMWRkNDUxIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJmNWU2NWY0MGFkMjRkNGVkNzA4MDU3MzlkZGU0Zjk1ZTcxN2YyMWQwMDE1YjczZWFjNzQ2ZDZhYTVlZmU1NWRkIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI2MDk5NmY0MWE4YWJiYmZhOWI3OTFkMjU1YmFlZmYzN2YzOGFiMjU4ZWM3Y2U0MmE3ZjNjODQwNzRlN2I0ZTZkIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_ab369a177c0e499d96e0a982e8865972",
+      "statement": "The CLI Shell tab allows dispatching commands to live USB FC or Mock FC, providing diagnostic quick-buttons, command history, and stream log suppression filtering.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_gs/src/ui/cli_tab.rs#L125-L146",
+          "version": "repo-lines-v1:sha256:76fc8e944fc695fb402bf05c4e7988472333e67cdf4f8ca423bcd33741283730:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYxOTJiNTE2YmU4MDMzYmMyZDhiYzE4OTEwMWZhZDAzMDg0OGE2ZWIzMWRmOTUxMGEzMGNjNjcyN2ViOGQxYTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRmYWI3MTBkZGY3ODU5ZTU3NTc2NGE5MTNhMDAyYzc0NTg1ZmZhNzAwMTUxMGNiODgxMWRhODNkMmNmNzRiMzQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_gs/src/ui/cli_tab.rs#L48-L70",
+          "version": "repo-lines-v1:sha256:3302072af6fd5a8b29a55583b16f35e082a51fe8c2005b325812763394302912:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk4NTg5ZjBmZmJiMjM4ZDUyNzk1NjFiNjVkOTljMDIwOGNhMGE0NzIyYTRiMTgwOGQxYjJlODg3ZWFiZmJjOTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIyZDExY2FmNDNlOTdlZjM2OWU2YmVlZDFhMjY4YmQwNTgzOGYyOWI5ZGQyNTRiZjY5YmE2NDg4NDE0NzIzNGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhhNGViMjNkYzA5MjcwOTlkNjc3NjkzYjhmYTYxYjFmZmY0OWNlYjc0MzBkYzlmN2IxNWM1NmRkYjRlOTJkMGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFkMzhlOGEzMWE5ZDllNDVjZjEwOTg5OGQ3ZTlkZWYwODI1YzllZWJjZjJmYzY1NDA1ZWQ2ODI3MmUyMDNiNzYifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-30T14:16:13.882Z"
+  }
+}

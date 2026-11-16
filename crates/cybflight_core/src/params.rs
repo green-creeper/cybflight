@@ -78,7 +78,7 @@ const MAGIC: u32 = 0x4359_4250; // "CYBP"
 /// (fields added/removed/reordered — i.e. whenever `PARAM_COUNT` or index
 /// order moves). The KV store is name-keyed and insensitive to reshapes;
 /// this stamps the fixed-layout blob header used by tests and host export.
-const VERSION: u32 = 57;
+const VERSION: u32 = 58;
 const HEADER_SIZE: usize = 16; // magic + version + length + crc
 
 /// The `fs_ctrl_timeout_s` schema minimum, mirrored as a `const` so the
@@ -904,6 +904,24 @@ pub struct RcParams {
     /// full stick turns the yaw setpoint at this rate.
     #[param(key = "rc_max_rate_yaw", unit = "rad/s", min = 0.1, max = 50.0)]
     pub max_rate_yaw_rad_s: f32,
+    /// Cubic stick expo on roll and pitch in `outer_rate` mode [0 = linear, 1 = full cubic].
+    #[param(key = "rc_expo_rp", min = 0.0, max = 1.0)]
+    pub expo_rp: f32,
+    /// Cubic stick expo on yaw in `outer_rate` mode [0 = linear, 1 = full cubic].
+    #[param(key = "rc_expo_yaw", min = 0.0, max = 1.0)]
+    pub expo_yaw: f32,
+    /// 0-indexed RC channel toggling Acro <-> Angle in `outer_rate` mode (0..=15 = CH1..CH16, 16 = disabled / always Acro).
+    #[param(key = "rc_angle_channel", min = 0.0, max = 16.0)]
+    pub angle_channel: u8,
+    /// Pulse-width threshold [us] above which `rc_angle_channel` engages self-leveling Angle mode (<= threshold stays Acro).
+    #[param(key = "rc_angle_threshold_us", unit = "us", min = 900.0, max = 2100.0)]
+    pub angle_threshold_us: u16,
+    /// Full-stick roll/pitch tilt angle limit in Angle mode [deg].
+    #[param(key = "rc_max_angle_deg", unit = "deg", min = 5.0, max = 75.0)]
+    pub max_angle_deg: f32,
+    /// Proportional tilt-error -> body-rate gain in Angle mode [1/s].
+    #[param(key = "rc_angle_kp", unit = "1/s", min = 0.5, max = 20.0)]
+    pub angle_kp: f32,
 }
 
 impl Default for RcParams {
@@ -930,6 +948,12 @@ impl Default for RcParams {
             land_lead_m: 1.0,
             max_rate_rp_rad_s: 8.0,
             max_rate_yaw_rad_s: 4.0,
+            expo_rp: 0.0,
+            expo_yaw: 0.0,
+            angle_channel: 16,
+            angle_threshold_us: 1500,
+            max_angle_deg: 30.0,
+            angle_kp: 4.5,
         }
     }
 }
@@ -2486,6 +2510,12 @@ pub(crate) mod tests_support {
                 land_lead_m: 1.15,
                 max_rate_rp_rad_s: 7.5,
                 max_rate_yaw_rad_s: 3.5,
+                expo_rp: 0.55,
+                expo_yaw: 0.45,
+                angle_channel: 5,
+                angle_threshold_us: 1550,
+                max_angle_deg: 35.0,
+                angle_kp: 5.0,
             },
             site: SiteParams {
                 gravity_m_s2: 9.807,
@@ -2896,6 +2926,12 @@ mod tests {
         assert_eq!(rc.land_lead_m, 1.0);
         assert_eq!(rc.max_rate_rp_rad_s, 8.0);
         assert_eq!(rc.max_rate_yaw_rad_s, 4.0);
+        assert_eq!(rc.expo_rp, 0.0);
+        assert_eq!(rc.expo_yaw, 0.0);
+        assert_eq!(rc.angle_channel, 16);
+        assert_eq!(rc.angle_threshold_us, 1500);
+        assert_eq!(rc.max_angle_deg, 30.0);
+        assert_eq!(rc.angle_kp, 4.5);
 
         let site = SiteParams::default();
         assert_eq!(site.gravity_m_s2, 9.81);

@@ -127,6 +127,11 @@ pub static RATE_COMMAND: Signal<CriticalSectionRawMutex, msgs::AttitudeControlSe
 pub static OFFBOARD_ACTIVE: core::sync::atomic::AtomicBool =
     core::sync::atomic::AtomicBool::new(false);
 
+/// Whether self-leveling Angle mode (`rc_angle_channel > rc_angle_threshold_us`)
+/// is active in `outer_rate` builds (`false` = manual Acro rate mode).
+pub static ANGLE_MODE_ACTIVE: core::sync::atomic::AtomicBool =
+    core::sync::atomic::AtomicBool::new(false);
+
 /// Direct 4-motor command `[m0, m1, m2, m3]` in `[0.0, 1.0]` from Offboard
 /// UART (`WireActuatorMotors`).
 ///

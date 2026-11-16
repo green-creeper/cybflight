@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:998daef58b1555992ae5891b090722161f9f5b6dc6646997944ebc962c5e9168",
+  "claims": [
+    {
+      "id": "claim_a1898813daaf4ec6a60515cf46ccf3af",
+      "statement": "cybflight_core::nn::mlp::Mlp performs allocation-free, no_std Multi-Layer Perceptron inference using dual stack scratch buffers bounded by a compile-time width parameter W.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/nn/mlp.rs#L87-L173",
+          "version": "repo-lines-v1:sha256:63f4f89732ec50cb4203c01193543db6f8bf740ff80ebf9fc96e66a3dda12252:eyJzZWxlY3RlZExpbmVDb3VudCI6ODcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEyMzIwOTA4N2MyNmI2ZWYwZDFjMDA4YWJiOTQ5YmMzMTFkM2VkNTI0NTE4ZjRmM2ZiYmU1ODYwODAzYmI2OTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjkzNTU0ZTg3NmIyYWEwNzZiMDE3NWIxMjVhYmFiNzhhNmZmMjU1ZWMxN2JlMzgwMGI2ZWY0MTAwNWUyMjZlYzQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdiYzk4ZDZiMGRjNDkyYzUwMTZkZjEwODA1YTNhNTRlYjljMTg0YTVhNjEzN2U3ZjRiZWNmYTBjMjIwNTUwZDAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_0aad1302b2d146d8bcde0855850f8699",
+      "statement": "cybflight_core::nn::mlp expects layer weights formatted as row-major matrices [out_features, in_features] followed immediately by bias vectors, matching PyTorch nn.Linear binary exports.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/nn/mlp.rs#L1-L17",
+          "version": "repo-lines-v1:sha256:2f37142ce848754caf7be43828636ab915645af4f12b388ea3cfa082bff6e17c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJhZDg0Mjg1ZTFhNTBjYzQ4MjlhNDkyOWY1ODE0ZjBjNzZkOGUwNzRjMGUzOGFhOGFlZDdkNzVhYzdkODNjYzkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJmMGYwOTIzODFkY2VjYzliZjY0MjgxNDU0NDUxYmMyNDY5Njk4MGU4M2JiMWRmZThkMDg1YjRiNzBjMzY5YTQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ2OWJjN2M0NWRlZTdjOGZjMjI3NDllOGM2ZjUwOGQ3OWI3OTRmMjM5MDgwZTQ5MTBiMDE0ZjIwNDBkNGNkODMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_60765590c3144e9e91e0a18a9adff903",
+      "statement": "Mlp::new eagerly validates weight slice length, hidden layer width bounds, and layer continuity to guarantee panic-free execution during Mlp::forward.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/nn/mlp.rs#L97-L127",
+          "version": "repo-lines-v1:sha256:cb9234fb622c259391c1db3dbec28dba16d23ffa88652411c9affaa7ba1fe6eb:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYyN2NlY2U5M2NhZWNkN2UxYTE5OWFiODc0MTI4ZWEwNTZiODdkMzZhOGY4N2YxYTYyMGM2ZWIwYmJkMDRiYjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFhODZkOGMwMWE2MmQxYTY1YjIzMWQyNTRhNTQxYmVlNTNhMDY1YTVhYjg5ZmI2Y2U4ZTJkOWMwZjZhNWMwNzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImMxMWY4NTEwNDBkOWI4ZTYyYjBiOGQzMzc2OTFjYWM3NTBlOWMzM2RlNTFjMmExYmFmZDRiY2U5Mzk4YjczNGYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f0019f59ceba48a4ba30330bb277e97e",
+      "statement": "cybflight_core::nn::race_policy::Track maintains a gate passage state machine that advances target gates only when crossing the gate plane within a configured square aperture size.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/nn/race_policy.rs#L429-L452",
+          "version": "repo-lines-v1:sha256:8e498d48622a9abbad5144f40984f5278b140c141c26dd4a9231b118281cf698:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY0OGMyZTkyMGEzNTEzMDFjM2Q4Mjc1NzM4MGRhYTllNjI2NGNjMjRlZjNmOTEyY2UzZjRlNGUyZDYyM2M2ZjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg5MjZlNTVjYzlkMDljN2YwNGJlNDA3MDJlMDg2MDU4YzNkYjBjM2Q2NGI2M2RlOGVhOTk2OTY5MWQ2N2I3YzgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ4NmJkZjExMjc1NzFlMjVmNzQ3N2ViMWU5OGIzNTQyMDQ0MGZlODczMzk2YzQ3ZWYwYmI0ZTI3NjE4YTllM2QifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d0012f6cebe84a7090f55713056d4b38",
+      "statement": "cybflight_core::nn::race_policy::RacePolicy converts vehicle state and gate geometry between ENU world/FLU body and legacy NED world/FRD body frame conventions based on PolicyFrame.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/nn/race_policy.rs#L211-L221",
+          "version": "repo-lines-v1:sha256:8e39dc769c6378513f7bf97196d2c6421c10d9f1223b92bbe85318318349b098:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE4ZDA2Njk3NjhmYTFmYWM5MmM5YjEyOWQwNDVjNjQxN2Q5NjI4ZWRiZjI4ZWNmNWM1YWUyMjIzZmVlZWUxZjciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEwMmQ4OTVmYWU0ZmFmM2MyYmE2ZTkwNmRhMjY0MjY4YTg5YTgzMGZjYzRkNDY5YWYyMGIzNzc3NDg4ZmMzZGIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVjZWE3Mjc2OGZiNTExN2ExZDcyNWRkMzJiYjUxNTY0ZGVkYWYwNTI5N2RhZDA1NTRhODA5MzkwMjY4ZDFhYmUifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/nn/race_policy.rs#L68-L77",
+          "version": "repo-lines-v1:sha256:87a803c1a8539e7e33cb9836549079a8cea48edd7d56162b7af79cd51f6e36f5:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkwMTgzZGRmNDY5YmI4NmRkNGVhNWZmMmI1ZGM5NDgwMmE1YTFjN2EwYjI4MGZmNWEyYzY0MzM3NWQ0MDNjZWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjIxYWU1ZTkwNzcxMjYyNDg2M2Q3MmE1MDJmYzE4ZGYwMWVkZjIyY2E3OGRjZWU3NDc5M2I3NTBhOTE2ZWEyYjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI1YzNmYmE3ZmI2NmFhNTk2ODhkZWU4MTBkMDE3MWFiNzliZjNlOTE5MDNlOGZmYWIwZmIwNmE1NzZlZTYzMDcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c1cec542203847ae93a191a3e1f0b2c1",
+      "statement": "cybflight::control::rl_policy_task::run_race_policy evaluates RacePolicy onboard when IS_ARMED and OFFBOARD_ACTIVE are asserted, resetting the track gate index on the engagement edge.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/control/rl_policy_task.rs#L71-L80",
+          "version": "repo-lines-v1:sha256:266c15eea1ec74ce4cfc45d203ce4a918b713147ed3bb459575f15bda6355fec:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE1MjVjZTg4ZjBkOTM2YzczOTY3MTZhZDVjN2ViMGVjN2UxNmFjNjkxY2I2NzM2NWMyMmMyMWJjNzdiMmEwYzYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRhOWY4NmQyOGU3ODRmOWZkMzFmYjcyZDE1ZjYwY2JjZWFhZmRkNjY5Y2JkNWI2ZGE3ODg4YTAyMzMyMWViYjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE1ZDExNjliNDdlNmM2ZGRmYTcxOTJiZjU2YTNlM2U1NzhmZWExOWQ3OGVlM2M0YWE1NGQ2MmEzNzNjN2NjN2UifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a9c61d5169ec48dc971af8ea83baa2a4",
+      "statement": "rl_policy_task suppresses output when odometry or IMU data exceeds odom_stale_timeout or contains non-finite values, allowing control staleness watchdogs to handle recovery.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/control/rl_policy_task.rs#L86-L113",
+          "version": "repo-lines-v1:sha256:79ef49b16d9cbee0b9b011fa067370361b99e32e37822abacb13ddb16ce0d3a0:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM3ZDY3NzNhZmYyNmY1YThlMTUwZjQxY2MyMjMwZDgzOWFjMmYzYWQ1ZGJlODBmNTIxYmZmMzEzNzVjN2Y4ODEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ3Mjk1NmM1ZDZkMzRmMmZjMDViOTY0ZGIzNmFkYTYzN2QwNzlmN2M2OTgxNTg0ZWRiZjMwZTdmNGJiOTU3MzIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI1OGVmY2NmZDg5YzRjNjMxYWY0ZTcwYzNhNzEyNzNkODMwYWE4ZWM3Y2MxZDI0Y2UzNjI3YTMzOWM3ODc1ZWEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c7516a8448c2483ebb359b92028c2fa3",
+      "statement": "cybflight::comm::esp_bridge::esp_bridge_rx_task processes offboard motor streaming messages WireActuatorMotors over DMA UART only when OFFBOARD_ACTIVE is asserted and commands pass finite bounds checks.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/comm/esp_bridge.rs#L167-L192",
+          "version": "repo-lines-v1:sha256:d4c2a24dcd4673b2cf31fda070725e54c5c0ba4014ad8114ebddaa766d9e4a7c:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImViYmNjM2U2ZGYyNTViMGVhNDY1ZDJhMTVjYjBlMDM3YjRlOGFlYTY3OWVhNWJhZmYyZDllMzNiMTkxNzFjOWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU3YjRlMWYxY2FjOWJmZDZmZDBiMzUwODY0ZjY1Yjc5ZTcxZmQ5M2YwZWEyMWUwOTFkNDdkNjNhMTg5MGU1NjAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZmOGNlYmYzNjFiODg3MmYwN2U1ZDdlNjNmMTVhNTVjNWZiMzZlODk0NTRhZGYwZWFhYzg4Yjc4OWFhMWYzMTAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg4ZTg1YjQ4YWQ0OTVmNTA0Zjk2YWU5MjQyNTkyNDRlNGIwZmZmZTg2YzJjMWY0NTc1OWQ4MWQzNmQ2YTAwZTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ee5cf01f84fe4be2a2184f5644b1516c",
+      "statement": "cybflight_rl::VecEnv exposes a PyO3 interface that steps parallel RecoveryEnv simulation instances via Rayon and formats outputs to match Stable-Baselines3 vector environment contracts.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_rl/src/lib.rs#L116-L183",
+          "version": "repo-lines-v1:sha256:148c3141ecafc965979f9d6bee0598ebcdf46c9b0edb60b40d13e67fc3dcd26e:eyJzZWxlY3RlZExpbmVDb3VudCI6NjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRlMGIxNTZmYWU4ZDhkZDVmOTIxZjZiYmJjYTJlNDU5N2VlMWU1NjQ5ZjkwZTRiMDRmMDJlOTU3MjNhOGNiNDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU5YzEzNTkwNjY1NjMyM2QxYzVlYTQxNjU0ZWU2NmFmYjU4NWFjZGNmYWVhY2ExMjFkNWUzMGJmMTkzZWVkZDciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY0ZTk5NTIzNzMwOWIyODM4ZGI2YTU4YTY1OWMxYTQ4MTllZDkyZTcwYmFjYWI2YTQyMzFjNTljM2E3YmZiZjAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImExZWZlYzJhYjU0YmQxMzk3ZDdlN2M4YzdiMmFkNmFiMTFhMGNlZWZhYzUzY2YxNDE4OTVjNjRlZGRhZDYwOTgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_bbccbeac3c394cd1a6c638210ae2a21e",
+      "statement": "tools/export_rl_policy.py serializes PyTorch PPO policies, ground-truth observation samples, and reference trajectories for Rust unit test verification in nn_gate_race.rs.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_sim/tests/nn_gate_race.rs#L153-L200",
+          "version": "repo-lines-v1:sha256:8e5752eff82d05aec0e78b7796cf61085f37a19fd969135c40dea4ea0320ead8:eyJzZWxlY3RlZExpbmVDb3VudCI6NDgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQyY2Q0ZGI0OGEzNTBlOGYwYjQ3OTQ0YzQ2ZTNmZmRiYmExMzJkMjI5MGE5MWQ3MDEyYjU2ZWI0NmM4YWI0ZjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MGFiZjM3M2U3NWZjZTk0ZDFiZjM2YmM3NjUzNjc1YTkyMjRkM2VmNTM1Yzk0ZjdkYmRiZmI0ZGMzN2E5MzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVmMzQyYjBiYTRlZGI1ZjU2Mjk4ZTlkNDgzYTMwYThiZWQ5YTIyZGQ3ZmU5MTkwNGQwMDA1NDIxNjYxZmY1ZGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU5N2YwM2UzNTU0OGM1MTQ4MDQzNjhiYzZlZDE1MWVhZWQ2ZTNhZDEyYTM3MjFiMDM2NWZjZTA5MWI2NzQ5MjAifQ"
+        },
+        {
+          "resource": "repo://tools/export_rl_policy.py#L44-L139",
+          "version": "repo-lines-v1:sha256:e8ba9e758fff1ea6cefc936494f9f9630de42740a8b866685648fc9aefc0e251:eyJzZWxlY3RlZExpbmVDb3VudCI6OTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZmYmY1Njk5NjBhODRiMTI2OTA1M2Q2ZGI5Mzk4ZjFmMjgxYzQ5Y2Q4OGZhMTVmMzJhZGZiZTQ5YTU0ZjU3NjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRkMWZlMGE2OTNjYzU0MWUyY2EzYzg0ZjNmNDkzMDUyMzQ3Yzg4YmJmMzJiMDlmZDNlOGMxMDg5YTk4MmE1M2IiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdjY2FjMWRiMDcwZmE1OTU5ZTdlYTg5NGZiOTJlNWM4ZTMzODE2ODg0Yjg1NGQwZDU5ZWJiODFhYTQzNGZkYzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc0ZWI2ZmNkNTY2Y2NkYjA0ZjI0YzRiODY2ZTcxMWY0NTA4NGNmNjcwM2YwMTYxYWQzNWFiMjQyZWY0MTUwMjUifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-30T14:16:13.882Z"
+  }
+}

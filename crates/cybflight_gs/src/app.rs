@@ -812,6 +812,75 @@ impl eframe::App for CybflightGsApp {
                     };
                     let (p_bg, p_border) = widgets::pill_colors(params_accent);
                     widgets::pill_badge(ui, None, &params_text, params_accent, p_bg, p_border);
+
+                    let outer_loop = self
+                        .telem
+                        .build_facts
+                        .get("outer_loop")
+                        .map(String::as_str)
+                        .unwrap_or_else(|| {
+                            if self
+                                .param_table
+                                .vehicle_config_summary
+                                .contains("outer_loop=rate")
+                            {
+                                "rate"
+                            } else {
+                                "other"
+                            }
+                        });
+                    if outer_loop == "rate" {
+                        let angle_ch = (self
+                            .param_table
+                            .get_value("rc_angle_channel", 16.0)
+                            .round() as usize)
+                            .min(16);
+                        let angle_thresh = self
+                            .param_table
+                            .get_value("rc_angle_threshold_us", 1500.0)
+                            .round() as u16;
+                        let rc_live = matches!(self.mode, ConnectionMode::MockFc { .. })
+                            || (self.telem.rc_frame_count > 0
+                                && self
+                                    .telem
+                                    .rc_last_rx
+                                    .is_some_and(|t| t.elapsed() <= Duration::from_secs(1)));
+                        let (mode_txt, mode_accent, mode_dot) =
+                            if self.rc_ui.mission_schmitt_latched && rc_live {
+                                ("Mode: OFFBOARD", widgets::ACCENT_PURPLE, true)
+                            } else if angle_ch < 16
+                                && rc_live
+                                && self.telem.rc_channels_us[angle_ch] > angle_thresh
+                            {
+                                ("Mode: ANGLE", widgets::OK_GREEN, true)
+                            } else {
+                                ("Mode: ACRO", widgets::INFO_BLUE, rc_live)
+                            };
+                        let (fm_bg, fm_brd) = widgets::pill_colors(mode_accent);
+                        let hover = if angle_ch < 16 {
+                            let us = self.telem.rc_channels_us[angle_ch];
+                            format!(
+                                "CH{}/AUX{} = {} µs (Acro <= {} µs, Angle > {} µs)",
+                                angle_ch + 1,
+                                angle_ch - 3,
+                                us,
+                                angle_thresh,
+                                angle_thresh
+                            )
+                        } else {
+                            "Angle switch disabled (rc_angle_channel = 16); always in Acro mode"
+                                .to_string()
+                        };
+                        widgets::pill_badge(
+                            ui,
+                            Some((mode_accent, mode_dot)),
+                            mode_txt,
+                            mode_accent,
+                            fm_bg,
+                            fm_brd,
+                        )
+                        .on_hover_text(hover);
+                    }
                 }
 
                 if matches!(self.mode, ConnectionMode::UsbSerial { .. }) {

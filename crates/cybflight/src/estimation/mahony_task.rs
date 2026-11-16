@@ -156,6 +156,7 @@ pub async fn mahony_task() {
             filter.set_gyro_bias(Vector3::zeros());
             super::MAHONY_READY.store(false, Ordering::Release);
             super::MAHONY_ATTITUDE_DEG.lock(|c| c.set(None));
+            super::MAHONY_QUAT.lock(|c| c.set(None));
             warmup = 0;
             pub_decim = 0;
             defmt::warn!("Mahony: non-finite state, reset to identity");
@@ -167,20 +168,22 @@ pub async fn mahony_task() {
             defmt::info!("Mahony: warm-up complete");
         }
 
+        let q = filter.orientation();
+        super::MAHONY_QUAT.lock(|c| c.set(Some(q)));
+        if warmup >= WARMUP_UPDATES {
+            super::MAHONY_READY.store(true, Ordering::Release);
+        }
+
         pub_decim += 1;
         if pub_decim < PUBLISH_DECIMATION {
             continue;
         }
         pub_decim = 0;
 
-        let q = filter.orientation();
         let (r_rad, p_rad, y_rad) = q.euler_angles();
         let (r_deg, p_deg, y_deg) = (r_rad.to_degrees(), p_rad.to_degrees(), y_rad.to_degrees());
         if r_deg.is_finite() && p_deg.is_finite() && y_deg.is_finite() {
             super::MAHONY_ATTITUDE_DEG.lock(|c| c.set(Some((r_deg, p_deg, y_deg))));
-            if warmup >= WARMUP_UPDATES {
-                super::MAHONY_READY.store(true, Ordering::Release);
-            }
         }
 
         let m = msgs::VehicleAttitude {

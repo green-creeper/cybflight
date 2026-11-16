@@ -1,0 +1,168 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:908fb13038ac9f7d58f525820feca11885828492ca26e3fb6dcd6996ae08c3e7",
+  "claims": [
+    {
+      "id": "claim_e09b15805ddf48cb870cd15539b9a2bb",
+      "statement": "The Cybflight mission planner supports two compile-time schemas (plan_offline and plan_online), where plan_offline solves a precomputed schedule using a MINCO Snap banded LU solver in single-digit milliseconds, and plan_online runs an on-device trust-region BFGS optimizer in 1-iteration cooperative bursts with inter-burst delays to allow peer Embassy tasks to execute without CPU starvation.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/control/mission_planner.rs#L3-L27",
+          "version": "repo-lines-v1:sha256:f4ea44a361abaf31b4819434cf941bafdc353147f3d06d948bab6f3d18fb342c:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQzODA3NTUxNjJiNjQwOGE3NGNjOWIwMDRjYTk4NjJhMGUxY2M2ZWUyZDk0ZjFiNmZmZjYxNTQ2YWVjZjAxMDIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYwNjU3MzdlMDcxZjlmYmNkZjU0YjhhZDM4ZTY2ZTRiNmYxZjlmYTFjMDFlZDZhZjlkOTY2NGQyMjJhOTY0MDMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjoyLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIyZWIxY2FmZDQyOTg5NWEzNDg4NGFhYzlhNDU1OWFhMjU5Y2RmMTAzODhiMzQyZjk1Y2FiNjQzYzA3MzBhMWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRkNmRmMmMyYjhjM2VkY2Y3NGMyNDRiZmEzM2YyODEzMjc2NDk2ZDljMzMzMDczZWM4OTQ5M2Y1ZGI4NTc3NDIifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/control/mission_planner.rs#L349-L468",
+          "version": "repo-lines-v1:sha256:af91d42800de56ef4ab03ec2f0cf3402309509f51762c5c0935953fd8f35b249:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIwLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJkNjA0MjM3NjA3ZjVhODE0N2IzMTJhNmY3YTY1ZWRkZDdlOWRjMmRkMjk3OTcyMjk2NTMwZWE4OGY4NDJiM2JhIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJhZDllMTI1NDY0MjU1NzZkM2RlYWU4YzliOWRiZjEyOGQ1ZDZkZGFmNWQ3ZmU4NTc5MzQ5MjdkZWZmYTNiOWRkIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI5OTQ3ZTIxNjQ1MDE5ZjA1NDkzODIzNWE2MzUwZGI4YTdmYTRkM2NmOGQ5YTdhMzM4ZmMyMGI2MjRhMWExNDA0IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI3MTVhMDE3N2ExZjk0NGM4NTQzNDhkY2E2YmRhNWQ0NWMwMTViMTI2ZGY5ZTJiMTk1NWFhY2EwZTRiMDEyNjU1In0"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/control/mission_planner.rs#L583-L701",
+          "version": "repo-lines-v1:sha256:83e2492f9879a0716e01f0f98ddab40f27a1f4e834a8979f4de30ca4487fa1ac:eyJzZWxlY3RlZExpbmVDb3VudCI6MTE5LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJkYzQzN2Q4MmM5ZjczMzQxNzNlNTlmMzhmYTEwOGJkMTYyNzg4MTIyY2I2OGE1ODExMTk4MGQ5OTlmYzVlYWM3IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI5MDUwMTU0N2ZjY2E0MWJhNWVjNTRiODQyMTU5ZDVmYzAxYzMwNmM2YTYyMjE0M2FiZjYwNGQwMTEzYjllMTFiIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJhMWVlZWI2Nzk3OGU4NDdlYTExZjI3N2NjZDM0MDY0ZDg5ZjZlYWEyYWU4ZDlmOWY1ZjQ5N2I3ZWFiY2MxNWE1IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI5MGVhODVlYjdiZGM1MjNiZGFiNzIzMTAxNDNmMDIyN2ZjOGUyM2UxYzU4MzAyMWQ2ZTkxNDg0YTMxNjk4NmE1In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_9a1ff55a17764d79889a20d35183b2bd",
+      "statement": "To ensure smooth transitions from hover to trajectory tracking, try_snapshot_setpoint snapshots ACTIVE_POSITION_SETPOINT as the trajectory head pose after validating that position and yaw values are finite, not future-dated, and no older than SETPOINT_STALE_TIMEOUT (50 ms).",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/control/mission_planner.rs#L280-L299",
+          "version": "repo-lines-v1:sha256:f849403f0161693f007d3e0e5c3d6e4faacebdabafa9a984213988d6ec5538fa:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNkMzRiNmVlYWRiNWQ2YTI2ZjA0MDJhN2Y3ZDlhOTI4YzI4ZDRmMmRhYWZiMzViNGI2YzhjMTM2ZDNlOTc4ZTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI1NDZiMjhiMjE3NDRjYzk5NWQ4MjUxOGNhZmJiMGU3ZGI5NjY0MjA0MDM5NjI4OTE5YWVmZjEwMWQ5NjY3ZmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRhZjg2ZjhiZjQzNDBiZWU1OGQ2ZGEzNjFkNzI5OTAxYjVkYmU3MDQzNmIzOTAyMjQwMWNhOTdlMGRiYzQyNmEifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/control/mission_planner.rs#L35-L40",
+          "version": "repo-lines-v1:sha256:40f5dff5da2c6fcf7fb90736c7d9ae770ec5ccb967e3b72ff736886bba22c23e:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDVjZjg3YmUyOGU1NWI2N2I0ZTAwNWExYWFiMDY0OTViZmUyNDJmMTI4YTliNjA2OTIyYWViZjFkOGM4ZTVlMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOTI3NTExNjc0OTZhMWQ2MmU3YTFmMzEyMWJlNTQ1OGQwY2ZhZDZlZjY2OTA3NjlhMmM1OTMzYTVjYzg5MTBmZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNmQxOTM1YjMyMTY2YmI1YzJjMzI4YTBjYjVmOWU2NzY5MGQ2ZjdkYzY5MWI5NTVhY2UxYTFlNDk4YjlmMjZhZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjc5OTU4ZTJkODg2NWEyODEzMzk0YTdjMjhjYWI4Y2E4NjRlOTU2Yjg2OWNmYmU3NjUyNmM4MDBmOTM1YWFlZCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_77bf27a63cb24f1a8a2d9aed2212756a",
+      "statement": "Trajectory publication in publish_outcome atomically writes the trajectory to MISSION_TRAJECTORY_SLOT and sets MISSION_STATE to Executing within a single critical section lock, ensuring synchronization with disarm and failsafe handlers.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/control/mission_planner.rs#L946-L985",
+          "version": "repo-lines-v1:sha256:252878cc660d4979f15589e7870779096190137b1f4e0eda3da4128f6df50f2c:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI2NTc4ZmRiZDVjZDM5OGFjZDc5ZWFjMzgyOTdiNDUwZjk3NjI0ZTc4M2UxM2E5N2U5ODY2MWVjMGRkM2M5NDQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE2ZTQzZWRmZjY3YTE5MGE1MWM4NjFmMDVjNGZmM2I2ZjVmODQ1NTIyMjUyY2M3MjNkMWNiNDQ5OTZiODVmOTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZjN2NhN2RkYzcwYjE4ZWFmMTAwZTU0OTc0YmJiZWU3ODZlYjc3ZWE1NTdkMGU5OGVkMjJlOTI4NjY0OGY2NmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNjYzJiNjA4NTY4YzhjNjYyOWEyOTc5NDgwN2IxNmUxY2UxMjQwZGQyYmVkYjA0OGFmMGU1NDRjNWU2ODUwOTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_bb464810995b4f888532899275fe85f7",
+      "statement": "The MincoSnapN solver formulates an 8N x 8N banded linear system with half-bandwidth 8 to solve degree-7 polynomial trajectories enforcing PVAJ head/tail boundaries and continuity up to derivative 6 (velocity through pop), while providing closed-form energy integrals and exact coefficient/time gradient backpropagation.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/trajectory_planning/minco_snap.rs#L10-L20",
+          "version": "repo-lines-v1:sha256:39c1b637100e19f052c512a6212b3f2d0f7789a144c755eb29ffd3106f083068:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYwNWNiYTE2OTZkNDUyM2M2NTI4ZTYzMDY1OGMyZWIxZWU3ODcyMjVlMzIzOTU4MzIxODNjZDgzNWJiYmE5M2UiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYwNjU3MzdlMDcxZjlmYmNkZjU0YjhhZDM4ZTY2ZTRiNmYxZjlmYTFjMDFlZDZhZjlkOTY2NGQyMjJhOTY0MDMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI2NDU1ZDhmZDgyMjhiYzdjZGRmZGUyYTYwNWM1NjI4NmMzMzlkOGVlNjU1NThhMGY4Y2U5MTc5OTk2NjhlZTQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkyNGRkMmJhNWU3OWNiNGRmMWU5ZTgwNjQzNDE0N2E2YjYwYjRkOTIzM2E4ZDc1NGMyZDg5YWM4ZTA3MDI4NmEifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/trajectory_planning/minco_snap.rs#L140-L310",
+          "version": "repo-lines-v1:sha256:3682b57ccb0264a98d69a75c4768151a090cb8639bdaec4abc5e30211a29f31d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcxLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIyOGViNDgzYTc5NzYzZTZjNDFiMTBhMTM1ZWM1NmJkNzJkMThiODE3MDMxYTI4NTZmNDJmYzNkZDY5ZTBmYjFmIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ODkzZjQwZTM3ODFlYjg5NmM4MmQwNDZhMDgwNjdhMTFlMzVjZGYyZjFkZmFmMjZmZWE5MGI4ZGI2Njc2NDEzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJjZjJmMWFiYjkwYzNhMDI2NTY5OTRmNjQ2MzY2MTkyMWU4MmM3ZmUyNmYzNThmNDMyNDcyNWU2ZTk4Yzc5MjQ5IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJhZTQxNDAxNTE2NzZhMjIxMjA1M2E2MzQ4ZTZiMWNjZGIxYTM1ODQ0ZWE3ZmQ1N2YyYjAzM2NlMDkzY2I0ZDUxIn0"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/trajectory_planning/minco_snap.rs#L329-L596",
+          "version": "repo-lines-v1:sha256:defa2b5add5198a8c04d8b48b7154e20dc1e5d7bfe1ce0cdea98278c9871b226:eyJzZWxlY3RlZExpbmVDb3VudCI6MjY4LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIwMzIwMGQwNWYwYzMzYzMzOTUxNDcyZjU4MGJmODUzY2NjZGNhYWRiYWUwMDY2ZDYwNTM5OWNhODg5NDZjMDEyIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ODkzZjQwZTM3ODFlYjg5NmM4MmQwNDZhMDgwNjdhMTFlMzVjZGYyZjFkZmFmMjZmZWE5MGI4ZGI2Njc2NDEzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI5NGQ4ODU2ZWQwYmE1NmE3ZjlkYTJhNjhmMWJiN2MxYWUyMDhhNTgyYzQ5MTIxOGI2YWM4NjIxMjg5ZjkwOGM3IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJhNTIxNjA0YjM1ZmM0MGFmMDBjYmE0ZWVhMmZkNWUyYzNhZjE4NjNiMzkxMTg1ZDdiZjRiYjA5ZTcyZDBjOGIzIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_6f5c49f34056477eb98651b55700412f",
+      "statement": "In online trajectory planning, intermediate waypoints are reparameterized onto a ball chart using a stereographic projection P_i = P_hat_i + (2 r D_i) / (||D_i||^2 + 1) with sanitized radius r >= 1e-4 m, bounding waypoint displacement while preserving smooth gradients for BFGS optimization.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/trajectory_planning/planner.rs#L332-L345",
+          "version": "repo-lines-v1:sha256:bd213d1efc6b92f35fcee9cdba451aff3f61f381e8889148386452aa50938b0a:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcwN2E0ODI1ZWY2YTcxM2M4MDg2MzFjYzA1Y2Q4OTRhY2ZjYjM1YjY2ODc1NTZhZGY5ZmMxNjVjZGJlMmE4ZjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE0MjU3ZDljMTQ3Mjc3MDRiNDQ1YjY3M2M1MmYxNmU1Y2ZkMmYyYzIzYWYyMWI5NmNlODMyMjU1MGVjYjA5YzQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEyZGJkYjM2ZDUyZjQyYTg3MzY1MjIzZjU0YTgyZGI0ZjU5NDRjOTBkYTk0NGUwODA5MGUwNWUzMGVlMzQyNDgifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/trajectory_planning/planner.rs#L538-L545",
+          "version": "repo-lines-v1:sha256:5bbdbf0aebf4770e93c13f4c8fd39c9d54a2001ef69f11d18f621c2fb7eeab0a:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiY2VmZDZjMGJjNWQ5NmE4ZjNmMDIxNGZjMWUzMjI4NTM2NzgzNDRhZmZiYTMzZjVkOGEwYjMxZmRhZDg5YjkwMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZjlhODkxMTI5ZTc1M2RjOWUyNDE1M2RhZjQ2MmVmYWQ1ZGZmNDU5OTdiOGFiZWI0NDJhYzI4NTdkMzBlNGYzYiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTYwOTcyNmNlM2U2NjFhMDUzODhhZTNlMTRkNzk1MjUwNzY5MTA3YTIyMjA2OWY4NjI2MTUwNWI1ZjUwMDMyZiJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/trajectory_planning/planner.rs#L68-L101",
+          "version": "repo-lines-v1:sha256:1ce22b56c0e93ff97445c3463f7e3df27b47533f71f37b275a53d078f32c0899:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlhMWY3NTM4M2M3ZGQ4N2ZhODkwYmQyYTkxZGRiZDcyYTAyMDEyN2RjODU0Y2JiYjBmMjk1OGVlMGQ4NmE1ZGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY2MjU5NDJjNmNhNjI0MDg1YmJkMjEwNWU3MTQ5OGM3Njg5ZjUzYWQwZTMxZGYxNWU3NjYyYmMwNjFhM2FmZmUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZiNGUyYmRhYWEwMmE2NTVjNjI3OWM3N2RkODhmNjFiZDE3Y2UwNmYyODQ4YThiYzZhMWM0ODU2ZTA2N2UyMjcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ca772b15926142259260977baab4cd5a",
+      "statement": "The tracking NMPC SQP solver executes 1 iteration per 50 Hz control tick using a structured Riccati backward sweep that exploits sparse dynamics Jacobian blocks (BNZ_START/BNZ_LEN) and sparse state Jacobian columns (JAC_X_NZ_COL_START), employing an unrolled 4 x 4 Cholesky inverse with diagonal regularization.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/mpc/sqp_solver.rs#L214-L420",
+          "version": "repo-lines-v1:sha256:cc28039c9cd55d31f2d473468b176f8e48ec4ed0b1b8b71bc263fb198a56ef7e:eyJzZWxlY3RlZExpbmVDb3VudCI6MjA3LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJiZjhmOTQ4MWE4MTk3OGZiODE3NmY1Mjc4OTVjOTAxNzJlOGI0NzZjNDE3MzA5MzQ0NWVhNjUyZDk5NzZhMTY2IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ODkzZjQwZTM3ODFlYjg5NmM4MmQwNDZhMDgwNjdhMTFlMzVjZGYyZjFkZmFmMjZmZWE5MGI4ZGI2Njc2NDEzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJkNTY0ZTMwM2Q2MTg0YmFhNWIwNzI5MGZlZDc3NzUxMmEzMTM2ZGRiZmE0MDM2YzE0NGZmOWY5NTEyMTkxNjcyIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI1ZjgwNzVhYjZlNThmNWMwYTYzNDc2MDkxMDJlY2EwMjJhZGJjMTRhMThlYzgyYTI0Y2UxNTZmOTc1OTAzYjdlIn0"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/mpc/sqp_solver.rs#L3-L16",
+          "version": "repo-lines-v1:sha256:75e9b081433c0a3bc9f4bff0540fe64f597a2563b770674b94a8f8698160cb27:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRhZWQ4Y2Y2YTE1ZTE2MWFkNTRiMWI4ZTliMjI3ZDRjNmY4YjA5ZDE3YjBkMTMyNWQwZDc3OTU4YTJiMTNkYTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjoyLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM5Y2Y1OTliOGQ4ZTNlMDJjODRjOWYzODQ5ZTE3NDI1NWJlZTVmNmMyMTczNGU2NjlmNDk2MzA0MmI0NjFjMDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk3MTBlMTA2MDMwMTZiMTBhNTA5OGQ3Zjc5Yjg3ODQzZjU5MDk5ZjVmODIxNjZhNDMzZWE1OTJlNzNiZWYwN2UifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/mpc/sqp_solver.rs#L55-L157",
+          "version": "repo-lines-v1:sha256:329e9ed731e62020562e0d1023e99a5de3efbb150e26c1374f6027fd5685db34:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAzLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI5OTBkZGIyYjVhYjc5OTdkY2RiNGNjNTFjZWJhMzIyNjRkYzhjYmY4NDhlZmMyNGM0MzAyOTc0NDMwMGU2YWYxIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0MTJjYTM0NWNjZjc1YmY5YzA4MDZiY2U2OTViZThkZTgwOGI3OTk4NDI1MWE3YTU0ZDIwMmNmNjEwMWRkNDUxIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI3YTc2N2NkY2EwZDIzNDMzNjEwNjhlZmJmYzhmZDNiYTZkZjliNjdhZDkyZjRmNjI2ZDFjN2MxNTFlYmYxMDU0IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI2YWRiMjExYWVmY2NmNzQ2MDliNzc5MzViMzA3OTNkZTEwNTNhYmVlNjU4ZDA0N2U5NGNhNzA1Y2E5MTk5NDI1In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_0c3673d59aac4e469056d195b146ad8f",
+      "statement": "The SQP backward sweep monitors matrix and gain finiteness during recursion, instantly marking the solve as diverged and rejecting the step if non-finite values enter P_N, H_uu, or feedback matrices, keeping control outputs at the last valid warm-start iterate.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/mpc/sqp_solver.rs#L227-L233",
+          "version": "repo-lines-v1:sha256:600616e3f9237117cd9298bad43c1c733d80329069bc5af4bb3af3a5fe908139:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTc3MDIzM2U5ZTc1YzM1MzdiNzlhOWRhOGFjMmFiZjcwMTVjMGIyODUyOTI0NGY2OTRlMWVlZDMzNmVhNDc2YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNTMzOTkyNWIyZjJhOWI0ODkwMDUyY2ZmYWNlYTQ3ZGE4NWY1MDU3YjRkYzRiMjNmMzcwYmNiMjhiNGMxMjczOSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMDkzOGEzNGE2MzkyZTI1ZDNlNGNkMDg1Njc1ZjAxOTA1Yjc2ZWRkNzAxYTk1YmMwYzc0ODA4OWQ1MTRjZmM0MCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYTg1ZmRjOTZhNTcyOWY5ZWQ0YmI1Y2RkZjA3MmMzMWFmOWEyZTMzNzQ0NDU4MmJhMTcwMDNlZjgzMTQ1YWYwMSJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/mpc/sqp_solver.rs#L335-L340",
+          "version": "repo-lines-v1:sha256:4b447b94362f45bdffee7edefc142e599c996506fcf710534e180b53440cec06:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMmUwZTU4MTMzN2FlNmQzY2U4NTcxOTY2ZDFjNWI2Y2I0OTc4OGUyZDhjNTg5YmU2NDRiMGMwZjBiYjZiMGU0NCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYzM3ZWFkOGRjYmI3ZThlYjU2ODY0ZWExN2JhYjI1Mzg3ZDA4M2I0Njk1N2JmNThjMGY1ZmVlN2YzNmZlYTZlMyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYmE1M2Q1MzIyNWM2ZGY2ZTJlYTE0NDU3OWI3NTM5OWU3NGE0OGY1NTBjZGJjNjM1ODNlNjBmNTNiZWY3YjI4MiJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/mpc/sqp_solver.rs#L409-L417",
+          "version": "repo-lines-v1:sha256:53778397c89eade4a987d03348de23ee0b7d4e7c0beb9e8b01d36f8317d69ccf:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOWU2MGExMTkwMTNiNDc1NTVjNjQwYjJiOGQyMDc3OWRlNjFjMTc4ODU3MjNlYWQzNWUwNjUwNjA4YWUyNWQ0NyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNTUyMmM0MmNkMTljNmQwM2Q4MDhjNDUyNzIwNTUyODI1YjdlYTFjNWI0OTFiMjE4NTExY2FjNzQxNWNmOWQ5YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOTViYjNkZWM3YjQ1YTc5MDkzNjRiMDhjMjgyNGYwNjk2MGRmZWYyZTk1OTE1ODM0NmRiZWUxNzA5NTE2ODVlZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNGU0OGZiMjRiMTM3ZmNkYzViM2YxNzg1MmYyM2NhOGZhMDBjNTcwZmViYWMzZTUyYTNhMGVkN2I3NDU1NzYxYSJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/mpc/sqp_solver.rs#L584-L593",
+          "version": "repo-lines-v1:sha256:28b758a84ac5e1be1579b3890e196c8fd5372982fe486e08c2727ec6d406ca79:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBjZmY1YTA5OGExM2Y3MDRhY2UzN2QxNzllZDg1NzE4YTlkODYzNjVhMTdmYWE1YTBmZTVmY2Y2OGQyZjExYWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1MjJjNDJjZDE5YzZkMDNkODA4YzQ1MjcyMDU1MjgyNWI3ZWExYzViNDkxYjIxODUxMWNhYzc0MTVjZjlkOWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM3ZDkyMzI2ZTY4YTRiZmI1YWUzNTYyZWUyY2RlYTgxNjE1ZWVlNmM4ZDhjMDIzZGMwMTBlNjQ4YjcwMzNiMTAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA5OGU4ZjJhMWY1YTU5MmFlNzEwYTdhMWJiNjA1ZTcyMjM0MjdlNzM4OTY2NGVlZGRmNTk4MDUzZDUzZDRkZjgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_26af6e6eba4d48f38fb833c91325ec6b",
+      "statement": "TinyMPC implements an ADMM linear MPC solver with an offline cache (TinyCache) that precomputes infinite-horizon LQR gain K_inf and cost-to-go P_inf on regularized state/input cost matrices, paired with an exact zero-order-hold discretization of hover-linearized quadrotor dynamics.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/mpc/tinympc.rs#L417-L451",
+          "version": "repo-lines-v1:sha256:5472eeae396f72b764a38a4153897883fe1c94f1541183bce5ff273455e1597a:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNlZGI2MjZkY2ExOWFiNGY1YzRiM2VlMWQyYmY5MWEyOThkZDE1MTIyNDliZGE5MWUwNDZmYTAwYTA3MDFiZWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg1MGQ1NjY0MjhjN2E4MzM0MWMyYTVjODBkYjc2ZDhiNzNlMjRhYzE2OGU5ZDhmODc0OGJmZTc1YmE1NGVlNDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQxMzYwZTc4OTM3Mjc0OTA3NjlhYzM4ZTYxMjRhNzZhMGIyOGZkZGJiZjFlYTM1ZDJiOTk4MDYzMjNiMWZjODUifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/mpc/tinympc.rs#L6-L22",
+          "version": "repo-lines-v1:sha256:0d13ae6d1c5b60e8223196043cfca9f8fc1227b677fa43b019900770d8eba12e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OGI2OGY1ZWFjM2VhMTg2YjJlODc1NDFiMDhhODIxNTg5NTZiMDA3MTFmMTQ5NGZiYzMyZjllZDdmNTFmYzEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg1YmZjNWE3ZWQ3MGI5NTM3ZDAwNDM5MDk2YmYyZDlmYWM0OTk0OTYzM2MxN2I4N2U4MjRmYzlhODI2NGIwY2MiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMxY2I0YWY4NjlkZWJmYmRkYmQwYmYyYmFiZTUxYTUzZGZmOTgzNzhiNDVlYzg2YTNhMzg0NWM4MTBjYmQ1MDkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQwMmQ5N2FhNjFlM2Q2M2Y3ODEyYmVjNjdiZjY1NjFjYWY4NzUwM2MyNzI3NWE2ODk2YmNlOTY1NTE5M2QyYmEifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/mpc/tinympc.rs#L90-L146",
+          "version": "repo-lines-v1:sha256:15a319c5346c7d9dcd642ee245b9ac3faa2346f92785687cbc6ab16e713c2743:eyJzZWxlY3RlZExpbmVDb3VudCI6NTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRhZDIwYzE3MDg5ZjE1ZjQxOWE4ODNkNzFkZGM2ODA4ZjJjMmNkMDE5NmVhYTU2ZmEwOTU3MDY0NDgzNjg2M2EiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNmYzg3OGRhZWMwN2YxMzhmNzI3ZGQ0MDFiMGRiYWVjNmFhZGU3NDQwZTk4MmRmNDU2Y2JlYjAxMjM3MDZkYjQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRlYTM2ZWRhMmIwM2RjYjQwYzIyYjYxMzhhNDAxNjhmYTVjMzhlOGI1Y2RkZDUxNWFhZTYyMTlhOTc1MmI5MGUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_cd3691d7262f4d42b31cf00f20e6c2e7",
+      "statement": "The learned cost adaptation module builds a 59-dimensional, yaw-invariant observation vector in the node 0 reference path frame and uses an MLP policy to modulate nominal NMPC stage, terminal, and rate input cost weights via per-channel piecewise log maps bounded by safety fences and validated by COST_MAP_VERSION.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/src/mpc/cost_adapt.rs#L166-L218",
+          "version": "repo-lines-v1:sha256:80a3a50746d71eb8fc235ded4624354f9f81b7684379bc32632913af37c1b561:eyJzZWxlY3RlZExpbmVDb3VudCI6NTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUxMmZiMTc4N2MyYjQyYmMzZWY1MTExZjlmYWI2ZmI5ZTVjMGYwZDkxNzExODI5YTA1NWJiZGEzNzI1Y2E3ZGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM5ZDI0OWQ0ZjU0NTEzMzU4NGI4MTZkOWRjNTA5ZWY5NjQyNjBjNzI4Njc5MTg1NTZjYzBjOWUzYmRhOTZhMzAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY5OTJhNDcxYWJkMWQ1OTgxMDAzYWNmNmI5NzA2YjQyZmJlZmJhMjE5NjY3OTI2NzNjZmJiYzZmYTg0OTU4YzgifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/mpc/cost_adapt.rs#L20-L46",
+          "version": "repo-lines-v1:sha256:5f1ba7e9df4c69ed972fad2391b96bed14fcbbbdd11f982e54bf4c630123ef9a:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZkYzk1NzYyNDZjYWIwNmZhODk5NTJiM2E2ODRjOTUxOWQ0YmUyOWZiNjZiM2NkOWY1N2EyOWEzM2M2ZGQ2OGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRkOGJmMzhjOTFlOTA0NTUxOTVkN2UwMTBhZjg2ZWQ4NzZmODNiYjIzNjI4MDI3ZjZhZGZjYzY1MTVmNmM1MGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNkYThhZDUzMTIzYjFkYWRjMjBmY2FjOTI3M2RlOWYyODAwOGViYmRjYzdjZTIwN2UxZWQ1MjNhODE0YmQ4YzUifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/mpc/cost_adapt.rs#L280-L361",
+          "version": "repo-lines-v1:sha256:6ea95c9dc1e13cfb7b936a2fb6cf6e592dc96a1c739d13d551b4954a6794b7ca:eyJzZWxlY3RlZExpbmVDb3VudCI6ODIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJhYzI4NWZlYzY2NjU2ZDMwMDA1ZDA4YzY3YjM4Y2JmMzhlNWZmNTZlMzdmMGM4YmI0Y2U2OGE3OGRlMTNlODgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFhY2I3NjIyNDE2MjAyOTljMjYxMzA1YWI1YjU2OTIxODFlNThlMmI3OGRlYmE4MWM3YmRhOWUzYjg3OTkxZGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY1MzA4YTU2YjMxZjRjNzg3N2NhODJmZTBlNTViNmUyMmQ2N2MwMDcyMDg3YzhiZmYwNTEyYjY1ZDE2NDk4MjIifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight_core/src/mpc/cost_adapt.rs#L74-L74",
+          "version": "repo-lines-v1:sha256:a81c1ce09d259d39b10fad389fae3344b2e586e87c11b9f4a09064a42bfcfe59:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTgxYzFjZTA5ZDI1OWQzOWIxMGZhZDM4OWZhZTMzNDRiMmU1ODZlODdjMTFiOWY0YTA5MDY0YTQyYmZjZmU1OSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTgxYzFjZTA5ZDI1OWQzOWIxMGZhZDM4OWZhZTMzNDRiMmU1ODZlODdjMTFiOWY0YTA5MDY0YTQyYmZjZmU1OSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDAzZWE3NDg2MGVhMGM2ZDg3NDAzODc2MWNmNjk3ZDc1OTQ4YmI4MmU3ODM2MjRiN2Y3MzgzZDczMmUyYjE2MCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNjE2MWMwYjY3YThhNzZjY2JiNThlNWRmOGJhZWE3YjUyMzYwMzVlMjUyOTRjZGFjMmVmZDk2MmNjZDYzYTFhMiJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-30T14:16:13.882Z"
+  }
+}

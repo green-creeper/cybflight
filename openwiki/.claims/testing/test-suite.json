@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:4444d871b95d2142ed79690b3049f9d57757bd9beba721cb43525e40a0782fe7",
+  "claims": [
+    {
+      "id": "claim_ca4f5e39979f4d9f98f7959bce45b775",
+      "statement": "cybflight-core tests verify MPC controller convergence across 50 initial orientations with up to 30°–50° tilt, allocation matrix equivalence with the firmware mixer, and SQP solve timing.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/tests/control_convergence.rs#L349-L415",
+          "version": "repo-lines-v1:sha256:c94e4464337ccea122cc1ac92fb3a01efae44f91c4b73634dd53aaa79ce65b04:eyJzZWxlY3RlZExpbmVDb3VudCI6NjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQyY2Q0ZGI0OGEzNTBlOGYwYjQ3OTQ0YzQ2ZTNmZmRiYmExMzJkMjI5MGE5MWQ3MDEyYjU2ZWI0NmM4YWI0ZjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA3MDM5ODc4YWQ2NDY0NDczZDcyMDI3ZmUxMDc5MmJiMWFjZTYxZWE0ZmExMWZkOTJjOWE2NDgzNWM5NmFhOWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNjYzA4YTcyYzU2OTlkYmY4OTM4NTBiZTAyMWMxMTY1ODFjZjJiNDc5YzYzMjE0MzhhZTU3NDI3MmQ4ZjdiOGUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_be0f646a0ae7481e972fca3fbd5f7edd",
+      "statement": "indi_golden.rs validates INDI filters, pseudo-control allocation, WLS solver, and thrust linearization against recorded C-reference golden outputs, and confirms FLU to NED coordinate frame parity.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_core/tests/indi_golden.rs#L1-L70",
+          "version": "repo-lines-v1:sha256:4ade4cfb52b5eacc13fbe19f593352c6b43c3703efd67d23b868eac32a9b3151:eyJzZWxlY3RlZExpbmVDb3VudCI6NzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRiNzRiNTM1NmM0ZmFmNGU5Mzk5NDgxZGMzMTM2ZjgyMDdjZmI1MDUzMmMwNTBiZTE0ZDE4MzQyNDA3ZTc2NzYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU4NWIzMmIwNWJjNWQzZWQyY2JlYTY4ZWJhYWVmYmM2ZmUxZDJiYmRlOTE4ZmNkMWUxOTM0OWQ5NmE1ZTVhYTMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_15ac1b37f239417e9209fc6ab045c536",
+      "statement": "autotest_faults.rs subjects the ESKF to position outlier rain, NaN acceleration inputs, and saturating IMU noise to verify jump-gate rejections, single NaN reset tripping, and Joseph-form covariance clamping.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_sim/tests/autotest_faults.rs#L32-L100",
+          "version": "repo-lines-v1:sha256:b694a0e18fb34da0ea097208a19192cde6c7c764be020a30759080445c9bb3c9:eyJzZWxlY3RlZExpbmVDb3VudCI6NjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQyY2Q0ZGI0OGEzNTBlOGYwYjQ3OTQ0YzQ2ZTNmZmRiYmExMzJkMjI5MGE5MWQ3MDEyYjU2ZWI0NmM4YWI0ZjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZiYTRhOWU1ZGQ1NGE3N2ZmMzU5MmZmNGRiODU1NmY1OTc5NWYwNmYxMDYyZjE5OGE0OGI5MWM4NDc2YjI5ZGIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc0NDEzZGI4ODk5MWJkYjI1ZjA2ZWEwZTYzYzdkZmQ1YzQyN2I0ZGQxZmExNWI4MzU2YWM2OTUxZTFlMDgyMzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE3MzM4MTgxZTVhOGZlNDU3NjQ4YjA2OGY3MGE1ZWM5ODNlNTZmMjRmMDNkMWMyMDZkYjVkM2ZmMzRlYTAxNDQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_51b12d761a8346ab9d83c6441a8d5f42",
+      "statement": "autotest_mission.rs runs closed-loop simulations across hover, point-to-point, and square mission scenarios using MpcIndiController, MpcDirectController, and CascadeController to verify trajectory tracking metrics.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_sim/tests/autotest_mission.rs#L27-L87",
+          "version": "repo-lines-v1:sha256:847f22dd43583c74cbb9eed8c87b4b30c625a2df7bce04cab98c43f04a565871:eyJzZWxlY3RlZExpbmVDb3VudCI6NjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE1OTc4ZjkyNTZiN2FmOTFmYjEzMmM2MGQwMDk2NWIxNDU3NGViY2UyMDk2ZTdlYmI3MzA0ODc2NWJjMmY3M2IiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU1YjVjNjUzODAwNmZhY2RmZGE4ODdkYjFjM2JlN2MwZGJiMGRkNTllNGNlNGQ0NGJmZTIzOTE3OGM5YjNjNzkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgzNGUzYjFiODgwY2FlOWFiMjM5MTE1N2MzMTFjZDIxYTJiMTI5NDlkMGY4NjU2Y2FhNDA3OGY1Y2VhOTJiYTcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5596be677bfd40d88f6452dedd77a1a9",
+      "statement": "regression_snapshot.rs enforces tight metric tolerances (~1% relative error) against regression_snapshot.json across 12 scenario and controller combinations including noisy sensor and GPS scenarios.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_sim/tests/regression_snapshot.rs#L1-L64",
+          "version": "repo-lines-v1:sha256:9b4dfb6d4cb4cdb7afd88958c61a7235cd2288ba7c25ec54d323b0cb5bcefbf9:eyJzZWxlY3RlZExpbmVDb3VudCI6NjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYwMWJkYTI4MzA3NzZhODUzYWVhZmQxNTkxYzE1Y2IyNGZiOWUwYjE5NmQzZjE0OTU0MTc3ZTQ3YjRhYzUxNDgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNjNDg3NjYwODYyMzI2OGY1MTkzOWZmYmQwMTNhZWMzN2JlZjgxNjI1MmVkMGU0NGRkNWNhZTNhZjhjZjQ1OGUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_409e4984653c4117803f144e0ea1477f",
+      "statement": "vehicle-yaml tests enforce airframe identity invariants across vehicle configuration files sharing the same airframe name.",
+      "evidence": [
+        {
+          "resource": "repo://crates/vehicle_yaml/tests/airframe_identity.rs#L1-L63",
+          "version": "repo-lines-v1:sha256:b19b4b8e5d300e8e75af6a87b4f292815a317e04a12e4b1bcf83717f2ff9fc7c:eyJzZWxlY3RlZExpbmVDb3VudCI6NjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBjMjVjMTFiNTQ3N2QxZGQxZjc4ZjM4MjRlM2EwMmQwOTlkZmM2N2I2ZjZiMGJiNTFhY2JhNjNjZWIyMWI3MjkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1NTBmZTA1Y2NhMWU0MDQ2MGQyZTNmM2ZiMDkwNzRlYmNkN2ZmOGY1MDU1ZjdmYjkxMjE1MmM2YzUzY2Y1MDEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUwMmU3MDhkNzBmMDU0ODUxNDFmN2ZhMDdmYzVlNjc0NTA1MDliNTM5MjVlNDI5ZDcxYzE5MWZmMjA2NjIwOTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_853983bc47a2495c89cea9d8f01b03cc",
+      "statement": "cybflight-drivers unit tests verify CRSF RC packet unpacking and CRC8 verification, along with DShot frame encoding, GCR decoding, and telemetry CRC logic.",
+      "evidence": [
+        {
+          "resource": "repo://crates/drivers/src/rc/crsf.rs#L709-L730",
+          "version": "repo-lines-v1:sha256:9c553140433cbc3e3203c35adc26f654bce7d4c3e42f43827532395279859507:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgzMTU0MjAzNTJjNzZkMWFkN2Q4ODJjMGI0MzE5Mzc1NjBhMGYzMmVjNjU4ZTNmNjVkZjkxMTZmYTI3OWY4ZTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFjYjAzMTg2NTY2MDc1ZjQxZWQxNTZlNGVlODg4Y2MyOTcwNTZmMmJkZjBjNzRiZTZkMDJjM2NjZTAyZmZlNmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhiZTk5NjVjZTRhMzJmOTdmOWYzM2M1NTM4Y2VmOWQxNDY3OGIxNDRkODg4NWQ2NjI5OGE2ZGUyYzg4NzU2ZTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRjMTczNjY1Nzk3ZjRiMjI2NGI5N2Q3NTAwN2IzMjI5MmZiYzQ5NWFlM2EzMWQ2YmMzMTRlYTA3ODU0ODNlYjkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ba077d9e91aa49cf8703d65bfc54a46d",
+      "statement": "The Justfile defines command recipes including just test, just test-drivers, just sim-check, just sim-snapshot, just sim-compare, and just test-all for executing workspace test suites.",
+      "evidence": [
+        {
+          "resource": "repo://Justfile#L75-L166",
+          "version": "repo-lines-v1:sha256:55e86e406bace0352a2c298359207f4bc4e60b6c5cbda39dc04870441055116b:eyJzZWxlY3RlZExpbmVDb3VudCI6OTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQwMDdiNTExODg0NTFkYjM3OTNhZTI0ZWExNzk0ODU4MzY3MmVjNTUxNDJhZmFiOTVmMzE0MTNkZjExZDViOWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEzYmEzYzNlOTM0MTNhZTQ0ZDQzYTMzZWJiNTYwOGQxNmMzY2YyYmYwZTY4ZGEyNzkzOGNlMzYyZWFiYmQxZTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNkNGFhMTFhNmZmYWIxMDA0MTZjNmY0NTA1NTlkOGNiMmM0YTRmNzE5ODMxMGQwMDE3MDE1MDA1MTgyMWQxZGEifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-30T14:16:13.882Z"
+  }
+}

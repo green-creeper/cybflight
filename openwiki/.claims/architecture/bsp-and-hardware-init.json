@@ -1,0 +1,138 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:3fb625e0bd82ca072fed4fcee975550700a940b0daafc0e021868ece20244660",
+  "claims": [
+    {
+      "id": "claim_f3ac1ad385464e85b9d06e61090ff003",
+      "statement": "The bsp-types crate provides platform-independent data structures and metadata types, including sensor alignment variants, serial roles, serial port identifiers, timer identifiers, power calibration constants, and motor DMA metadata.",
+      "evidence": [
+        {
+          "resource": "repo://crates/bsp/types/src/lib.rs#L4-L98",
+          "version": "repo-lines-v1:sha256:607e60a81bf835957dd958837f9a278cc03db400ab2838d96a92bf5ea84135f5:eyJzZWxlY3RlZExpbmVDb3VudCI6OTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkZGU0OWE4MDYwZWQ0ZmY0YTk4ODhhNTQ4NzkyZjhiZWZmZmIyZDlmZGZhZTlhNmFiNjA3YzZlMDZmZjRlODYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFiMWZjM2M3YjhhYjI5MmRmZThlNjMzMzY3MzZhYjQyNTFhMTcyOTkwMzA0NTQyZWY4OWRhODU4NTFiYWVhZDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e3a610d5c5f74924a554ecd040b25624",
+      "statement": "Target-specific BSP crates define board constants, clock frequencies, capability flags, and peripheral pin ownership structures, exposing an initialization function that configures RCC clocks and returns a strongly typed Board structure.",
+      "evidence": [
+        {
+          "resource": "repo://crates/bsp/flywoof745/src/lib.rs#L15-L35",
+          "version": "repo-lines-v1:sha256:93a88e821897debab6c26fccf46c920b1a8b87f6ef6df3d22a8ec35f4128f43c:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNjOWUyZTQ3MDliOTYzNmM2MTA0ODUwNjcwZDE2NTczMGFmNzJmY2I0OTlmZjRmMGY2MDQ3NmViYzdlYTdjYjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ4YTQyMjVjMzcyNWI5MmVjYTY5ODE3YmExYmFiNzczY2VhYWU0YTExYzU4NGM4M2RhNTk0NGU0MTJmMTAxMzkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg4N2YwZDFlZDNiY2M4ZDk4NzhmMDc5MzUyYThmNDJkNTdhZDE0MWViM2RlMTU5MmYxNDJmYjk2ZjdlNzczODQifQ"
+        },
+        {
+          "resource": "repo://crates/bsp/flywoof745/src/lib.rs#L259-L291",
+          "version": "repo-lines-v1:sha256:2505edc946f145d6cd0b498eff5c919370e005a156ef4e0e855597390239fcfc:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJkMjVhMTY0ZDdjOGVkOTAyNDcwYmQ2NzEzZTZkY2YyMjkyOGYwNTBhYTg2NTFjNWNmZGNmZDU3ZDdlZjNiNjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk3NGM2ZGJmOWRkZTkzMzk2ZDk4ZmFhZGRhZDNmNjFmNTQ4YjM5YjUyNjE5N2ExMmY3MGI4MzAwY2ZlYTBjZDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFjZDhmYzI5ZDJiMDUwMDczZjUxZDUxYTlmMDdhMGJlOTA0YjliMDczODRhMWIyODg1NGJjZGU4MjNlYWEwZDYifQ"
+        },
+        {
+          "resource": "repo://crates/bsp/flywoof745/src/lib.rs#L293-L439",
+          "version": "repo-lines-v1:sha256:76cc7f1d9ff063e322484add8264248b0784ed90d9d36f53c7ae34d2823c8adc:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQ3LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI1MDRmYjg3MGY4MmU4NTRjOGY0MjgzMTMwYzc3OWY1NmRmN2VkMTVjNTJiOTczNDMyOTM3YjEzMWNkYWM1MDNjIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0MTJjYTM0NWNjZjc1YmY5YzA4MDZiY2U2OTViZThkZTgwOGI3OTk4NDI1MWE3YTU0ZDIwMmNmNjEwMWRkNDUxIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI1NWI1ZmU3MDgwYzMzZDMxY2YxZmZhODI3Zjg5YWMzYmY1ZDE5MmIxMDg0MjQzM2FhMGU0OTgwYzZkYjRiYWZhIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MCwiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_e52a9a4a86d24827ab5db2f9c645d296",
+      "statement": "Linker scripts partition flash memory between the firmware binary and parameter storage, reserving the final 256 KB of flash for a key-value store on both STM32H743 and STM32F745 target configurations.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/build.rs#L8-L15",
+          "version": "repo-lines-v1:sha256:fa55f3eec46901a88d6c5d9c6a0344b51e8d4c941d6684c2f5a3a301f5081034:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNGNkMWU1MTQyN2MxOTc3OGYyYzEzMTg0YTVjOTE5NmM1NWIyMjM1YTZhNTUyZmZhNDhlOWQzOWVmYmMzYTEzNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTk3NjcyOWQ0ZGVmNGRmYjZhNGYxZjMzODRjODRiZWM5MzI2NjZjMTFhOTljN2VmOTRkYzcxMWRmZTA4MjQ1NyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTEwMTFkZTc1NThmMWU2MmFhOTlmMTVjZGZiNzEyN2Y2MWI3NGYwMWVlOWE5NTBjOTRhZjI5YTE3OWJiOTgwOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYTM1OGYzMzE4MTVlNDk5MWQ5YTRhYTVlNmI1ZDg3OTQ4OTUzZjQ2YTUzNjQxZDU1ZWMwYjVjOGRhNmI4YTIyZiJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight/memory.x#L1-L13",
+          "version": "repo-lines-v1:sha256:31edace1d26455bf22ae893a7319c21310218b95bac59c29c8daee39674e096c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM5YjBjZGQ4ZDVmMWRjYWI2NmZhM2I4YmZjMDM3ZDU1YWIyMjY3MGZiYmU1M2VlMzk3YzU5YjY3Yzc4YjNlNzUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI1MjFlYzUzZDhkYWE2ZDY0Y2EwNzA0MDdhNThiYmY1Zjg5NGQyNDE1OWM1YmY5MmE4YTU2Y2NjYTliNGYxNGEifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/memory_f745.x#L1-L13",
+          "version": "repo-lines-v1:sha256:ebeababf04230ae01fedd2ef9fe3e275e0f426c7b42e8aee6fb8576a53447a65:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM5YjBjZGQ4ZDVmMWRjYWI2NmZhM2I4YmZjMDM3ZDU1YWIyMjY3MGZiYmU1M2VlMzk3YzU5YjY3Yzc4YjNlNzUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjEyMTg5N2VlMDI4ZmU5NjVjODVkZjUyZmIxMDA3OWNmMDZhNGE5YzI4ODRmMTZiYzIxYzRhY2FlNDljYTg3NWQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_6004dce99e584d59afb29eb1fe9ba8ac",
+      "statement": "On STM32F745 targets, the memory layout places interrupt and executor stacks in a dedicated 64 KB DTCM-RAM region at 0x20000000, causing stack overflows to trigger a hardware BusFault instead of corrupting SRAM memory.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/memory_f745.x#L7-L17",
+          "version": "repo-lines-v1:sha256:b7928cd0120bfdfb94c356692fd0d485f4da79547e10b6d90d228c311d8a0cb7:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI3YmY2MDZlZDZkMjQzM2UyYWFmZWIzOGQ5OGFlYjNmMmFjMWU1NGJjMmRlZjlmMTBmMTYwMzRmNWNhMGYyNDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVhOWQ1Mzk0ZWVlNGExOTYyMzY1NGZhMzdmZDBlNDYzNThkNjA3ZTZmZjdkYjY0N2RlMDhkZTdjYTdlYjIxMWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU4NDZjZjg4ODQ1OTNlMTMzMGNmMjc4MTlmOGJlMTcyZjg1NjIxZmMwZjk2MDU2ZGViNGMwYjZmMjI5OTlhZTQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f991bb184b894da0a792e1ed0c3b45b0",
+      "statement": "Target compilation flags disable double-precision floating-point hardware feature support (-fp64) for thumbv7em-none-eabihf to prevent double-precision hardware instruction faults on single-precision STM32F745 microcontrollers.",
+      "evidence": [
+        {
+          "resource": "repo://.cargo/config.toml#L1-L8",
+          "version": "repo-lines-v1:sha256:4b1be27224a56c745c7ffadd548a84c80bda8190758999ba25d97f2a9aa823c3:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjFlZDM5ZjgwNWI4YjQ3MTM1OTBmYzc3ZWQxOWMyNGMwY2M2Mzc1YmRhN2IxNzcwYTYwYjNmMmFmMThlMjNkNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDM1ZjMxODM2ZmExZGVkMmNiNGMyNmVlMThiZDQ4MmU5MzFjODdlYjM5M2I2ZGE5NjQ5OGQ4YTYzM2EyYjZkMSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiN2ZjMGVmOTc0MzRhMDZkYTRhOTViYjU0Y2VmMTg2YTkwMjJlYzRjZTQzOGNkZmRjNDg3ZmU1ZTUxNDIyNGY1YSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_38696e7a5c0d490e94edf825dc1139ef",
+      "statement": "Release compilation profiles set opt-level = 's' for the top-level cybflight package to fit STM32F745 512 KB Flash limits while compiling driver and mathematical core packages at higher optimization levels.",
+      "evidence": [
+        {
+          "resource": "repo://Cargo.toml#L32-L51",
+          "version": "repo-lines-v1:sha256:315fd950cd77cadbd400bd04e121bb0896c912eaabca6d52ca787849a4c864d6:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU2MWI5OTBhZDhmNDI4NGMzNTRjZDhmOWI2YjFiMGQwMTU2NTAyYWJiMDhhYjI5YWI1MDgyNDk0ZDdhMDc2MGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI3OGVhYTRmNzZkMGYxNjliOWIzOGQ0N2NhNWZiYzZhYjk3YTlhMzQ5MmY3ZDU2MjhmZGIxODRhZDk0MGVhMDYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAyMjlmNDdlN2E0Njg1MWVlNjIwMGM3YTNiODdiNmY4MGRlZTY5NzdiYWFmMWZhYWUwMjM4MjhlNmRkYTdmOGEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_795e6812ed674ab8902162d14129139b",
+      "statement": "The firmware boot flow establishes a three-tier cooperative-preemptive execution model where P6 motor output tasks and P10 control tasks run on dedicated interrupt executors to preempt the main thread executor.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/main.rs#L147-L178",
+          "version": "repo-lines-v1:sha256:0989a68dc3178f1460f62fbb916acf2aa3956bc681ded5d08b118b604c53c552:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBlYjhiYzZkYTQ0MjUyYzE3NGY5ODMwOTRhMWJkM2E0YTY1YTdhOGRiZGNkNDY4NGIxZThkNDg2OWFjZjgzNmMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZlYTgyYTViODNkZjUyMDdhODYxY2FjM2U4ZGFiOTI4MmM3Mzk0Yzk3ZDY0ZGQzYTI4ZTZkMmNiNmMxZjdlN2MiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZlYTViOWZhZTE0OTYwNGFmMmViYTc3NzgxOTJiMDYwNGVmN2M1MDdjNDk5ZmExNjUzNjQ1N2Y2NTljOWRmZjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjlhODYzNjUwN2EyMmU1ZDg5YzE4M2ZiOWI2ODMzYWQ4MzdiNDA3MDdlNWFkZjc4MDFiYjA3MmFjOWU0ZGEzNjAifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/main.rs#L20-L78",
+          "version": "repo-lines-v1:sha256:973e23f9d4656b2547b28b7e96f58c747a0cda89cf967012124dbcc17b226d8f:eyJzZWxlY3RlZExpbmVDb3VudCI6NTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNkNDY2NDQ3NTU0NjJlMTBkMDE0NDk1ZTIwYTYwMjNmMGFmZjg3MDQyNGQwNDkwYTc1MjAyZmQ3ZjQ4ZmJhZWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdkYTY4MTE1ZTAyNjY2YTgxZTJlZDMxY2MwY2YxMTJiNGVlMTkwMmE1Nzg1YzQ0ZTMwYWJkOWY1ZTRmNWNlMmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImYwZjZlZmM5MWM3YjZlNGRiNDhhYzFiNTc1NGNkODc5YjZhOThjY2VmNjIxNzEzYWJhY2Q4NmNhOTQ5OTRjOGMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_691d78ab30444955a451f88fd3db54cd",
+      "statement": "On STM32F745, board initialization instantiates a dedicated P8 interrupt executor bound to CAN2_RX1 for 8 kHz MPU6000 IMU sampling to prevent P10 inner control calculations from delaying sensor reads.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/board_init/flywoof745.rs#L165-L176",
+          "version": "repo-lines-v1:sha256:d9d4bc67306bf8f2ce767ecb60f6d183ca8c3b3a2f88bdcaa53f8b81886fefcd:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYwNmY4YTM1MTU5NzdjOGJhMmE3ZDQwZTkyZmVkMGMyY2M4YTFiZDcwM2JjMjMyNWRlZDAzZWRmMTliMjgwYzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVjYjVlZDQ4NTUyY2Q4MGJmNzJjNzgzMmM0MTJiZDQyNDRmNWI3NWJjMzZiNWI5Njg2MjM5NDVmY2I0OWJlOTUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIyMDJjMzU1OWJkMGQyYmUxMWRhMmQyNzc0YzRhZTUwYTdlN2NlNWQ4ZTIwY2I3NDVhZWViYjMyYzM5NDlkMjQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImViZGNlM2MyMjQxZmQ0NjJmMTdiYjA3NzA2ZGZjMmI0YWE4ZjQ0MTRmMzQxZGNmZmQwYjY1OGQ5Y2NkMDAwZWEifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/board_init/flywoof745.rs#L75-L93",
+          "version": "repo-lines-v1:sha256:ea998ec86c9dfdf33440ce9c87599d8483696cbb2f5b00a02bc5f007c5039573:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMxZDJlNDViNjQxYTFhODhjNTk0NjJkMTc5YTY1MzkzZTk3MTMyNTRjMDdjZTA5MTUwMzQ5NTViOTc1MTZmZGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkOWUxMjU0NjQyNTU3NmQzZGVhZThjOWI5ZGJmMTI4ZDVkNmRkYWY1ZDdmZTg1NzkzNDkyN2RlZmZhM2I5ZGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJkMTA1YTAxOTlhNWE2YzRjMDkxMTY5MmY0NWI3ZjFhYjllNWM5ZTNmZmZlYWQ2ZTA4ODMxMDg2MDdlOTk3NjQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIwYzU3YTk2MDUxNmEwZjRkY2U0ZTVjOWNlOGI4ZjI2NDQ4OTFmYjRkYjEyM2NjZWQyZWNjZDk5MTQ5NzQ4M2UifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_57e7bccb7d4645088c59d614c42c008f",
+      "statement": "Board initialization clears wedged I2C buses prior to bus creation by toggling SCL 9 times with SDA high and emitting a STOP condition, and requires all shared-bus sensors to be initialized before spawning reader background tasks.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/board_init/flywoof745.rs#L413-L485",
+          "version": "repo-lines-v1:sha256:f3c6b9a20abe02aeed5d647a42d7a9b26a1f018b23065876991efc5bb26a3500:eyJzZWxlY3RlZExpbmVDb3VudCI6NzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUwMmYwZWNkM2RkMDRkNTA3MmI2ZTlkYTEyMmViZmEzNzUyNjRkZjc1MTRmNmE0NDAyNWNkZTZiOGE4YWYzMjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5OWJkZWZlZWFjYTYzNDBlMDI5MGRjODZlODg5Yzg5ZDVlMTg5YWE1YmE0NGI1ODViM2I3MDczNGY0YTYyZDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhmY2NlYzAzYTEwOTI4ZGQwYTVjZTdkMmJlNDc3ZTMwMGQyZTQyNmE4ZGNlMzZlYTM3NzA1MGEwOWZlNGY5OTEifQ"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/board_init/flywoof745.rs#L553-L570",
+          "version": "repo-lines-v1:sha256:bd9b1fcc3abce71f92a5b396216789078153048cb38fadd9f8d7a515872bca7e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYyNjI0OTVhN2JiNDJiY2Q1ZTg0NDdkMjYyMWQzZjdmMDMxODk5M2E0NmViNzJlODVmMmQ4MmE4YjQ3ZWViZDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc5ZTJkMmI1YzdiNDlhZTEzYTExZjZiZjQ4MGY0NDhlOWQ2OGU3NWFkMGQ4NTgzZjY2ZDZlYzY3Yzg4ZTJlNzYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNkNDI5ZGI3ZGIxMzIxOGQ1NDRhMjM2YWVjZDE5ZjkyMmZmMGM3ZDBkOGZhNDk1ZGJiYWU4MzY4OGQ5MGQ3MGEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_3a8bb9a04b694044b47bdbf3b45a6ddb",
+      "statement": "Dual-timer DShot motor setup enables the Master Output Enable bit on advanced control timers, configures pin alternate function registers, and passes timer register pointers and DMA channels to the motor output task.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/board_init/flywoof745.rs#L604-L675",
+          "version": "repo-lines-v1:sha256:3ed40ea2f4b74c2dc88d6879c44501e035cc4e6976ba019248d363c2a6e7e3a8:eyJzZWxlY3RlZExpbmVDb3VudCI6NzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRjZmJkMGYzZWFmYjBhMDM5ZDBjZWI1ODRiNjNjMDAyNzY5NjdjM2QwYzkxNTI5N2UwMmZhMDAzNmM0NzQ0OWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMyMjdjYTgwYWQ0ZjA1NDdlMWMzM2RjNmZkNTc4MjAyZThjYzVjNjcyNGZjNjNiY2JiOTRiODM3NWYyMTUyMmYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFjOWFiN2QzYjU1M2JkNGEyNTkzZjg3MjdiZWJkYjk3ZmVlY2VlNTdhN2UzYmJlNmM4YmFiYzNjZTBmOGM5YmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRmM2ZmZDMzY2MzMmQyYjhiNDk5ODg1OTdhZGQyODVkOTA0NDliNzI2MTc1NDc5YzUwYmQyNTM2MzBjMzU3YjcifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-30T14:16:13.882Z"
+  }
+}

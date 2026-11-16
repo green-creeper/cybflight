@@ -19,6 +19,8 @@ use air_filters::iir::biquad::{
     BiquadFilter, BiquadFilterConfigBuilder, BiquadFilterType, DirectForm2,
 };
 use air_filters::{Filter, nonlinear::slew::SlewFilter};
+#[cfg(feature = "outer_rate")]
+use cybflight_core::indi::controller::IndiOutput;
 use cybflight_core::{
     indi::{
         controller::{
@@ -401,9 +403,8 @@ pub async fn indi_task() {
         );
         (i, i_inv)
     };
-    // Pre-launch idle throttle — prop/ESC coupled, so a parameter rather
+    // Pre-launch / ground idle throttle — prop/ESC coupled, so a parameter rather
     // than a firmware constant.
-    #[cfg(any(feature = "outer_mpc", feature = "outer_geometric"))]
     let idle_normalized = ic.idle_normalized;
 
     // --- Build INDI controller ---
@@ -513,6 +514,8 @@ pub async fn indi_task() {
     // and outer-loop decimation all scale to the real sample rate. The IMU
     // driver's `sample_rate_hz()` agreement is asserted in board_init.
     let mut indi = IndiController::new(&config, loop_rate_hz);
+    #[cfg(feature = "outer_rate")]
+    indi.set_spf_indi_enabled(false);
 
     // --- Per-motor RPM estimators (FOPDT EKF, one per motor) ---
     // Motor dynamics come from the same params block as the controller
@@ -1141,7 +1144,7 @@ pub async fn indi_task() {
         // reject GCR decode errors (ZOH on reject, no interpolation).
         // Always on — protects both the KF path and the raw-hold path.
         let mut y_meas: [Option<f32>; NU] = [None; NU];
-        if let Some(telem) = dshot_sub.try_next_message_pure() {
+        while let Some(telem) = dshot_sub.try_next_message_pure() {
             health_frames = health_frames.saturating_add(1);
             for i in 0..NU {
                 let m = &telem.motors[i];
@@ -1193,40 +1196,33 @@ pub async fn indi_task() {
             }
         }
 
+        for i in 0..NU {
+            if let Some(y) = y_meas[i] {
+                last_y_meas_hold[i] = y;
+            }
+        }
+
         // ── Conditional KF ───────────────────────────────────────────
         //
-        // KF only runs when armed.
-        // Disarmed: KF idle (avoids divergence without corrections).
+        // KF only runs when armed AND `indi_omega_kf` is enabled.
+        // Disarmed or `use_kf_omega == false`: KF idle (avoids divergence
+        // without corrections and saves ~200 us/tick on F745 when using ZOH).
         let (g2_valid, rpm_all_stale) = if armed {
-            // Normal flight: run KF, feed smoothed omega to RpmTracker
-            for i in 0..NU {
-                // A rejection here means telemetry arrived and passed every
-                // task-level gate, but the model and the measurement
-                // disagreed — a different failure from having no data, and
-                // one that used to be invisible.
-                if rpm_estimators[i].step(est_current_ts, est_dt, y_meas[i])
-                    == StepOutcome::Rejected
-                {
-                    health[i].nis_reject = health[i].nis_reject.saturating_add(1);
+            if use_kf_omega {
+                for i in 0..NU {
+                    if rpm_estimators[i].step(est_current_ts, est_dt, y_meas[i])
+                        == StepOutcome::Rejected
+                    {
+                        health[i].nis_reject = health[i].nis_reject.saturating_add(1);
+                    }
                 }
             }
-            // Validity comes from the *wire*, the value from the estimator.
-            //
-            // This used to pass `RpmInput::Erpm(kf_omega)` unconditionally,
-            // which made `RpmInput::Invalid` unreachable: `g2_valid` was a
-            // constant `true`, the per-motor G2 gating and the all-motors
-            // failsafe in `RpmTracker` could never fire, and four dead ESCs
-            // would have left INDI applying G2 against a purely fabricated
-            // ω. The estimator always produces a finite number — that is
-            // its job — so it can never be the source of liveness.
-            //
-            // The gate is time-based rather than frame-counting because
-            // this ESC firmware legitimately reports "no new commutation"
-            // between electrical steps: at idle roughly half of all frames,
-            // and dozens consecutively during spin-up. Counting those as
-            // faults would trip the failsafe every takeoff.
             let inputs: [RpmInput; NU] = core::array::from_fn(|i| {
-                let omega_hat = rpm_estimators[i].state().omega();
+                let omega_hat = if use_kf_omega {
+                    rpm_estimators[i].state().omega()
+                } else {
+                    last_y_meas_hold[i]
+                };
                 let stale = match rpm_last_fresh[i] {
                     // `rpm_last_fresh` is only ever written from
                     // `imu.timestamp`, so this subtraction cannot underflow.
@@ -1294,13 +1290,7 @@ pub async fn indi_task() {
             let x = if use_kf_omega && armed {
                 rpm_estimators[i].state().omega()
             } else {
-                match y_meas[i] {
-                    Some(y) => {
-                        last_y_meas_hold[i] = y;
-                        y
-                    }
-                    None => last_y_meas_hold[i],
-                }
+                last_y_meas_hold[i]
             };
             let new_fs = motor_omega_filter[i].apply(x);
             omega_dot_fs[i] = if omega_fs_has_prev {
@@ -1609,7 +1599,12 @@ pub async fn indi_task() {
             }
             rpm_all_stale_prev = rpm_all_stale;
         }
-        let motor_state = if armed && omega_fs_has_prev && !rpm_all_stale {
+        // Require all 4 motors to have fresh valid RPM before feeding `External`
+        // (and G2) so a partial ESC dropout falls back cleanly to `Internal`
+        // rather than mixing stale ZOH jumps into WLS.
+        let all_rpm_valid = !rpm_all_stale && g2_valid.iter().all(|&v| v);
+        let g2_sym = if all_rpm_valid { g2_valid } else { [false; NU] };
+        let motor_state = if armed && omega_fs_has_prev && all_rpm_valid {
             MotorState::External {
                 omega_fs: &omega_fs,
                 omega_dot_fs: &omega_dot_fs,
@@ -1628,14 +1623,35 @@ pub async fn indi_task() {
             continue;
         }
 
-        #[cfg(not(feature = "outer_mpc_full"))]
+        #[cfg(feature = "outer_rate")]
+        let output = if armed && spf_sp_z <= 0.0 && direct_motors_opt.is_none() {
+            let idle_cmds = SVector::<f32, NU>::from_element(idle_normalized);
+            indi.update_actuator_state(&idle_cmds, voltage_v);
+            IndiOutput {
+                motor_commands: idle_cmds,
+                nan_failsafe: false,
+            }
+        } else {
+            let (output, _step_state) = indi.step(
+                &gyro_corrected,
+                &accel_corrected,
+                &rate_ref,
+                spf_sp_z,
+                armed,
+                &g2_sym,
+                motor_state,
+                voltage_v,
+            );
+            output
+        };
+        #[cfg(all(not(feature = "outer_rate"), not(feature = "outer_mpc_full")))]
         let (output, _step_state) = indi.step(
             &gyro_corrected,
             &accel_corrected,
             &rate_ref,
             spf_sp_z,
             armed,
-            &g2_valid,
+            &g2_sym,
             motor_state,
             voltage_v,
         );
@@ -1659,7 +1675,7 @@ pub async fn indi_task() {
             &alpha_sp,
             spf_sp_z,
             armed,
-            &g2_valid,
+            &g2_sym,
             motor_state,
             voltage_v,
         );
@@ -1733,8 +1749,8 @@ pub async fn indi_task() {
 
         // Feed this frame's throttle commands into the estimators so the
         // FOPDT model can account for transport delay on the next decode.
-        // Only when the KF is active (armed).
-        if armed {
+        // Only when the KF is active (armed && use_kf_omega).
+        if armed && use_kf_omega {
             for (i, est) in rpm_estimators.iter_mut().enumerate() {
                 est.push_throttle(
                     est_current_ts,
@@ -1800,10 +1816,14 @@ pub async fn indi_task() {
                 body_rate_rad_s: rate_ref,
                 torque_n_m: Vector3::zeros(), // INDI doesn't compute explicit torque
             });
-            // Processed motor RPM: post-KF.
+            // Processed motor RPM: post-KF (or sync-filtered ZOH when `indi_omega_kf=0`).
             let processed_motors: [msgs::DshotMotorTelemetry; 4] = core::array::from_fn(|i| {
                 let omega = if armed {
-                    rpm_estimators[i].state().omega()
+                    if use_kf_omega {
+                        rpm_estimators[i].state().omega()
+                    } else {
+                        omega_fs[i]
+                    }
                 } else {
                     0.0
                 };

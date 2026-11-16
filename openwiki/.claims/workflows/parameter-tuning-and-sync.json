@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:e97dab0b6bcc04694fb9ae31966ba9ebbf85bff794ffa53ed835c26d8b7bde5d",
+  "claims": [
+    {
+      "id": "claim_4bafd5796c1a42ab964dc7ea33b9cfcb",
+      "statement": "The flight controller USB CDC shell handler refuses parameter modification commands including param set, param save, param reset, and param defaults while the vehicle is armed.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/usb_serial.rs#L2370-L2374",
+          "version": "repo-lines-v1:sha256:3ba166af3bcb578f9a058f00262eff9107fc31c9f045853ab6342dd3f59ec7ce:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTM2NzA3NzE0ZDFmZGI2N2JkYWY3ZDczOTNiZDllOTJmMjYxY2RkMmI3MWVjOTExYWZlZWE4NDUwY2ViM2U2YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMGEwZWVhNTk3ZDU3NmEwNmU0ODNiNmJmNjhmZjEzMjA1ZDhmMWEyZDhlYTU2MjI2ZmViMGI2YTYxZDIwNGMyYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjJhZTY0YmI5ZTAwNWUxZDdmMjEwNGI3ZmQ4ZjkwMzc4NjJlZmY2MDIxMzdhZjVlMmJkYTk2MzA3ODE4MzdmZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTBlNDI1M2NmNDcyMWMyMGM4MWI1MjczN2U3YzY5NDE3ODI5ZjMyZGEzNmU1MDJhZGM1NjQxNzEyMTA0NTkxMyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_bac42adec42c42c7a34fa10536b1391f",
+      "statement": "The param set command validates numeric values against metadata range bounds and blocks edits to blackbox_* parameters while an active blackbox recording session is running.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/usb_serial.rs#L2606-L2629",
+          "version": "repo-lines-v1:sha256:88f502edee0bf9f786f117644d2e0f3714cbe223ab6a5b9392fae1cd6e535173:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNjYTczZjc1MGUwNWE2YjY1ODQwMDU4OWFiNGU5OWEzY2Q1NDQxZTI2YjE4ZTg0N2MxN2ZjYzg2NjhlODU1Y2EiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkwM2UyZjA0MTQwNTM5ODhlN2JjMWViZTRiZGEyNDJlMjhlYzAxMjA3MjQxYTA3YzIyM2E5ZDI3YmUzNWU0N2IiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE4ZTBiNTc5YzgzYTRhY2E1NzU0MjViMjhmYjk0YTIyMDdlMjFlOTU2MzI4MDZlN2Q3M2Q5YmVkYzlmYWViZTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImExMGQ0ZjZhOTNjMDVmNTZhOGVlYmExNzg5ODlhMGNhMzJhNmVmOGE4NjIxYzViZmRjNjk2YWYwNTY2ZWIxY2UifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e317c04c13dd4a92b584cef0baf4b19b",
+      "statement": "Standard param save appends modified parameter records to the dual-sector flash KV log, whereas param save --prune compacts the store by rewriting only parameter overrides that differ from baked defaults.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight/src/params.rs#L10-L15",
+          "version": "repo-lines-v1:sha256:b768f50ba6bbf4db7e99ff6460c07288fd4e41d47d9dfe716dbd51058d43c03b:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTUxNjBhM2FjMWEzMjgzYzRjYmY4YWFlYjI2ZGIwZTYyYTM4NjE1OTkxZjBiZjQ4M2M2M2M5Yzg5NGRlNDk3MyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNTVhYjAyZjg2ZmZiNGEzYzEyNjMxYjUyOGI3ZTljYTIwZmMxMDU0ZGU5MjhmMjUzNGJlZjFjMDdlMzA5NDlkYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOTk1MGIyOWJmNjIwNTljMGYzNTgwMDAyOTY2ODA0NDc0YTIwNTkyMjc2M2EyYmJjMDE1NTk3NWYxOGU0OGQ5MyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDBlZmE5MzM5ZTM5N2NjYWNiNzA2MGE2MjQ2ZTgxNmRiMDYyMTQxNGI3MGRmODI3OWM3MThhYTBjZmY4MzVhZSJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight/src/usb_serial.rs#L2668-L2692",
+          "version": "repo-lines-v1:sha256:53b9e09f643b63bd2bb830461b865ed71799460b09149805145a91081c593150:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlhOTI2NzkyN2JmMjZlNzBmM2Y1MTM3MGQxZWRkMjAxNzIxNjEyZDY1MmY1MTliNTQyMWE2YmMwYTI0ZWIwNjkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJhODJiYTBkNGM2NTcyNDFjNjlkNjYxNTgyNGUxMWUyNmMyNzBhMzIxYTI0OTVlMTU2NDYxNmQxNWM4MzdhM2UiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQxYjdjMmI3ZmRiOWY3YTZhOGM5MmFmMTY5OTdmZjg3YzRmMjM2MDFlYjMxMzU2MzA1ZWQxMzkxNTgzMTY3YzMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQwNzgwMzFjOWQyY2M3ZmI4YjMwNDY2OWM2YjkyY2ZiOGRmNWJhZmVkYzE4MDA4OGJmM2IzZDVhMmRhNjAxMTcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_abdd75b235564ea98be7e1b8676998c5",
+      "statement": "The just param-sync workflow runs tools/param_sync.py to query param diff --yaml over USB CDC, verifying vehicle identity via the # vehicle: header before line-merging overrides into vehicles/<VEHICLE>.yaml under the tuning: section.",
+      "evidence": [
+        {
+          "resource": "repo://Justfile#L398-L399",
+          "version": "repo-lines-v1:sha256:e0812e10a289be87db4dbda7c85dbdd0d771db78b27e16fb933123d26e7aafe6:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDMxNmU4YWVhNjFmZjQ3ODU0YzBiMWEwNWIzNDlmODlhNjg2NTA2NGYyYjUxOTQxZTIzY2M0NDQ4YjRhNGU5ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg2YzI5YjNkZTgxYjg0ZjkxNDlkNGUwZmMwZTljYjI1OTBmZjIyMDQyMDRmMzZjZWRjZjRkNDliMjkzNTBlMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2M0OTFlZmIzMmJlNDRiZTViNDQ4M2QzMjhlODY5OGFkN2E1MDFkYTEyMzA1MzcwOTQ1N2MxMDhiZTIzODM2MyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYTIwZmIwYzdkY2E5MGU2MDA5Yjg3MTYxMjg5ZmM0MTFiNTBiYzE4MGI5YzZmZTM1OWQyOGI5NzI2YjI0NjFiNiJ9"
+        },
+        {
+          "resource": "repo://tools/param_sync.py#L41-L116",
+          "version": "repo-lines-v1:sha256:88d443efb432259e2c784c9e7030c58de244c44aeb1e1c5245d183d92b7afb6b:eyJzZWxlY3RlZExpbmVDb3VudCI6NzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MmU5MjZiZGEwYWM0ZTkzY2Q0MWY3OGM1YTc1OTI2OWVmNDEwMjA5ODQ4ZTU4MjkyYmIwN2VmYzVlODQxMWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY3YjNjMWVjMTVkNDg1ZjJlYjljNjI3NTI5MmJkYTRiNTFmNzJjNzNkOTMzYThhYzM2YTgwNWMyMjY3ZjFmNWYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJlYmFkZWFkOTA5ZGI3OTI2ODFkYjZkMzFjMmJhMjRjZTViMmNhNjI1YTg1MzIxMmViYWMzNGEwYmUyMGI3OGIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVlZjE4MDFjZTJlNDNkNDk4ZjE4ZjhkMmY3YmU2NDNiZGM5Zjc4ZWYyYWI5NzA3M2RiYTE2NDllZjBlNWU4OGQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_8fba0d565f974c538c2a9f0dd388f136",
+      "statement": "tools/param_sync.py compares the vehicle target reported by firmware against the host YAML target and aborts on divergence unless forced with --force-vehicle-mismatch.",
+      "evidence": [
+        {
+          "resource": "repo://tools/param_sync.py#L138-L146",
+          "version": "repo-lines-v1:sha256:21356c94fdf5d7d21b1735b856ec49c9fb31550b6f0e0bfa16e43cac304e704c:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTg4YmQwZjJjYzMzNjQ3MDRiYTFlN2NiOWI0YjBhZTYzMTVjNWJkM2VlOTFlOTFmZmNhOTgzNTE5Yzc2YmJlMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiM2I4MmQyOTllN2Y4YjBhNjA5NWNlMmM1NTRiYzYzZDhhZDczNGYxYTIzNmQzNzNlMjBiMGExMzZmYzEwMzVhYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMGU4Y2JhMWJmN2IyZWUwMjVmZWQ1MDg4YTY1MDk0NDc1YzFhMGYyMmY2MThhYTY2MzQ2ODAwMjU4YjAzODZiZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzBiNjNmM2Q5MWEwMjc5ZDA0YTI3MDkxNjRhZGY5MGViZDdkNTA2NzlhNTk3NzVkMDVmNTZiNWExMDgxMzIyZCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_4eddb0582a044dada5e5c8b6407d789e",
+      "statement": "tools/fc_shell.py implements a zero-dependency USB CDC client that asserts DTR and RTS modem control lines via ioctl to wake embassy-usb connection polling.",
+      "evidence": [
+        {
+          "resource": "repo://tools/fc_shell.py#L114-L129",
+          "version": "repo-lines-v1:sha256:55bbf1fa9f2d869d61589796003bc5d88149109477dc24eb171ee772d3b484fe:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkYTVjNjZlMTdiMTQ1Mzk3ODM0YjhjODU0ZGM0MTkzZTIxMjUxODBhODk5NmExNGMzMTg4MzMyNmIyZWZiY2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYwNjJlNThlYTBiMGZkMTk1YmEwNzY2MTNiNjMwZDU5ZTY3YmQ0NzBiYjE5ZTk3YTIwYzkwMjM2NmU1YmEwZTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIyZDQxY2ZjZmUyZmQ0MmMxYjMwYmVjNDMwOTRkZjlkYWJkNDk1YjE5MmEwMDdmMmM1N2I4NWI0YjIxY2JhNGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRiZTc3MGI0Zjc3N2VkZWM0YTExNjMzNGEyZGI1NDcyMzIxODAzNmE5ZmNhY2RmZmQ5NTRlZTA3ZWQyMThmNjEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5ab32637f2044d5c9b6747ce4c469942",
+      "statement": "The just params-doc recipe executes the param_doc binary in cybflight-sim to iterate through the FirmwareConfig registry and generate docs/parameters.md with bounds, units, application semantics, and markdown escaping.",
+      "evidence": [
+        {
+          "resource": "repo://Justfile#L409-L411",
+          "version": "repo-lines-v1:sha256:3c281becb4e32ad1a63b3f7264c36dd12421a3bbe1e5a7e5452aec193b5e7fd4:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZWMyYzQ5ODNjMTc5MDcwM2M1OTFiOGJjNWZhM2EwNGU1NjYxOWMxZDNiYWExYjhmNTE3YjBlNTIwYWUxNzNiZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjdlM2FmNWU2MGM1ZGFmZDEwZDY2NjAyZjgyMWVjZjUyZTBmNGY1ZGY2ZWMyMTJiODVjNjA1MGU3Zjc4ZjFjOCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZWFjMGUyYjZkYmNiOWFmYjNjYmM4NTNjMzg5NTEwYzhjMTBiZjRiNDY2NzEzZDRkMmU1MzZiNDcxOTIwMjE2MyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZjNmOGQ1ZDg2YzViMmQ4Y2VjZTVmMDllNzVlM2I5YmNiMzg1ODcwNTRhMGJkNDM2MzBmYjA3NzgzNDg1ODgyZiJ9"
+        },
+        {
+          "resource": "repo://crates/cybflight_sim/src/bin/param_doc.rs#L16-L51",
+          "version": "repo-lines-v1:sha256:bccea8ab3aa27b2879e6ef6fd1da212e61ee1d2a6920ce21c8f8e09dfd5ec902:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAwYjllZWU5MWJjMGIxYTc3YjVmMjI0ZmQ2OTQ1ZjNkZWMyMzRlNTU5NmI5NDc1YzkwYzVhZWM5ZTZhZTIwYjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_97f57fbbaa6444cab43405b6b60aef88",
+      "statement": "The cybflight-gs Parameters tab tracks modified RAM parameters and batches param set commands over USB CDC when triggered via Apply to FC RAM, providing separate controls for param save and param save --prune.",
+      "evidence": [
+        {
+          "resource": "repo://crates/cybflight_gs/src/ui/params_tab.rs#L113-L190",
+          "version": "repo-lines-v1:sha256:c8f9dbdceac8b2cecfc38d9d43d5f450de2cf8f14aef186167f8044636c8a130:eyJzZWxlY3RlZExpbmVDb3VudCI6NzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY0Yjk4Y2I4NDI1ODNmOWE0MGRkYWJhYjNjYzM2MDNkMGI1ODNkMjQzODMwZDQ3ODQzODMyNzdjY2U1NjkzZmMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlkMjYzYWEwODUwM2E2MWRlYjBiNTUyOGY3MmVmZWEwYWNkMDJmODM1MGI3NjI3NTViN2NkOWEwYzEyZjA5N2MiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjkwYmRkY2ViODRiZGQwYjhmNWM3MTBhMmIzOGU5ZjFkYTZlYmJmNWVmZWIxM2U2MjNiZGQyMTFmZTI5NThmZWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3MGJjMWFmNTgzMzc5N2Y2ZTI5MTZjYWMyYzBmMjI4N2Y2Mzc4MWUwMTU5MWQzN2E4M2E0MjQxNzIyY2JiMDUifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-30T14:16:13.882Z"
+  }
+}

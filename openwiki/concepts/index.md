@@ -1,0 +1,9 @@
+# Files
+
+- [Blackbox Logging & Telemetry](blackbox-and-telemetry.md) - Onboard MCAP/CBOR blackbox logging framework, SDMMC storage driver, ESP32 telemetry bridge, receiver protocols (CRSF/GHST), USB Serial VCP, and PTP UTC time synchronization.
+- [Flight Control & Motor Actuation Systems](control-and-actuation.md) - Multi-rate inner-loop flight control stack, including SE(3) geometric cascade control, Incremental Nonlinear Dynamic Inversion (INDI) rate control, Savitzky-Golay rate-dot estimation, RPM notch filtering, active-set WLS motor allocation, and bi-directional DShot actuation.
+- [Neural Network Policies & Offboard Control](neural-and-offboard-control.md) - Architecture and execution pipeline for onboard Multi-Layer Perceptron (MLP) neural network policies, PyO3 reinforcement learning environments, and high-speed offboard direct motor command streaming via ESP32 UART bridge.
+- [NMPC & Trajectory Generation](nmpc-and-trajectory.md) - Architectural overview of Cybflight outer-loop position control, NMPC/SQP/TinyMPC solvers, MINCO trajectory generation, learned cost adaptation, and mission execution.
+- [Parameter & Vehicle Configuration System](parameter-system.md) - Comprehensive guide to CybFlight's vehicle configuration architecture, compile-time YAML baking, proc-macro parameter schema, and dual-sector flash key-value store persistence.
+- [Safety, Failsafes & Postmortem Diagnostics](safety-and-postmortem.md) - Comprehensive safety architecture in Cybflight including arming gates, failsafe modes, hardware watchdog supervision, and BKPSRAM postmortem crash diagnostics.
+- [State Estimation & ESKF Sensor Fusion](state-estimation-eskf.md) - Architecture and mathematics of the 15-state Error-State Kalman Filter (ESKF), multi-sensor fusion (GPS/RTK, MoCap), position guards, and Mahony fallback.
